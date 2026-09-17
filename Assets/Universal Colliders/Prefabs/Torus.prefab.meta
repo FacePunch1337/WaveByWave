@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: cf6a47414569f10c5b4c548c6332a01e
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Prefabs/Torus.prefab
+  uploadId: 879332

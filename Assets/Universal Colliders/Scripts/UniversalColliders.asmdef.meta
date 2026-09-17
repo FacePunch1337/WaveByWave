@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: ebb0bd7279a113fc384358b187ce3358
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Scripts/UniversalColliders.asmdef
+  uploadId: 879332

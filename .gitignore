@@ -104,3 +104,28 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Unity Version Control workspace metadata
+/.plastic/
+/ignore.conf
+
+# Local player build and delta updater output
+/WaveByWave-Windows/
+/WaveByWave-Windows.rar
+/DeltaServer/
+/.wavebywave-*/
+/.wavebywave-manifest.json
+
+# Local credentials and signing keys
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.private
+*.private.meta
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: ce443dfc2834f34728426d44c4cc23de
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Documentation/CHANGELOG.md
+  uploadId: 879332

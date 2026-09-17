@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 8143e741e2ef1bf66bce40bd96e25682
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Materials/Iron.mat
+  uploadId: 879332

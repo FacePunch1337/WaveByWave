@@ -1,0 +1,30 @@
+using Unity.Netcode;
+using UnityEngine;
+
+namespace WaveByWave.UI
+{
+    [RequireComponent(typeof(Camera), typeof(AudioListener))]
+    public sealed class ScenePreviewCamera : MonoBehaviour
+    {
+        private Camera _camera;
+        private AudioListener _listener;
+
+        private void Awake()
+        {
+            _camera = GetComponent<Camera>();
+            _listener = GetComponent<AudioListener>();
+        }
+
+        private void Update()
+        {
+            var manager = NetworkManager.Singleton;
+            if (manager == null || manager.LocalClient?.PlayerObject == null)
+                return;
+
+            if (_camera != null)
+                _camera.enabled = false;
+            if (_listener != null)
+                _listener.enabled = false;
+        }
+    }
+}

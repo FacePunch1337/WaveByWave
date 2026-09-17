@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: f0fb6bea50c93a9d4acebedd179a28b0
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {fileID: 2800000, guid: 2618f9ef861991a369807257e16e5341, type: 3}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Scripts/UCollidersRoot.cs
+  uploadId: 879332

@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: 086bc03bdfa112a7cba1bf89a598a793
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Scripts/ConvexDecomposer.cs
+  uploadId: 879332

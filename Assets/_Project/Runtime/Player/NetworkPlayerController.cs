@@ -1,0 +1,1798 @@
+using System.Collections;
+using System.Collections.Generic;
+using KinematicCharacterController;
+using Unity.Netcode;
+using Unity.Netcode.Components;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
+using WaveByWave.Networking;
+using WaveByWave.Ships;
+using WaveByWave.UI;
+
+namespace WaveByWave.Player
+{
+    [DefaultExecutionOrder(9000)]
+    [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider), typeof(NetworkObject))]
+    [RequireComponent(typeof(OwnerNetworkTransform), typeof(NetworkRigidbody))]
+    [RequireComponent(typeof(KinematicCharacterMotor))]
+    public sealed class NetworkPlayerController : NetworkBehaviour, ICharacterController
+    {
+        public const string LocalBodyLayerName = "LocalPlayerBody";
+        private const float GroundCastStartOffset = 0.08f;
+
+        [Header("Movement")]
+        [SerializeField, Min(0f)] private float moveSpeed = 5f;
+        [SerializeField, Min(1f)] private float sprintMultiplier = 1.65f;
+        [SerializeField, Min(0f)] private float jumpHeight = 1.35f;
+        [SerializeField] private float gravity = -24f;
+        [SerializeField, Min(0f)] private float groundAcceleration = 55f;
+        [SerializeField, Min(0f)] private float airAcceleration = 12f;
+        [SerializeField, Range(1f, 89f)] private float maximumSlopeAngle = 50f;
+        [SerializeField, Min(0f)] private float groundStickSpeed = 2f;
+
+        [Header("Moving platforms")]
+        [SerializeField, Min(0.02f)] private float platformProbeDistance = 0.22f;
+        [Tooltip("Maximum gap at which a client may attach to a network-interpolated deck.")]
+        [SerializeField, Min(0.005f)] private float clientPlatformContactTolerance = 0.04f;
+        [SerializeField, Min(0f)] private float platformContactGrace = 0.15f;
+        [SerializeField, Min(0f)] private float platformAnchorSharpness = 40f;
+        [SerializeField, Min(0f)] private float maximumPlatformCorrectionSpeed = 8f;
+        [Tooltip("Local-space smoothing used only when displaying another player on a moving platform.")]
+        [SerializeField, Min(1f)] private float remotePlatformPositionSharpness = 24f;
+        [SerializeField, Min(1f)] private float remotePlatformRotationSharpness = 28f;
+
+        [Header("Interaction")]
+        [SerializeField, Min(0.5f)] private float interactionDistance = 3f;
+        [SerializeField] private LayerMask interactionMask = ~0;
+
+        [Header("References")]
+        [SerializeField] private Rigidbody body;
+        [SerializeField] private CapsuleCollider bodyCollider;
+        [SerializeField] private KinematicCharacterMotor _kccMotor;
+        [SerializeField] private PlayerAnimationSync animationSync;
+        [SerializeField] private PlayerInventory inventory;
+        [SerializeField] private Transform cameraTarget;
+        [SerializeField] private FirstPersonCamera ownerCamera;
+        [SerializeField] private Transform firstPersonHiddenRoot;
+
+        private FirstPersonCamera _camera;
+        private Transform _presentationRoot;
+        private readonly List<(Transform Transform, int Layer)> _hiddenLayerRestore = new();
+        private Vector2 _moveInput;
+        private bool _sprintHeld;
+        private bool _jumpQueued;
+        private bool _isGrounded;
+        private Vector3 _groundNormal = Vector3.up;
+        private Quaternion _desiredBodyRotation = Quaternion.identity;
+        private Vector3 _airbornePlatformMomentum;
+        private float _ignoreGroundUntil;
+        private MovingPlatform _platform;
+        private bool _airborneFromPlatform;
+        private Vector3 _platformLocalAnchor;
+        private bool _platformAnchorLocked;
+        private float _lastPlatformContactTime;
+        private readonly RaycastHit[] _groundHits = new RaycastHit[12];
+        private ShipHelm _activeHelm;
+        private ShipSailControl _activeSailControl;
+        private ShipMastControl _activeMastControl;
+        private float _nextHelmSend;
+        private float _nextSailSend;
+        private float _nextMastSend;
+        private bool _menuWasOpen;
+        private bool _sceneTransitioning;
+        private int _placementRevision;
+        private OwnerNetworkTransform _networkTransform;
+        private NetworkObject _remotePlatformObject;
+        private Vector3 _remotePlatformLocalPosition;
+        private Quaternion _remotePlatformLocalRotation = Quaternion.identity;
+        private bool _remotePlatformPoseInitialized;
+        private Vector3 _remoteWorldPresentationOffset;
+        private Quaternion _remoteWorldPresentationRotationOffset = Quaternion.identity;
+        private bool _remoteWorldPresentationActive;
+        private Quaternion _clientPlatformPoseRotation = Quaternion.identity;
+        private Matrix4x4 _clientPlatformWorldToLocal = Matrix4x4.identity;
+        private Vector3 _clientPlatformPreviousLocalPosition;
+        private Vector3 _clientPlatformCurrentLocalPosition;
+        private Quaternion _clientPlatformPreviousLocalRotation = Quaternion.identity;
+        private Quaternion _clientPlatformCurrentLocalRotation = Quaternion.identity;
+        private bool _clientPlatformPoseInitialized;
+        private bool _usingClientPlatformRelativeVelocity;
+        private bool _ownerPlatformPresentationActive;
+        private Vector3 _ownerWorldPresentationOffset;
+        private Quaternion _ownerWorldPresentationRotationOffset = Quaternion.identity;
+        private PhysicsMaterial _motorPhysicsMaterial;
+        private bool _useKccMotor;
+
+        // The ordinary OwnerNetworkTransform remains responsible for movement replication.
+        // This small parallel state keeps presentation relative to the supporting platform,
+        // preventing two independently interpolated world-space transforms from drifting apart.
+        // The physics root deliberately remains unparented. Platform-relative presentation is
+        // applied to a visual child, while the Rigidbody keeps one coherent world-space state.
+        private readonly NetworkVariable<bool> _hasReplicatedPlatform = new(
+            false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        private readonly NetworkVariable<NetworkObjectReference> _replicatedPlatform = new(
+            default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        private readonly NetworkVariable<Vector3> _replicatedPlatformLocalPosition = new(
+            default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        private readonly NetworkVariable<Quaternion> _replicatedPlatformLocalRotation = new(
+            Quaternion.identity, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        public PlayerInventory Inventory => inventory;
+        public bool IsAtHelm => _activeHelm != null;
+        public bool IsAtSailControl => _activeSailControl != null;
+        public bool IsAtMastControl => _activeMastControl != null;
+        public bool IsAtControlStation => IsAtHelm || IsAtSailControl || IsAtMastControl;
+
+        public void SetDesiredBodyRotation(Quaternion rotation)
+        {
+            if (!IsOwner || IsAtControlStation)
+                return;
+
+            _desiredBodyRotation = rotation;
+        }
+
+        private void Awake()
+        {
+            body ??= GetComponent<Rigidbody>();
+            bodyCollider ??= GetComponent<CapsuleCollider>();
+            _kccMotor ??= GetComponent<KinematicCharacterMotor>();
+            animationSync ??= GetComponent<PlayerAnimationSync>();
+            inventory ??= GetComponent<PlayerInventory>();
+            _networkTransform = GetComponent<OwnerNetworkTransform>();
+            cameraTarget ??= transform;
+            firstPersonHiddenRoot ??= transform.Find("Visual");
+            EnsurePresentationRoot();
+
+            body.useGravity = false;
+            body.isKinematic = true;
+            body.interpolation = RigidbodyInterpolation.None;
+            body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+            if (_kccMotor != null)
+            {
+                _kccMotor.CharacterController = null;
+                _kccMotor.enabled = false;
+            }
+            else
+                Debug.LogError("Player prefab is missing KinematicCharacterMotor.", this);
+            ConfigureMotorPhysicsMaterial();
+            _desiredBodyRotation = transform.rotation;
+
+            _camera = ownerCamera;
+            if (ownerCamera != null)
+                ownerCamera.gameObject.SetActive(false);
+        }
+
+        private void ConfigureMotorPhysicsMaterial()
+        {
+            if (bodyCollider == null)
+                return;
+
+            // A velocity-driven Rigidbody must not inherit deck/slope friction. Otherwise the
+            // contact solver can cancel horizontal motion while the capsule is held grounded.
+            _motorPhysicsMaterial = new PhysicsMaterial("Player Motor (Runtime)")
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+                dynamicFriction = 0f,
+                staticFriction = 0f,
+                frictionCombine = PhysicsMaterialCombine.Minimum,
+                bounciness = 0f,
+                bounceCombine = PhysicsMaterialCombine.Minimum
+            };
+            bodyCollider.material = _motorPhysicsMaterial;
+        }
+
+        public override void OnDestroy()
+        {
+            if (_motorPhysicsMaterial != null)
+                Destroy(_motorPhysicsMaterial);
+            base.OnDestroy();
+        }
+
+        private void EnsurePresentationRoot()
+        {
+            _presentationRoot = transform.Find("Presentation Root");
+            if (_presentationRoot == null)
+            {
+                _presentationRoot = new GameObject("Presentation Root").transform;
+                _presentationRoot.SetParent(transform, false);
+            }
+
+            if (cameraTarget != null && cameraTarget != transform && cameraTarget.parent == transform)
+                cameraTarget.SetParent(_presentationRoot, false);
+            if (firstPersonHiddenRoot != null && firstPersonHiddenRoot != transform &&
+                firstPersonHiddenRoot.parent == transform)
+                firstPersonHiddenRoot.SetParent(_presentationRoot, false);
+        }
+
+        public override void OnNetworkSpawn()
+        {
+            // Every player is simulated by KCC on the machine that owns it. Network copies are
+            // presentation-only and receive that owner's transform through OwnerNetworkTransform.
+            if (_kccMotor != null)
+            {
+                _kccMotor.CharacterController = null;
+                _kccMotor.enabled = false;
+            }
+            bodyCollider.enabled = IsOwner;
+            body.isKinematic = true;
+            body.interpolation = RigidbodyInterpolation.None;
+
+            if (!IsOwner)
+            {
+                if (ownerCamera != null)
+                    ownerCamera.gameObject.SetActive(false);
+                return;
+            }
+
+            ActivateOwnerCamera();
+            EnableKccMotor();
+            gameObject.name = $"Player_{OwnerClientId}";
+        }
+
+        private void ActivateOwnerCamera()
+        {
+            _camera = ownerCamera;
+            if (_camera == null)
+            {
+                Debug.LogError("Player prefab is missing its Camera Holder/FirstPersonCamera.", this);
+                return;
+            }
+
+            _camera.gameObject.SetActive(true);
+            _camera.SetTarget(cameraTarget, transform);
+            HideOwnerBodyFromCamera();
+        }
+
+        private void HideOwnerBodyFromCamera()
+        {
+            var hiddenLayer = LayerMask.NameToLayer(LocalBodyLayerName);
+            if (hiddenLayer < 0)
+            {
+                Debug.LogError($"Required layer '{LocalBodyLayerName}' is missing.", this);
+                return;
+            }
+
+            var ownerView = _camera != null ? _camera.GetComponent<Camera>() : null;
+            if (ownerView != null)
+                ownerView.cullingMask &= ~(1 << hiddenLayer);
+
+            RestoreOwnerBodyLayers();
+            if (firstPersonHiddenRoot == null)
+                return;
+
+            foreach (var child in firstPersonHiddenRoot.GetComponentsInChildren<Transform>(true))
+            {
+                _hiddenLayerRestore.Add((child, child.gameObject.layer));
+                child.gameObject.layer = hiddenLayer;
+            }
+        }
+
+        private void RestoreOwnerBodyLayers()
+        {
+            foreach (var entry in _hiddenLayerRestore)
+            {
+                if (entry.Transform != null)
+                    entry.Transform.gameObject.layer = entry.Layer;
+            }
+            _hiddenLayerRestore.Clear();
+        }
+
+        private void Update()
+        {
+            if (!IsOwner || !IsSpawned || Keyboard.current == null)
+                return;
+
+            if (_sceneTransitioning)
+                return;
+
+            if (SessionMenuPresenter.InputCaptured)
+            {
+                if (!_menuWasOpen)
+                    StopShipControlInputsForMenu();
+                _menuWasOpen = true;
+                MaintainPlatformAttachmentWhileMenuIsOpen();
+                return;
+            }
+
+            if (_menuWasOpen)
+            {
+                _menuWasOpen = false;
+                ResyncRigidbodyAfterMenu();
+                // Consume the frame that closed the menu so Escape cannot also leave the helm.
+                return;
+            }
+
+            if (_activeHelm != null)
+            {
+                UpdateHelmInput();
+                return;
+            }
+
+            if (_activeSailControl != null)
+            {
+                UpdateSailControlInput();
+                return;
+            }
+
+            if (_activeMastControl != null)
+            {
+                UpdateMastControlInput();
+                return;
+            }
+
+            CaptureMovementInput();
+            UpdateInteraction();
+            UpdateItemActions();
+        }
+
+        private void StopShipControlInputsForMenu()
+        {
+            ClearMovementInput();
+            if (_activeHelm != null)
+                _activeHelm.Ship.SubmitHelmInputServerRpc(0f);
+            if (_activeSailControl != null)
+                _activeSailControl.Ship.SubmitSailInputServerRpc(0f);
+            if (_activeMastControl != null)
+                _activeMastControl.Ship.SubmitMastInputServerRpc(0f);
+        }
+
+        private void MaintainPlatformAttachmentWhileMenuIsOpen()
+        {
+            if (_platform != null)
+                SnapToActiveControlStation();
+            PublishPlatformPose();
+            _camera?.RefreshPose();
+        }
+
+        private void ResyncRigidbodyAfterMenu()
+        {
+            if (body == null || body.isKinematic)
+                return;
+
+            body.WakeUp();
+            if (_platform != null && !_airborneFromPlatform)
+            {
+                _platformLocalAnchor = _platform.transform.InverseTransformPoint(body.position);
+                _platformAnchorLocked = true;
+            }
+        }
+
+        private void CaptureMovementInput()
+        {
+            var keyboard = Keyboard.current;
+            _moveInput = Vector2.ClampMagnitude(new Vector2(
+                (keyboard.dKey.isPressed ? 1f : 0f) - (keyboard.aKey.isPressed ? 1f : 0f),
+                (keyboard.wKey.isPressed ? 1f : 0f) - (keyboard.sKey.isPressed ? 1f : 0f)), 1f);
+            _sprintHeld = keyboard.leftShiftKey.isPressed;
+            _jumpQueued |= keyboard.spaceKey.wasPressedThisFrame;
+        }
+
+        private void ClearMovementInput()
+        {
+            _moveInput = Vector2.zero;
+            _sprintHeld = false;
+            _jumpQueued = false;
+        }
+
+        private void EnableKccMotor()
+        {
+            if (!IsOwner || body == null || bodyCollider == null || _kccMotor == null)
+                return;
+
+            var capsuleRadius = bodyCollider.radius;
+            var capsuleHeight = bodyCollider.height;
+            var capsuleYOffset = bodyCollider.center.y;
+            body.isKinematic = true;
+            body.interpolation = RigidbodyInterpolation.None;
+            body.angularVelocity = Vector3.zero;
+
+            _useKccMotor = true;
+            _kccMotor.CharacterController = this;
+            _kccMotor.AttachedRigidbodyOverride = null;
+            _kccMotor.SetCapsuleDimensions(
+                capsuleRadius,
+                capsuleHeight,
+                capsuleYOffset);
+            _kccMotor.GroundDetectionExtraDistance = 0f;
+            _kccMotor.MaxStableSlopeAngle = maximumSlopeAngle;
+            _kccMotor.StepHandling = StepHandlingMethod.Extra;
+            _kccMotor.MaxStepHeight = 0.5f;
+            _kccMotor.MaxStableDistanceFromLedge = capsuleRadius;
+            _kccMotor.InteractiveRigidbodyHandling = true;
+            _kccMotor.RigidbodyInteractionType = RigidbodyInteractionType.SimulatedDynamic;
+            // NetworkPhysicsObject applies the same explicit server impulse for host and
+            // remote owners. A zero interaction mass prevents KCC from adding a second,
+            // host-only impulse while still treating the prop as a solid obstruction.
+            _kccMotor.SimulatedCharacterMass = 0f;
+            _kccMotor.PreserveAttachedRigidbodyMomentum = true;
+            var initialForward = Vector3.ProjectOnPlane(
+                transform.rotation * Vector3.forward, Vector3.up);
+            if (initialForward.sqrMagnitude < 0.0001f)
+                initialForward = Vector3.forward;
+            _desiredBodyRotation = Quaternion.LookRotation(initialForward.normalized, Vector3.up);
+            _kccMotor.SetPositionAndRotation(transform.position, _desiredBodyRotation);
+            _kccMotor.BaseVelocity = Vector3.zero;
+            _kccMotor.enabled = true;
+            bodyCollider.enabled = true;
+
+            // KCC interpolates the physics root itself. The old render-only correction from the
+            // Rigidbody controller must not be applied a second time.
+            ResetClientPlatformFrame();
+            ResetPresentationPose();
+        }
+
+        public void BeforeCharacterUpdate(float deltaTime)
+        {
+        }
+
+        public void UpdateRotation(ref Quaternion currentRotation, float deltaTime)
+        {
+            if (!_useKccMotor || !IsOwner || _sceneTransitioning || IsAtControlStation)
+                return;
+
+            currentRotation = _desiredBodyRotation;
+        }
+
+        public void UpdateVelocity(ref Vector3 currentVelocity, float deltaTime)
+        {
+            if (!_useKccMotor || !IsOwner || _sceneTransitioning || IsAtControlStation)
+            {
+                currentVelocity = Vector3.zero;
+                _jumpQueued = false;
+                return;
+            }
+
+            var characterUp = _kccMotor.CharacterUp;
+            var speed = moveSpeed * (_sprintHeld ? sprintMultiplier : 1f);
+            var inputDirection = _desiredBodyRotation *
+                                 new Vector3(_moveInput.x, 0f, _moveInput.y);
+            inputDirection = Vector3.ProjectOnPlane(inputDirection, characterUp);
+            if (inputDirection.sqrMagnitude > 1f)
+                inputDirection.Normalize();
+
+            var stableOnGround = _kccMotor.GroundingStatus.IsStableOnGround;
+            if (stableOnGround)
+            {
+                currentVelocity = _kccMotor.GetDirectionTangentToSurface(
+                                      currentVelocity,
+                                      _kccMotor.GroundingStatus.GroundNormal) *
+                                  currentVelocity.magnitude;
+
+                var inputRight = Vector3.Cross(inputDirection, characterUp);
+                var desiredGroundVelocity = inputDirection.sqrMagnitude > 0.0001f
+                    ? Vector3.Cross(_kccMotor.GroundingStatus.GroundNormal, inputRight).normalized *
+                      inputDirection.magnitude * speed
+                    : Vector3.zero;
+                currentVelocity = Vector3.MoveTowards(
+                    currentVelocity, desiredGroundVelocity, groundAcceleration * deltaTime);
+
+                if (_jumpQueued)
+                {
+                    _airbornePlatformMomentum = Vector3.zero;
+                    SetKccAirbornePlatformFrame(_platform);
+                    _kccMotor.ForceUnground();
+                    var jumpSpeed = Mathf.Sqrt(jumpHeight * -2f * gravity);
+                    currentVelocity = Vector3.ProjectOnPlane(currentVelocity, characterUp) +
+                                      characterUp * jumpSpeed;
+                    _isGrounded = false;
+                    if (_platform != null)
+                    {
+                        _airborneFromPlatform = true;
+                        _lastPlatformContactTime = Time.fixedTime;
+                    }
+                }
+            }
+            else
+            {
+                var verticalVelocity = Vector3.Project(currentVelocity, characterUp);
+                var horizontalVelocity = currentVelocity - verticalVelocity;
+                if (inputDirection.sqrMagnitude > 0.0001f)
+                {
+                    var targetAirVelocity = Vector3.ProjectOnPlane(
+                                                _airbornePlatformMomentum, characterUp) +
+                                            inputDirection.normalized * speed;
+                    horizontalVelocity = Vector3.MoveTowards(
+                        horizontalVelocity, targetAirVelocity, airAcceleration * deltaTime);
+                }
+
+                currentVelocity = horizontalVelocity + verticalVelocity +
+                                  characterUp * (gravity * deltaTime);
+            }
+
+            _jumpQueued = false;
+            animationSync.SetLocomotion(
+                _moveInput.magnitude * (speed / Mathf.Max(0.01f, moveSpeed)),
+                _isGrounded,
+                Vector3.Dot(currentVelocity, characterUp));
+        }
+
+        public void PostGroundingUpdate(float deltaTime)
+        {
+            if (!_useKccMotor)
+                return;
+
+            var wasGrounded = _isGrounded;
+            var previousPlatform = _platform;
+            _isGrounded = _kccMotor.GroundingStatus.IsStableOnGround;
+
+            MovingPlatform supportingPlatform = null;
+            if (_isGrounded && _kccMotor.GroundingStatus.GroundCollider != null)
+                MovingPlatform.TryResolve(
+                    _kccMotor.GroundingStatus.GroundCollider,
+                    out supportingPlatform);
+
+            if (_isGrounded && supportingPlatform != null)
+            {
+                // Grounding will attach KCC to this Rigidbody normally in the same motor phase.
+                // The explicit override is only needed while the capsule is airborne.
+                SetKccAirbornePlatformFrame(null);
+                _platform = supportingPlatform;
+                _airborneFromPlatform = false;
+                _platformLocalAnchor = supportingPlatform.transform.InverseTransformPoint(
+                    _kccMotor.TransientPosition);
+                _platformAnchorLocked = true;
+                _lastPlatformContactTime = Time.fixedTime;
+                _airbornePlatformMomentum = Vector3.zero;
+                _camera?.SetReferenceFrame(supportingPlatform.transform);
+            }
+            else if (_isGrounded)
+            {
+                SetKccAirbornePlatformFrame(null);
+                ClearPlatformReference();
+                _airbornePlatformMomentum = Vector3.zero;
+            }
+            else
+            {
+                if (wasGrounded && previousPlatform != null)
+                {
+                    _airbornePlatformMomentum = Vector3.zero;
+                    SetKccAirbornePlatformFrame(previousPlatform);
+                    _airborneFromPlatform = true;
+                    _lastPlatformContactTime = Time.fixedTime;
+                }
+                else if (_airborneFromPlatform && _platform != null)
+                    SetKccAirbornePlatformFrame(_platform);
+
+                RefreshAirbornePlatformReference();
+            }
+        }
+
+        public void AfterCharacterUpdate(float deltaTime)
+        {
+        }
+
+        public bool IsColliderValidForCollisions(Collider coll)
+        {
+            return coll != null && coll != bodyCollider && !coll.transform.IsChildOf(transform);
+        }
+
+        public void OnGroundHit(
+            Collider hitCollider,
+            Vector3 hitNormal,
+            Vector3 hitPoint,
+            ref HitStabilityReport hitStabilityReport)
+        {
+        }
+
+        public void OnMovementHit(
+            Collider hitCollider,
+            Vector3 hitNormal,
+            Vector3 hitPoint,
+            ref HitStabilityReport hitStabilityReport)
+        {
+            if (!IsOwner || hitCollider == null || _kccMotor == null)
+                return;
+
+            var pushable = hitCollider.GetComponentInParent<NetworkPhysicsObject>();
+            if (pushable == null)
+                return;
+
+            var pushDirection = Vector3.ProjectOnPlane(-hitNormal, Vector3.up);
+            if (pushDirection.sqrMagnitude < 0.0001f)
+                return;
+
+            pushDirection.Normalize();
+            var intendedDirection = _desiredBodyRotation *
+                                    new Vector3(_moveInput.x, 0f, _moveInput.y);
+            intendedDirection = Vector3.ProjectOnPlane(intendedDirection, Vector3.up);
+            if (intendedDirection.sqrMagnitude > 1f)
+                intendedDirection.Normalize();
+
+            // BaseVelocity may already be projected to zero by the kinematic client proxy
+            // when this callback runs. Input intent remains stable and is the value the host
+            // and remote client can reproduce identically.
+            var intendedSpeed = moveSpeed * (_sprintHeld ? sprintMultiplier : 1f);
+            var approachSpeed = Mathf.Max(
+                0f,
+                Vector3.Dot(intendedDirection * intendedSpeed, pushDirection));
+            pushable.RequestPush(pushDirection, approachSpeed);
+        }
+
+        public void ProcessHitStabilityReport(
+            Collider hitCollider,
+            Vector3 hitNormal,
+            Vector3 hitPoint,
+            Vector3 atCharacterPosition,
+            Quaternion atCharacterRotation,
+            ref HitStabilityReport hitStabilityReport)
+        {
+        }
+
+        public void OnDiscreteCollisionDetected(Collider hitCollider)
+        {
+        }
+
+        private void SetKccAirbornePlatformFrame(MovingPlatform platform)
+        {
+            if (!_useKccMotor || _kccMotor == null)
+                return;
+
+            _kccMotor.AttachedRigidbodyOverride = platform != null ? platform.Body : null;
+        }
+
+        private void SimulateMovement(float deltaTime)
+        {
+            ApplyClientPlatformFrameMotion();
+            body.MoveRotation(_desiredBodyRotation);
+
+            var wasGrounded = _isGrounded;
+            var previousPlatform = _platform;
+            var mayGround = Time.fixedTime >= _ignoreGroundUntil;
+            var groundHit = default(RaycastHit);
+            var hasGroundCandidate = mayGround && TryGetGroundHit(out groundHit);
+            MovingPlatform supportingPlatform = null;
+            if (hasGroundCandidate)
+                MovingPlatform.TryResolve(groundHit.collider, out supportingPlatform);
+
+            _isGrounded = hasGroundCandidate;
+            if (_isGrounded && !wasGrounded && supportingPlatform != null &&
+                supportingPlatform.UsesInterpolatedNetworkMotion)
+            {
+                var groundGap = Mathf.Max(0f, groundHit.distance - GroundCastStartOffset);
+                if (groundGap > clientPlatformContactTolerance)
+                {
+                    // The long probe locates a fast remote deck but must not count as physical
+                    // contact. Otherwise the anchor records the capsule while it is still in air.
+                    _isGrounded = false;
+                    supportingPlatform = null;
+                }
+                else if (groundGap > 0.0001f)
+                {
+                    // Resolve the remaining small gap before locking the ship-local anchor so
+                    // clients stand at the same capsule height as the host.
+                    body.position += Vector3.down * groundGap;
+                }
+            }
+
+            _groundNormal = _isGrounded ? groundHit.normal.normalized : Vector3.up;
+
+            if (_isGrounded && supportingPlatform != null)
+            {
+                if (_platform != supportingPlatform || _airborneFromPlatform || !wasGrounded)
+                    AttachToPlatform(supportingPlatform);
+                else
+                    _lastPlatformContactTime = Time.fixedTime;
+            }
+            else if (_isGrounded)
+            {
+                ConvertClientPlatformVelocityToWorld(previousPlatform);
+                ClearPlatformReference();
+            }
+            else
+            {
+                if (wasGrounded)
+                {
+                    var departurePlatformVelocity = previousPlatform != null
+                        ? previousPlatform.GetPointVelocity(body.position)
+                        : Vector3.zero;
+                    ConvertClientPlatformVelocityToWorld(previousPlatform, departurePlatformVelocity);
+                    _airbornePlatformMomentum = departurePlatformVelocity;
+                    if (previousPlatform != null)
+                    {
+                        _airborneFromPlatform = true;
+                        _lastPlatformContactTime = Time.fixedTime;
+                    }
+                }
+
+                RefreshAirbornePlatformReference();
+            }
+
+            var speed = moveSpeed * (_sprintHeld ? sprintMultiplier : 1f);
+            var inputDirection = _desiredBodyRotation *
+                                 new Vector3(_moveInput.x, 0f, _moveInput.y);
+            if (inputDirection.sqrMagnitude > 1f)
+                inputDirection.Normalize();
+
+            var currentVelocity = body.linearVelocity;
+            var platformVelocity = _isGrounded && supportingPlatform != null
+                ? supportingPlatform.GetPointVelocity(body.position)
+                : Vector3.zero;
+            var usesClientRelativeMotion = _isGrounded && supportingPlatform != null &&
+                                           supportingPlatform.UsesInterpolatedNetworkMotion;
+
+            if (_isGrounded)
+            {
+                var desiredGroundVelocity = Vector3.ProjectOnPlane(inputDirection, _groundNormal);
+                if (desiredGroundVelocity.sqrMagnitude > 0.0001f)
+                    desiredGroundVelocity = desiredGroundVelocity.normalized * speed;
+
+                // A remote ship advances through NetworkTransform in render time. Its replicated
+                // velocity must not also be integrated by the local Rigidbody or the player is
+                // carried twice on some fixed ticks and not at all on others. Once attached, this
+                // motor stores velocity relative to that ship and frame displacement carries the
+                // body between the ship poses sampled by physics.
+                var relativeVelocity = currentVelocity -
+                                       (usesClientRelativeMotion && _usingClientPlatformRelativeVelocity
+                                           ? Vector3.zero
+                                           : platformVelocity);
+                var relativeGroundVelocity = Vector3.ProjectOnPlane(relativeVelocity, _groundNormal);
+                relativeGroundVelocity = Vector3.MoveTowards(
+                    relativeGroundVelocity, desiredGroundVelocity, groundAcceleration * deltaTime);
+
+                var anchorCorrection = Vector3.zero;
+                if (supportingPlatform != null)
+                {
+                    if (_moveInput.sqrMagnitude > 0.0001f)
+                    {
+                        // While walking, the anchor follows the physics body instead of pulling it
+                        // back to the point where movement started.
+                        _platformLocalAnchor = supportingPlatform.transform.InverseTransformPoint(body.position);
+                        _platformAnchorLocked = false;
+                    }
+                    else if (!_platformAnchorLocked)
+                    {
+                        // Lock at the final physics position on the first stationary tick. This
+                        // avoids a one-tick snap after releasing a movement key.
+                        _platformLocalAnchor = supportingPlatform.transform.InverseTransformPoint(body.position);
+                        _platformAnchorLocked = true;
+                    }
+                    else
+                    {
+                        var anchorTarget = supportingPlatform.transform.TransformPoint(_platformLocalAnchor);
+                        anchorCorrection = Vector3.ClampMagnitude(
+                            (anchorTarget - body.position) * platformAnchorSharpness,
+                            maximumPlatformCorrectionSpeed);
+                    }
+                }
+
+                if (_jumpQueued)
+                {
+                    var jumpSpeed = Mathf.Sqrt(jumpHeight * -2f * gravity);
+                    body.linearVelocity = platformVelocity + relativeGroundVelocity + Vector3.up * jumpSpeed;
+                    _usingClientPlatformRelativeVelocity = false;
+                    _airbornePlatformMomentum = platformVelocity;
+                    _isGrounded = false;
+                    _ignoreGroundUntil = Time.fixedTime + 0.12f;
+                    if (supportingPlatform != null)
+                    {
+                        _platform = supportingPlatform;
+                        _airborneFromPlatform = true;
+                        _platformLocalAnchor = supportingPlatform.transform.InverseTransformPoint(body.position);
+                        _platformAnchorLocked = false;
+                    }
+                }
+                else
+                {
+                    var velocityFrame = usesClientRelativeMotion ? Vector3.zero : platformVelocity;
+                    body.linearVelocity = velocityFrame + relativeGroundVelocity + anchorCorrection +
+                                          -_groundNormal * groundStickSpeed;
+                    _usingClientPlatformRelativeVelocity = usesClientRelativeMotion;
+                }
+            }
+            else
+            {
+                var horizontalVelocity = Vector3.ProjectOnPlane(currentVelocity, Vector3.up);
+                if (_moveInput.sqrMagnitude > 0.0001f)
+                {
+                    var targetAirVelocity = Vector3.ProjectOnPlane(_airbornePlatformMomentum, Vector3.up) +
+                                            Vector3.ProjectOnPlane(inputDirection, Vector3.up).normalized * speed;
+                    horizontalVelocity = Vector3.MoveTowards(
+                        horizontalVelocity, targetAirVelocity, airAcceleration * deltaTime);
+                }
+
+                body.linearVelocity = horizontalVelocity +
+                                      Vector3.up * (currentVelocity.y + gravity * deltaTime);
+            }
+
+            _jumpQueued = false;
+            var animationPlatformVelocity = usesClientRelativeMotion && _isGrounded
+                ? Vector3.zero
+                : platformVelocity;
+            var relativeVerticalVelocity = body.linearVelocity.y - animationPlatformVelocity.y;
+            animationSync.SetLocomotion(
+                _moveInput.magnitude * (speed / Mathf.Max(0.01f, moveSpeed)),
+                _isGrounded,
+                relativeVerticalVelocity);
+        }
+
+        private void ApplyClientPlatformFrameMotion()
+        {
+            if (_platform == null || !_platform.UsesInterpolatedNetworkMotion)
+                return;
+
+            var platformTransform = _platform.transform;
+            if (_airborneFromPlatform)
+            {
+                // Air physics remains world-space, but its completed fixed-step poses are sampled
+                // in the same platform frame used while grounded. Rendering never has to switch
+                // between the player's and ship's independently buffered NetworkTransforms.
+                SampleClientPlatformPose(platformTransform);
+                return;
+            }
+
+            if (!_usingClientPlatformRelativeVelocity)
+                return;
+
+            if (!_clientPlatformPoseInitialized)
+            {
+                InitializeClientPlatformFrame(platformTransform);
+                return;
+            }
+
+            // body.position is the result of the preceding physics step, but the ship may already
+            // have advanced in a render Update. Recover the completed movement against the ship
+            // pose used by that physics step, then rebuild it against the newest ship pose.
+            // Use the complete previous platform matrix. The ship prefab is uniformly scaled and
+            // its walkable surfaces are child colliders; rotation-only conversion would apply the
+            // root scale a second time during presentation and visibly lift clients above the deck.
+            var completedLocalPosition = _clientPlatformWorldToLocal.MultiplyPoint3x4(body.position);
+            var completedLocalRotation = Quaternion.Inverse(_clientPlatformPoseRotation) * body.rotation;
+            _clientPlatformPreviousLocalPosition = _clientPlatformCurrentLocalPosition;
+            _clientPlatformPreviousLocalRotation = _clientPlatformCurrentLocalRotation;
+            _clientPlatformCurrentLocalPosition = completedLocalPosition;
+            _clientPlatformCurrentLocalRotation = completedLocalRotation;
+
+            var currentPlatformRotation = platformTransform.rotation;
+            var frameRotation = currentPlatformRotation * Quaternion.Inverse(_clientPlatformPoseRotation);
+            body.position = platformTransform.TransformPoint(completedLocalPosition);
+            body.linearVelocity = frameRotation * body.linearVelocity;
+
+            _clientPlatformPoseRotation = currentPlatformRotation;
+            _clientPlatformWorldToLocal = platformTransform.worldToLocalMatrix;
+        }
+
+        private void SampleClientPlatformPose(Transform platformTransform)
+        {
+            if (platformTransform == null)
+                return;
+
+            if (!_clientPlatformPoseInitialized)
+            {
+                InitializeClientPlatformFrame(platformTransform);
+                return;
+            }
+
+            _clientPlatformPreviousLocalPosition = _clientPlatformCurrentLocalPosition;
+            _clientPlatformPreviousLocalRotation = _clientPlatformCurrentLocalRotation;
+            _clientPlatformCurrentLocalPosition = platformTransform.InverseTransformPoint(body.position);
+            _clientPlatformCurrentLocalRotation =
+                Quaternion.Inverse(platformTransform.rotation) * body.rotation;
+            _clientPlatformPoseRotation = platformTransform.rotation;
+            _clientPlatformWorldToLocal = platformTransform.worldToLocalMatrix;
+        }
+
+        private void InitializeClientPlatformFrame(Transform platformTransform)
+        {
+            if (platformTransform == null)
+            {
+                ResetClientPlatformFrame();
+                return;
+            }
+
+            _clientPlatformPoseRotation = platformTransform.rotation;
+            _clientPlatformWorldToLocal = platformTransform.worldToLocalMatrix;
+            var localPosition = platformTransform.InverseTransformPoint(body.position);
+            var localRotation = Quaternion.Inverse(_clientPlatformPoseRotation) * body.rotation;
+            _clientPlatformPreviousLocalPosition = localPosition;
+            _clientPlatformCurrentLocalPosition = localPosition;
+            _clientPlatformPreviousLocalRotation = localRotation;
+            _clientPlatformCurrentLocalRotation = localRotation;
+            _clientPlatformPoseInitialized = true;
+        }
+
+        private void ResetClientPlatformFrame()
+        {
+            _clientPlatformPoseInitialized = false;
+            _usingClientPlatformRelativeVelocity = false;
+        }
+
+        private void ConvertClientPlatformVelocityToWorld(
+            MovingPlatform platform,
+            Vector3? knownPlatformVelocity = null)
+        {
+            if (!_usingClientPlatformRelativeVelocity)
+                return;
+
+            if (body != null && !body.isKinematic && platform != null)
+                body.linearVelocity += knownPlatformVelocity ?? platform.GetPointVelocity(body.position);
+
+            ResetClientPlatformFrame();
+        }
+
+        private bool TryGetGroundHit(out RaycastHit nearestHit, float probeDistance = -1f,
+            float minimumUpDot = -1f)
+        {
+            nearestHit = default;
+            if (bodyCollider == null || !bodyCollider.enabled)
+                return false;
+
+            var scale = transform.lossyScale;
+            var radiusScale = Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+            var radius = Mathf.Max(0.05f, bodyCollider.radius * radiusScale * 0.92f);
+            var halfHeight = Mathf.Max(radius,
+                bodyCollider.height * Mathf.Abs(scale.y) * 0.5f);
+            var scaledCenter = Vector3.Scale(bodyCollider.center, scale);
+            var rootPosition = _useKccMotor && _kccMotor != null
+                ? _kccMotor.TransientPosition
+                : body.position;
+            var rootRotation = _useKccMotor && _kccMotor != null
+                ? _kccMotor.TransientRotation
+                : body.rotation;
+            var worldCenter = rootPosition + rootRotation * scaledCenter;
+            var bottomSphere = worldCenter - rootRotation * Vector3.up * (halfHeight - radius);
+            var origin = bottomSphere + Vector3.up * GroundCastStartOffset;
+            var distance = (probeDistance > 0f ? probeDistance : platformProbeDistance) +
+                           GroundCastStartOffset;
+            var hitCount = Physics.SphereCastNonAlloc(origin, radius, Vector3.down, _groundHits,
+                distance, ~0, QueryTriggerInteraction.Ignore);
+            var nearestDistance = float.PositiveInfinity;
+            var requiredUpDot = minimumUpDot >= 0f
+                ? minimumUpDot
+                : Mathf.Cos(maximumSlopeAngle * Mathf.Deg2Rad);
+
+            for (var i = 0; i < hitCount; i++)
+            {
+                var hit = _groundHits[i];
+                if (hit.collider == null || hit.collider == bodyCollider ||
+                    hit.distance >= nearestDistance || Vector3.Dot(hit.normal, Vector3.up) < requiredUpDot)
+                    continue;
+
+                nearestDistance = hit.distance;
+                nearestHit = hit;
+            }
+
+            return nearestDistance < float.PositiveInfinity;
+        }
+
+        private bool TryFindPlatformBelow(out MovingPlatform platform, float probeDistance)
+        {
+            platform = null;
+            return TryGetGroundHit(out var hit, probeDistance, 0.35f) &&
+                   MovingPlatform.TryResolve(hit.collider, out platform);
+        }
+
+        private void RefreshAirbornePlatformReference()
+        {
+            if (_platform == null)
+            {
+                ClearPlatformReference();
+                return;
+            }
+
+            if (Time.fixedTime - _lastPlatformContactTime <= platformContactGrace)
+                return;
+
+            var airborneProbeDistance = jumpHeight + bodyCollider.height * Mathf.Abs(transform.lossyScale.y) +
+                                        platformProbeDistance;
+            if (TryFindPlatformBelow(out var platformBelow, airborneProbeDistance) && platformBelow == _platform)
+                return;
+
+            ClearPlatformReference();
+        }
+
+        private void AttachToPlatform(MovingPlatform platform)
+        {
+            if (platform == null)
+                return;
+
+            SetKccAirbornePlatformFrame(null);
+
+            var preserveAirborneSamples = _platform == platform && _airborneFromPlatform &&
+                                          _clientPlatformPoseInitialized;
+            if (_platform != platform)
+                ConvertClientPlatformVelocityToWorld(_platform);
+
+            _platform = platform;
+            _airborneFromPlatform = false;
+            _platformLocalAnchor = platform.transform.InverseTransformPoint(body != null ? body.position : transform.position);
+            _platformAnchorLocked = true;
+            _lastPlatformContactTime = Time.fixedTime;
+            _airbornePlatformMomentum = Vector3.zero;
+            if (platform.UsesInterpolatedNetworkMotion)
+            {
+                if (preserveAirborneSamples)
+                    SampleClientPlatformPose(platform.transform);
+                else
+                    InitializeClientPlatformFrame(platform.transform);
+            }
+            else
+                ResetClientPlatformFrame();
+            _camera?.SetReferenceFrame(platform.transform);
+            PublishPlatformPose();
+        }
+
+        private void ClearPlatformReference()
+        {
+            // Also clear a stale KCC override when the bookkeeping was already reset by
+            // placement/despawn code. Leaving the override alive would keep carrying the
+            // character with an old ship while the gameplay state says it is world-relative.
+            SetKccAirbornePlatformFrame(null);
+
+            if (_platform == null && !_airborneFromPlatform)
+                return;
+
+            _platform = null;
+            _airborneFromPlatform = false;
+            _platformAnchorLocked = false;
+            _airbornePlatformMomentum = Vector3.zero;
+            ResetClientPlatformFrame();
+            _camera?.SetReferenceFrame(null);
+            PublishPlatformPose();
+        }
+
+        private void PublishPlatformPose()
+        {
+            if (!IsOwner || !IsSpawned)
+                return;
+
+            var hasContinuousAirborneFrame = _platform != null && _airborneFromPlatform &&
+                                             (_useKccMotor ||
+                                              (_platform.UsesInterpolatedNetworkMotion &&
+                                               _clientPlatformPoseInitialized));
+            if (_platform == null || (!_isGrounded && !hasContinuousAirborneFrame))
+            {
+                _hasReplicatedPlatform.Value = false;
+                return;
+            }
+
+            var platformObject = _platform.GetComponentInParent<NetworkObject>();
+            if (platformObject == null || !platformObject.IsSpawned)
+            {
+                _hasReplicatedPlatform.Value = false;
+                return;
+            }
+
+            var platformWorldPosition = _useKccMotor
+                ? transform.position
+                : _platformAnchorLocked
+                    ? _platform.transform.TransformPoint(_platformLocalAnchor)
+                    : transform.position;
+            var platformWorldRotation = _useKccMotor ? transform.rotation : body.rotation;
+            if (!_useKccMotor && _platform.UsesInterpolatedNetworkMotion &&
+                TryGetClientPlatformPresentationPose(out var localPosition, out var localRotation))
+            {
+                platformWorldPosition = _platform.transform.TransformPoint(localPosition);
+                platformWorldRotation = _platform.transform.rotation * localRotation;
+            }
+
+            _replicatedPlatform.Value = new NetworkObjectReference(platformObject);
+            _replicatedPlatformLocalPosition.Value =
+                platformObject.transform.InverseTransformPoint(platformWorldPosition);
+            _replicatedPlatformLocalRotation.Value =
+                Quaternion.Inverse(platformObject.transform.rotation) * platformWorldRotation;
+            _hasReplicatedPlatform.Value = true;
+        }
+
+        private void ApplyRemotePlatformPose()
+        {
+            if (!_hasReplicatedPlatform.Value ||
+                !_replicatedPlatform.Value.TryGet(out var platformObject, NetworkManager) ||
+                platformObject == null || !platformObject.IsSpawned ||
+                platformObject.GetComponentInChildren<MovingPlatform>(true) == null)
+            {
+                ApplyRemoteWorldPresentation();
+                return;
+            }
+
+            var targetLocalPosition = _replicatedPlatformLocalPosition.Value;
+            var targetLocalRotation = _replicatedPlatformLocalRotation.Value;
+            if (!_remotePlatformPoseInitialized || _remotePlatformObject != platformObject)
+            {
+                _remotePlatformObject = platformObject;
+                // Enter platform space from the pose already on screen. This avoids a one-frame
+                // pop when the grounded flag arrives on a different network tick than position.
+                _remotePlatformLocalPosition = platformObject.transform.InverseTransformPoint(
+                    _presentationRoot.position);
+                _remotePlatformLocalRotation = Quaternion.Inverse(platformObject.transform.rotation) *
+                                               _presentationRoot.rotation;
+                _remotePlatformPoseInitialized = true;
+                _remoteWorldPresentationActive = false;
+                _remoteWorldPresentationOffset = Vector3.zero;
+                _remoteWorldPresentationRotationOffset = Quaternion.identity;
+            }
+            else
+            {
+                var positionBlend = 1f - Mathf.Exp(-remotePlatformPositionSharpness * Time.deltaTime);
+                var rotationBlend = 1f - Mathf.Exp(-remotePlatformRotationSharpness * Time.deltaTime);
+                _remotePlatformLocalPosition = Vector3.Lerp(
+                    _remotePlatformLocalPosition, targetLocalPosition, positionBlend);
+                _remotePlatformLocalRotation = Quaternion.Slerp(
+                    _remotePlatformLocalRotation, targetLocalRotation, rotationBlend);
+            }
+
+            // Apply after NetworkTransform interpolation. Platform motion is exact in this
+            // frame; only the player's own walking/jumping is smoothed in platform space.
+            _presentationRoot.SetPositionAndRotation(
+                platformObject.transform.TransformPoint(_remotePlatformLocalPosition),
+                platformObject.transform.rotation * _remotePlatformLocalRotation);
+        }
+
+        private void ApplyRemoteWorldPresentation()
+        {
+            if (_presentationRoot == null)
+                return;
+
+            if (_remotePlatformPoseInitialized)
+            {
+                _remoteWorldPresentationOffset = _presentationRoot.position - transform.position;
+                _remoteWorldPresentationRotationOffset =
+                    Quaternion.Inverse(transform.rotation) * _presentationRoot.rotation;
+                _remoteWorldPresentationActive = true;
+                _remotePlatformObject = null;
+                _remotePlatformPoseInitialized = false;
+            }
+
+            if (!_remoteWorldPresentationActive)
+            {
+                ResetPresentationPose();
+                return;
+            }
+
+            var positionDecay = Mathf.Exp(-remotePlatformPositionSharpness * Time.deltaTime);
+            var rotationDecay = Mathf.Exp(-remotePlatformRotationSharpness * Time.deltaTime);
+            _remoteWorldPresentationOffset *= positionDecay;
+            _remoteWorldPresentationRotationOffset = Quaternion.Slerp(
+                Quaternion.identity,
+                _remoteWorldPresentationRotationOffset,
+                rotationDecay);
+
+            if (_remoteWorldPresentationOffset.sqrMagnitude < 0.00000001f &&
+                Quaternion.Angle(_remoteWorldPresentationRotationOffset, Quaternion.identity) < 0.01f)
+            {
+                _remoteWorldPresentationActive = false;
+                ResetPresentationPose();
+                return;
+            }
+
+            _presentationRoot.SetPositionAndRotation(
+                transform.position + _remoteWorldPresentationOffset,
+                transform.rotation * _remoteWorldPresentationRotationOffset);
+        }
+
+        private void ResetRemotePlatformPose()
+        {
+            _remotePlatformObject = null;
+            _remotePlatformPoseInitialized = false;
+            _remoteWorldPresentationActive = false;
+            _remoteWorldPresentationOffset = Vector3.zero;
+            _remoteWorldPresentationRotationOffset = Quaternion.identity;
+            ResetPresentationPose();
+        }
+
+        private void LateUpdate()
+        {
+            if (!IsSpawned)
+                return;
+
+            if (!IsOwner)
+            {
+                ApplyRemotePlatformPose();
+                return;
+            }
+
+            if (_sceneTransitioning)
+                return;
+
+            if (_useKccMotor)
+            {
+                // KCC has already interpolated both the local motor and its ship mover in the
+                // same LateUpdate phase. Keep visual children at the motor root with no second
+                // correction pass; only a control station may override the root pose.
+                if (!SnapToActiveControlStation())
+                    ResetPresentationPose();
+                _camera?.RefreshPose();
+                PublishPlatformPose();
+                return;
+            }
+
+            if (_platform != null)
+            {
+                // Platform NetworkTransform interpolation happens before this LateUpdate. Keep
+                // the rendered body/camera in the exact platform frame while physics remains in
+                // fixed time. This removes the render-time gap without teleporting the Rigidbody.
+                var usesContinuousAirborneFrame = _airborneFromPlatform &&
+                                                  _platform.UsesInterpolatedNetworkMotion &&
+                                                  _clientPlatformPoseInitialized;
+                if (!SnapToActiveControlStation() &&
+                    ((_isGrounded && !_airborneFromPlatform) || usesContinuousAirborneFrame))
+                    ApplyOwnerPlatformPresentation();
+                else if (!IsAtControlStation)
+                    ApplyOwnerWorldPresentation();
+                _camera?.RefreshPose();
+            }
+            else
+            {
+                ApplyOwnerWorldPresentation();
+            }
+
+            PublishPlatformPose();
+        }
+
+        private void ApplyOwnerPlatformPresentation()
+        {
+            if (_presentationRoot == null || _platform == null)
+                return;
+
+            Vector3 targetPosition;
+            Quaternion targetRotation;
+
+            if (_platform.UsesInterpolatedNetworkMotion &&
+                TryGetClientPlatformPresentationPose(out var localPosition, out var localRotation))
+            {
+                // The local walk is interpolated in ship space, then composed with the ship's
+                // newest render pose. Translation of the ship therefore reaches the camera and
+                // character exactly once and cannot fight Rigidbody interpolation.
+                targetPosition = _platform.transform.TransformPoint(localPosition);
+                targetRotation = _platform.transform.rotation * localRotation;
+            }
+            else if (_airborneFromPlatform || !_platformAnchorLocked || _moveInput.sqrMagnitude > 0.0001f)
+            {
+                _platformLocalAnchor = _platform.transform.InverseTransformPoint(body.position);
+                targetPosition = transform.position;
+                targetRotation = transform.rotation;
+            }
+            else
+            {
+                targetPosition = _platform.transform.TransformPoint(_platformLocalAnchor);
+                targetRotation = body.rotation;
+            }
+
+            if (!_ownerPlatformPresentationActive)
+            {
+                // Land in platform space from the pose already displayed in world space. Contact
+                // and the network pose can arrive on adjacent ticks, so snapping directly to the
+                // new target would produce a visible landing jerk.
+                _ownerWorldPresentationOffset = _presentationRoot.position - targetPosition;
+                _ownerWorldPresentationRotationOffset =
+                    Quaternion.Inverse(targetRotation) * _presentationRoot.rotation;
+            }
+
+            var positionDecay = Mathf.Exp(-remotePlatformPositionSharpness * Time.deltaTime);
+            var rotationDecay = Mathf.Exp(-remotePlatformRotationSharpness * Time.deltaTime);
+            _ownerWorldPresentationOffset *= positionDecay;
+            _ownerWorldPresentationRotationOffset = Quaternion.Slerp(
+                Quaternion.identity,
+                _ownerWorldPresentationRotationOffset,
+                rotationDecay);
+            _ownerPlatformPresentationActive = true;
+            _presentationRoot.SetPositionAndRotation(
+                targetPosition + _ownerWorldPresentationOffset,
+                targetRotation * _ownerWorldPresentationRotationOffset);
+        }
+
+        private void ApplyOwnerWorldPresentation()
+        {
+            if (_presentationRoot == null)
+                return;
+
+            if (_ownerPlatformPresentationActive)
+            {
+                // Preserve the last deck-relative render pose on the take-off frame. The tiny
+                // fixed/render-time gap then fades out instead of becoming a visible backward snap.
+                _ownerWorldPresentationOffset = _presentationRoot.position - transform.position;
+                _ownerWorldPresentationRotationOffset =
+                    Quaternion.Inverse(transform.rotation) * _presentationRoot.rotation;
+                _ownerPlatformPresentationActive = false;
+            }
+
+            var preserveTakeoffContinuity = _platform != null && _airborneFromPlatform &&
+                                            _platform.UsesInterpolatedNetworkMotion;
+            if (!preserveTakeoffContinuity)
+            {
+                var decay = Mathf.Exp(-remotePlatformPositionSharpness * Time.deltaTime);
+                _ownerWorldPresentationOffset *= decay;
+                _ownerWorldPresentationRotationOffset = Quaternion.Slerp(
+                    Quaternion.identity,
+                    _ownerWorldPresentationRotationOffset,
+                    decay);
+            }
+
+            if (_ownerWorldPresentationOffset.sqrMagnitude < 0.00000001f &&
+                Quaternion.Angle(_ownerWorldPresentationRotationOffset, Quaternion.identity) < 0.01f)
+            {
+                _ownerWorldPresentationOffset = Vector3.zero;
+                _ownerWorldPresentationRotationOffset = Quaternion.identity;
+                _presentationRoot.localPosition = Vector3.zero;
+                _presentationRoot.localRotation = Quaternion.identity;
+                _presentationRoot.localScale = Vector3.one;
+                return;
+            }
+
+            _presentationRoot.SetPositionAndRotation(
+                transform.position + _ownerWorldPresentationOffset,
+                transform.rotation * _ownerWorldPresentationRotationOffset);
+        }
+
+        private bool TryGetClientPlatformPresentationPose(
+            out Vector3 localPosition,
+            out Quaternion localRotation)
+        {
+            localPosition = default;
+            localRotation = Quaternion.identity;
+            if (!_clientPlatformPoseInitialized)
+                return false;
+
+            var interpolation = Mathf.Clamp01(
+                (Time.time - Time.fixedTime) / Mathf.Max(Time.fixedDeltaTime, 0.0001f));
+            localPosition = Vector3.Lerp(
+                _clientPlatformPreviousLocalPosition,
+                _clientPlatformCurrentLocalPosition,
+                interpolation);
+            localRotation = Quaternion.Slerp(
+                _clientPlatformPreviousLocalRotation,
+                _clientPlatformCurrentLocalRotation,
+                interpolation);
+            return true;
+        }
+
+        private void ResetPresentationPose()
+        {
+            if (_presentationRoot == null)
+                return;
+
+            _presentationRoot.localPosition = Vector3.zero;
+            _presentationRoot.localRotation = Quaternion.identity;
+            _presentationRoot.localScale = Vector3.one;
+            _ownerPlatformPresentationActive = false;
+            _ownerWorldPresentationOffset = Vector3.zero;
+            _ownerWorldPresentationRotationOffset = Quaternion.identity;
+        }
+
+        private void UpdateInteraction()
+        {
+            if (!Keyboard.current.eKey.wasPressedThisFrame)
+                return;
+
+            var origin = cameraTarget.position;
+            var direction = _camera != null ? _camera.transform.forward : transform.forward;
+            if (!Physics.SphereCast(origin, 0.3f, direction, out var hit, interactionDistance,
+                    interactionMask, QueryTriggerInteraction.Collide))
+                return;
+
+            foreach (var behaviour in hit.collider.GetComponentsInParent<MonoBehaviour>())
+            {
+                if (behaviour is IPlayerInteractable interactable)
+                {
+                    interactable.Interact(this);
+                    return;
+                }
+            }
+        }
+
+        private void UpdateItemActions()
+        {
+            if (Mouse.current == null)
+                return;
+
+            if (Mouse.current.leftButton.wasPressedThisFrame)
+            {
+                animationSync.PlayAction("Primary");
+                inventory.UseSelected(false);
+            }
+            else if (Mouse.current.rightButton.wasPressedThisFrame)
+            {
+                animationSync.PlayAction("Special");
+                inventory.UseSelected(true);
+            }
+
+            if (Keyboard.current.gKey.wasPressedThisFrame)
+                inventory.DropSelected(transform.position + transform.forward * 1.1f + Vector3.up, transform.forward);
+        }
+
+        public void EnterHelm(ShipHelm helm)
+        {
+            if (!IsOwner || helm == null || _activeSailControl != null || _activeMastControl != null)
+                return;
+
+            _activeHelm = helm;
+            ClearMovementInput();
+            _airbornePlatformMomentum = Vector3.zero;
+            var platform = helm.Ship.GetComponent<MovingPlatform>();
+            if (platform != null)
+                AttachToPlatform(platform);
+            else
+                _camera?.SetReferenceFrame(helm.Ship.transform);
+            SetOwnerPhysicsSimulation(false);
+            SnapToActiveControlStation();
+            helm.Ship.RequestHelmServerRpc();
+        }
+
+        public void EnterSailControl(ShipSailControl sailControl)
+        {
+            if (!IsOwner || sailControl == null || _activeHelm != null || _activeMastControl != null)
+                return;
+
+            _activeSailControl = sailControl;
+            ClearMovementInput();
+            _airbornePlatformMomentum = Vector3.zero;
+            var platform = sailControl.Ship.GetComponent<MovingPlatform>();
+            if (platform != null)
+                AttachToPlatform(platform);
+            else
+                _camera?.SetReferenceFrame(sailControl.Ship.transform);
+
+            SetOwnerPhysicsSimulation(false);
+            SnapToActiveControlStation();
+            sailControl.Ship.RequestSailControlServerRpc();
+        }
+
+        public void EnterMastControl(ShipMastControl mastControl)
+        {
+            if (!IsOwner || mastControl == null || _activeHelm != null || _activeSailControl != null)
+                return;
+
+            _activeMastControl = mastControl;
+            ClearMovementInput();
+            _airbornePlatformMomentum = Vector3.zero;
+            var platform = mastControl.Ship.GetComponent<MovingPlatform>();
+            if (platform != null)
+                AttachToPlatform(platform);
+            else
+                _camera?.SetReferenceFrame(mastControl.Ship.transform);
+
+            SetOwnerPhysicsSimulation(false);
+            SnapToActiveControlStation();
+            mastControl.Ship.RequestMastControlServerRpc();
+        }
+
+        private void UpdateHelmInput()
+        {
+            if (Keyboard.current.eKey.wasPressedThisFrame)
+            {
+                var helm = _activeHelm;
+                helm.Ship.ReleaseHelmServerRpc();
+                _activeHelm = null;
+                var platform = helm.Ship.GetComponent<MovingPlatform>();
+                if (platform != null)
+                    AttachToPlatform(platform);
+                else
+                    _camera?.SetReferenceFrame(null);
+                SetOwnerPhysicsSimulation(true, platform != null
+                    ? platform.GetPointVelocity(body.position)
+                    : Vector3.zero);
+                return;
+            }
+
+            SnapToActiveControlStation();
+
+            if (Time.unscaledTime < _nextHelmSend)
+                return;
+
+            _nextHelmSend = Time.unscaledTime + 0.05f;
+            var steer = (Keyboard.current.dKey.isPressed ? 1f : 0f) - (Keyboard.current.aKey.isPressed ? 1f : 0f);
+            _activeHelm.Ship.SubmitHelmInputServerRpc(steer);
+            animationSync.SetLocomotion(0f, true, 0f);
+        }
+
+        private void UpdateSailControlInput()
+        {
+            if (Keyboard.current.eKey.wasPressedThisFrame)
+            {
+                var sailControl = _activeSailControl;
+                sailControl.Ship.ReleaseSailControlServerRpc();
+                _activeSailControl = null;
+                var platform = sailControl.Ship.GetComponent<MovingPlatform>();
+                if (platform != null)
+                    AttachToPlatform(platform);
+                else
+                    _camera?.SetReferenceFrame(null);
+                SetOwnerPhysicsSimulation(true, platform != null
+                    ? platform.GetPointVelocity(body.position)
+                    : Vector3.zero);
+                return;
+            }
+
+            SnapToActiveControlStation();
+
+            if (Time.unscaledTime < _nextSailSend)
+                return;
+
+            _nextSailSend = Time.unscaledTime + 0.05f;
+            var sailInput = (Keyboard.current.sKey.isPressed ? 1f : 0f) -
+                            (Keyboard.current.wKey.isPressed ? 1f : 0f);
+            _activeSailControl.Ship.SubmitSailInputServerRpc(sailInput);
+            animationSync.SetLocomotion(0f, true, 0f);
+        }
+
+        private void UpdateMastControlInput()
+        {
+            if (Keyboard.current.eKey.wasPressedThisFrame)
+            {
+                var mastControl = _activeMastControl;
+                mastControl.Ship.ReleaseMastControlServerRpc();
+                _activeMastControl = null;
+                var platform = mastControl.Ship.GetComponent<MovingPlatform>();
+                if (platform != null)
+                    AttachToPlatform(platform);
+                else
+                    _camera?.SetReferenceFrame(null);
+                SetOwnerPhysicsSimulation(true, platform != null
+                    ? platform.GetPointVelocity(body.position)
+                    : Vector3.zero);
+                return;
+            }
+
+            SnapToActiveControlStation();
+
+            if (Time.unscaledTime < _nextMastSend)
+                return;
+
+            _nextMastSend = Time.unscaledTime + 0.05f;
+            var mastInput = (Keyboard.current.dKey.isPressed ? 1f : 0f) -
+                            (Keyboard.current.aKey.isPressed ? 1f : 0f);
+            _activeMastControl.Ship.SubmitMastInputServerRpc(mastInput);
+            animationSync.SetLocomotion(0f, true, 0f);
+        }
+
+        private bool SnapToActiveControlStation()
+        {
+            Transform station = null;
+            if (_activeHelm != null)
+                station = _activeHelm.Station;
+            else if (_activeSailControl != null)
+                station = _activeSailControl.Station;
+            else if (_activeMastControl != null)
+                station = _activeMastControl.Station;
+
+            if (station == null)
+                return false;
+
+            SetBodyPose(station.position, station.rotation);
+            _desiredBodyRotation = station.rotation;
+            UpdatePlatformAnchorFromCurrentPose();
+            ResetPresentationPose();
+            return true;
+        }
+
+        private void UpdatePlatformAnchorFromCurrentPose()
+        {
+            if (_platform != null)
+                _platformLocalAnchor = _platform.transform.InverseTransformPoint(body.position);
+        }
+
+        private void SetBodyPose(Vector3 position, Quaternion rotation)
+        {
+            body.position = position;
+            body.rotation = rotation;
+            transform.SetPositionAndRotation(position, rotation);
+            if (_useKccMotor && _kccMotor != null)
+                _kccMotor.SetPositionAndRotation(position, rotation);
+        }
+
+        private void SetOwnerPhysicsSimulation(bool enabled, Vector3 initialVelocity = default)
+        {
+            if (!IsOwner || body == null || _kccMotor == null || !_useKccMotor)
+                return;
+
+            if (!enabled)
+            {
+                _kccMotor.BaseVelocity = Vector3.zero;
+                _kccMotor.AttachedRigidbodyOverride = null;
+                _kccMotor.enabled = false;
+                body.isKinematic = true;
+                bodyCollider.enabled = false;
+                ResetClientPlatformFrame();
+                return;
+            }
+
+            var currentRotation = transform.rotation;
+            var kccPlanarForward = Vector3.ProjectOnPlane(
+                currentRotation * Vector3.forward, Vector3.up);
+            if (kccPlanarForward.sqrMagnitude < 0.0001f)
+                kccPlanarForward = Vector3.forward;
+            _desiredBodyRotation = Quaternion.LookRotation(kccPlanarForward.normalized, Vector3.up);
+            SetBodyPose(transform.position, _desiredBodyRotation);
+            body.isKinematic = true;
+            body.interpolation = RigidbodyInterpolation.None;
+            bodyCollider.enabled = true;
+            _kccMotor.CharacterController = this;
+            _kccMotor.BaseVelocity = _platform != null ? Vector3.zero : initialVelocity;
+            _kccMotor.enabled = true;
+        }
+
+        public void PrepareForSceneTransitionLocally()
+        {
+            if (!IsOwner)
+                return;
+
+            _sceneTransitioning = true;
+            StopShipControlInputsForMenu();
+            RemoveAnyNetworkParent();
+            _activeHelm = null;
+            _activeSailControl = null;
+            _activeMastControl = null;
+            _platform = null;
+            _airborneFromPlatform = false;
+            ResetClientPlatformFrame();
+            _airbornePlatformMomentum = Vector3.zero;
+            _isGrounded = false;
+            _hasReplicatedPlatform.Value = false;
+            _camera?.SetReferenceFrame(null);
+            SetOwnerPhysicsSimulation(false);
+            ResetPresentationPose();
+        }
+
+        public void RemoveNetworkParentOnServer()
+        {
+            if (!IsServer || !IsSpawned || transform.parent == null)
+                return;
+
+            NetworkObject.TryRemoveParent(true);
+        }
+
+        public void CancelSceneTransitionLocally()
+        {
+            if (!IsOwner || !IsSpawned)
+                return;
+
+            _sceneTransitioning = false;
+            SetOwnerPhysicsSimulation(true);
+        }
+
+        private void RemoveAnyNetworkParent()
+        {
+            if (!IsOwner || !IsSpawned || transform.parent == null)
+                return;
+
+            NetworkObject.TryRemoveParent(true);
+        }
+
+        [ClientRpc]
+        public void TeleportOwnerClientRpc(
+            int targetSceneBuildIndex,
+            Vector3 worldPosition,
+            Quaternion worldRotation,
+            bool usePlatformSpace,
+            NetworkObjectReference platformReference,
+            Vector3 platformLocalPosition,
+            Quaternion platformLocalRotation,
+            ClientRpcParams rpcParams = default)
+        {
+            if (!IsOwner)
+                return;
+
+            var revision = ++_placementRevision;
+            StartCoroutine(ApplyPlacementWhenReady(
+                revision,
+                targetSceneBuildIndex,
+                worldPosition,
+                worldRotation,
+                usePlatformSpace,
+                platformReference,
+                platformLocalPosition,
+                platformLocalRotation));
+        }
+
+        private IEnumerator ApplyPlacementWhenReady(
+            int revision,
+            int targetSceneBuildIndex,
+            Vector3 worldPosition,
+            Quaternion worldRotation,
+            bool usePlatformSpace,
+            NetworkObjectReference platformReference,
+            Vector3 platformLocalPosition,
+            Quaternion platformLocalRotation)
+        {
+            while (IsSpawned && revision == _placementRevision &&
+                   SceneManager.GetActiveScene().buildIndex != targetSceneBuildIndex)
+                yield return null;
+
+            NetworkObject platformObject = null;
+            if (usePlatformSpace)
+            {
+                while (IsSpawned && revision == _placementRevision &&
+                       !platformReference.TryGet(out platformObject, NetworkManager))
+                    yield return null;
+            }
+
+            if (!IsSpawned || revision != _placementRevision)
+                yield break;
+
+            ApplyOwnerPlacement(
+                worldPosition,
+                worldRotation,
+                usePlatformSpace ? platformObject : null,
+                platformLocalPosition,
+                platformLocalRotation);
+        }
+
+        private void ApplyOwnerPlacement(
+            Vector3 worldPosition,
+            Quaternion worldRotation,
+            NetworkObject platformObject,
+            Vector3 platformLocalPosition,
+            Quaternion platformLocalRotation)
+        {
+            RemoveAnyNetworkParent();
+            SetOwnerPhysicsSimulation(false);
+
+            _activeHelm = null;
+            _activeSailControl = null;
+            _activeMastControl = null;
+            _platform = null;
+            _airborneFromPlatform = false;
+            ResetClientPlatformFrame();
+            _airbornePlatformMomentum = Vector3.zero;
+            _isGrounded = false;
+            ClearMovementInput();
+
+            if (platformObject != null && platformObject.IsSpawned &&
+                platformObject.GetComponentInChildren<MovingPlatform>(true) is { } platform)
+            {
+                var resolvedWorldPosition = platformObject.transform.TransformPoint(platformLocalPosition);
+                var resolvedWorldRotation = platformObject.transform.rotation * platformLocalRotation;
+                SetBodyPose(resolvedWorldPosition, resolvedWorldRotation);
+
+                _platform = platform;
+                _platformLocalAnchor = platform.transform.InverseTransformPoint(resolvedWorldPosition);
+                _platformAnchorLocked = true;
+                _lastPlatformContactTime = Time.fixedTime;
+                if (platform.UsesInterpolatedNetworkMotion)
+                    InitializeClientPlatformFrame(platform.transform);
+                _networkTransform?.Teleport(resolvedWorldPosition, resolvedWorldRotation, transform.localScale);
+                _camera?.SetReferenceFrame(platform.transform);
+            }
+            else
+            {
+                SetBodyPose(worldPosition, worldRotation);
+                _networkTransform?.Teleport(worldPosition, worldRotation, transform.localScale);
+                _hasReplicatedPlatform.Value = false;
+                _camera?.SetReferenceFrame(null);
+            }
+
+            _desiredBodyRotation = body.rotation;
+            _sceneTransitioning = false;
+            SetOwnerPhysicsSimulation(true, _platform != null
+                ? _platform.GetPointVelocity(body.position)
+                : Vector3.zero);
+            ResetPresentationPose();
+            PublishPlatformPose();
+            _camera?.RefreshPose();
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            RestoreOwnerBodyLayers();
+            if (_kccMotor != null)
+            {
+                _kccMotor.AttachedRigidbodyOverride = null;
+                _kccMotor.CharacterController = null;
+                _kccMotor.enabled = false;
+            }
+            _useKccMotor = false;
+            if (bodyCollider != null)
+                bodyCollider.enabled = false;
+            if (body != null)
+                body.isKinematic = true;
+            _platform = null;
+            _airborneFromPlatform = false;
+            ResetClientPlatformFrame();
+            _activeHelm = null;
+            _activeSailControl = null;
+            _activeMastControl = null;
+            _airbornePlatformMomentum = Vector3.zero;
+            _isGrounded = false;
+            ClearMovementInput();
+            _menuWasOpen = false;
+            _sceneTransitioning = false;
+            _placementRevision++;
+            ResetRemotePlatformPose();
+            _camera?.SetReferenceFrame(null);
+            if (ownerCamera != null)
+                ownerCamera.gameObject.SetActive(false);
+            _camera = null;
+        }
+    }
+}

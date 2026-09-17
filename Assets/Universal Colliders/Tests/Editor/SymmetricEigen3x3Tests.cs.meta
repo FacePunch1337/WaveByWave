@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: 1626421097ade8b89a6d4d0c51e48a9f
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Tests/Editor/SymmetricEigen3x3Tests.cs
+  uploadId: 879332

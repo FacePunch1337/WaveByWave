@@ -1,0 +1,25 @@
+{
+    "name": "WaveByWave.Runtime",
+    "rootNamespace": "WaveByWave",
+    "references": [
+        "Facepunch Transport for Netcode for GameObjects",
+        "Unity.Collections",
+        "Unity.Entities",
+        "Unity.InputSystem",
+        "KinematicCharacterController",
+        "Unity.Mathematics",
+        "Unity.Netcode.Runtime",
+        "Unity.Networking.Transport",
+        "UnityEngine.UI",
+        "sc.stylizedwater3.runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

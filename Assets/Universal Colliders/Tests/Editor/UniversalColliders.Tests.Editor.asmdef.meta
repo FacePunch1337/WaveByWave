@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: b918a4a77e9c8ed35b7cfff0edab5b51
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Tests/Editor/UniversalColliders.Tests.Editor.asmdef
+  uploadId: 879332

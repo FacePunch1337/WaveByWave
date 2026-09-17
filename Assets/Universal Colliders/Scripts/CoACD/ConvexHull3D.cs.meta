@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: b082f0b82694fb2e19667a9373d35ea9
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Scripts/CoACD/ConvexHull3D.cs
+  uploadId: 879332

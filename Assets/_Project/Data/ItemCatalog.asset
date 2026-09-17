@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 49426f9a5e837944295ee46db82497ba, type: 3}
+  m_Name: ItemCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::WaveByWave.Items.ItemCatalog
+  items:
+  - {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
+  - {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
+  - {fileID: 11400000, guid: 71cedb2baf08f9e4ca4dc7bbd5cf44de, type: 2}
+  - {fileID: 11400000, guid: c2e5c7c0a869e614d823e9df72d77fdd, type: 2}
+  - {fileID: 11400000, guid: ead410e76e3f4a64fa6efcefa3b56af3, type: 2}

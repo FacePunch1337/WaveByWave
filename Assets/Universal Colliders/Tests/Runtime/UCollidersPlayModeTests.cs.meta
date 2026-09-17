@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: 140ea8999d0005185b7d42f516debb2c
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Tests/Runtime/UCollidersPlayModeTests.cs
+  uploadId: 879332

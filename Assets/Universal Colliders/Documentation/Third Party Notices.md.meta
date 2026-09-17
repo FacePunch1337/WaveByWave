@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 277310eb8408c988ca5a6fd0f6653875
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Documentation/Third Party Notices.md
+  uploadId: 879332

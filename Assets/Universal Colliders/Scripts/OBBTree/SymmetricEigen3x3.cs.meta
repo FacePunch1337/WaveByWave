@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: 52a7135e4a8b5e7ada46038c3eddaaf6
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Scripts/OBBTree/SymmetricEigen3x3.cs
+  uploadId: 879332

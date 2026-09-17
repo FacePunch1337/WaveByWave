@@ -1,0 +1,112 @@
+# Normalize text files, including Unity YAML and source code.
+* text=auto
+*.cs text eol=lf
+*.shader text eol=lf
+*.hlsl text eol=lf
+*.compute text eol=lf
+*.cginc text eol=lf
+*.json text eol=lf
+*.asmdef text eol=lf
+*.asmref text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.meta text eol=lf
+*.unity text eol=lf
+*.prefab text eol=lf
+*.mat text eol=lf
+*.asset text eol=lf
+*.anim text eol=lf
+*.controller text eol=lf
+*.overrideController text eol=lf
+*.playable text eol=lf
+*.lighting text eol=lf
+*.terrainlayer text eol=lf
+*.physicMaterial text eol=lf
+*.shadergraph text eol=lf
+*.shadersubgraph text eol=lf
+*.inputactions text eol=lf
+*.watermesh text eol=lf
+*.watershader3 text eol=lf
+*.bat text eol=crlf
+
+# Binary source assets are stored in Git LFS (case-insensitive extensions).
+*.[pP][nN][gG] filter=lfs diff=lfs merge=lfs -text
+*.[jJ][pP][gG] filter=lfs diff=lfs merge=lfs -text
+*.[jJ][pP][eE][gG] filter=lfs diff=lfs merge=lfs -text
+*.[gG][iI][fF] filter=lfs diff=lfs merge=lfs -text
+*.[tT][gG][aA] filter=lfs diff=lfs merge=lfs -text
+*.[tT][iI][fF] filter=lfs diff=lfs merge=lfs -text
+*.[tT][iI][fF][fF] filter=lfs diff=lfs merge=lfs -text
+*.[bB][mM][pP] filter=lfs diff=lfs merge=lfs -text
+*.[iI][cC][oO] filter=lfs diff=lfs merge=lfs -text
+*.[eE][xX][rR] filter=lfs diff=lfs merge=lfs -text
+*.[hH][dD][rR] filter=lfs diff=lfs merge=lfs -text
+*.[pP][sS][dD] filter=lfs diff=lfs merge=lfs -text
+*.[pP][sS][bB] filter=lfs diff=lfs merge=lfs -text
+*.[xX][cC][fF] filter=lfs diff=lfs merge=lfs -text
+*.[dD][dD][sS] filter=lfs diff=lfs merge=lfs -text
+*.[kK][tT][xX] filter=lfs diff=lfs merge=lfs -text
+*.[kK][tT][xX]2 filter=lfs diff=lfs merge=lfs -text
+*.[fF][bB][xX] filter=lfs diff=lfs merge=lfs -text
+*.[bB][lL][eE][nN][dD] filter=lfs diff=lfs merge=lfs -text
+*.[mM][aA][xX] filter=lfs diff=lfs merge=lfs -text
+*.[mM][aA] filter=lfs diff=lfs merge=lfs -text
+*.[mM][bB] filter=lfs diff=lfs merge=lfs -text
+*.[cC]4[dD] filter=lfs diff=lfs merge=lfs -text
+*.3[dD][sS] filter=lfs diff=lfs merge=lfs -text
+*.[oO][bB][jJ] filter=lfs diff=lfs merge=lfs -text
+*.[dD][aA][eE] filter=lfs diff=lfs merge=lfs -text
+*.[aA][bB][cC] filter=lfs diff=lfs merge=lfs -text
+*.[wW][aA][vV] filter=lfs diff=lfs merge=lfs -text
+*.[mM][pP]3 filter=lfs diff=lfs merge=lfs -text
+*.[oO][gG][gG] filter=lfs diff=lfs merge=lfs -text
+*.[aA][iI][fF][fF] filter=lfs diff=lfs merge=lfs -text
+*.[aA][iI][fF] filter=lfs diff=lfs merge=lfs -text
+*.[fF][lL][aA][cC] filter=lfs diff=lfs merge=lfs -text
+*.[mM][pP]4 filter=lfs diff=lfs merge=lfs -text
+*.[mM][oO][vV] filter=lfs diff=lfs merge=lfs -text
+*.[aA][vV][iI] filter=lfs diff=lfs merge=lfs -text
+*.[wW][eE][bB][mM] filter=lfs diff=lfs merge=lfs -text
+*.[mM][kK][vV] filter=lfs diff=lfs merge=lfs -text
+*.[tT][tT][fF] filter=lfs diff=lfs merge=lfs -text
+*.[oO][tT][fF] filter=lfs diff=lfs merge=lfs -text
+*.[wW][oO][fF][fF] filter=lfs diff=lfs merge=lfs -text
+*.[wW][oO][fF][fF]2 filter=lfs diff=lfs merge=lfs -text
+*.[dD][lL][lL] filter=lfs diff=lfs merge=lfs -text
+*.[sS][oO] filter=lfs diff=lfs merge=lfs -text
+*.[dD][yY][lL][iI][bB] filter=lfs diff=lfs merge=lfs -text
+*.[aA] filter=lfs diff=lfs merge=lfs -text
+*.[lL][iI][bB] filter=lfs diff=lfs merge=lfs -text
+*.[bB][yY][tT][eE][sS] filter=lfs diff=lfs merge=lfs -text
+*.[bB][iI][nN] filter=lfs diff=lfs merge=lfs -text
+*.[zZ][iI][pP] filter=lfs diff=lfs merge=lfs -text
+*.7[zZ] filter=lfs diff=lfs merge=lfs -text
+*.[rR][aA][rR] filter=lfs diff=lfs merge=lfs -text
+*.[pP][dD][fF] filter=lfs diff=lfs merge=lfs -text
+*.[uU][nN][iI][tT][yY][pP][aA][cC][kK][aA][gG][eE] filter=lfs diff=lfs merge=lfs -text
+*.[bB][uU][nN][dD][lL][eE] filter=lfs diff=lfs merge=lfs -text
+*.[aA][sS][sS][eE][tT][bB][uU][nN][dD][lL][eE] filter=lfs diff=lfs merge=lfs -text
+
+# Large generated meshes and Unity assets serialized in binary format.
+Assets/_Project/Generated/CollisionMeshes/**/*.asset filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Examples/Scenes/CharacterPlayground/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Examples/Terrain/New Terrain.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/1- Player Camera Character Setup/Scene/WalkthroughScene1/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/10- Multiple movement states setup/Scene/WalkthroughScene10/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/11- Charging state/Scene/WalkthroughScene11/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/12- NoClip state/Scene/WalkthroughScene12/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/13- Swimming state/Scene/WalkthroughScene13/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/14- Climbing Ladders/Scene/WalkthroughScene14/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/15- Root motion example/Scene/WalkthroughScene15/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/16- FramePerfect Rotation/Scene/WalkthroughScene16/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/2- Basic Movement and Gravity/Scene/WalkthroughScene2/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/3- Jumping/Scene/WalkthroughScene3/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/4- Landing and leaving ground/Scene/WalkthroughScene4/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/5- Adding velocities and impulses/Scene/WalkthroughScene5/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/6- Crouching/Scene/WalkthroughScene6/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/7- Orienting towards arbitrary up direction/Scene/WalkthroughScene7/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/8- Creating a moving platform/Scene/WalkthroughScene8/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/KinematicCharacterController/Walkthrough/9- Custom collision filtering/Scene/WalkthroughScene9/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/Stylized Water 3/_Demo/DemoAssets/Terrain/SW3 Demo Island.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/Stylized Water 3/_Demo/DemoAssets/Terrain/SWS_DioramaTerrain.asset" filter=lfs diff=lfs merge=lfs -text
+"Assets/Ultimate Game Tools/ConcaveCollider/Sample Scenes/Bucket/Terrain.asset" filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: def2766386cacca8e882503b7a22b9da
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 204204
+  packageName: Universal Colliders
+  packageVersion: 2.0.0
+  assetPath: Assets/Universal Colliders/Meshes/Horse.controller
+  uploadId: 879332

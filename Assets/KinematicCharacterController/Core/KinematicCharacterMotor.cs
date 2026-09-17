@@ -498,6 +498,16 @@ namespace KinematicCharacterController
         }
 
         /// <summary>
+        /// Applies a final platform-relative rotation during the character update.
+        /// Unlike SetRotation, this does not teleport the transform or reset
+        /// interpolation endpoints; it only changes the completed tick pose.
+        /// </summary>
+        public void SetTransientRotation(Quaternion rotation)
+        {
+            TransientRotation = rotation;
+        }
+
+        /// <summary>
         /// The character's total velocity, including velocity from standing on rigidbodies or PhysicsMover
         /// </summary>
         public Vector3 Velocity

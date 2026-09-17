@@ -97,6 +97,7 @@ namespace WaveByWave.Player
         private Quaternion _clientPlatformPreviousLocalRotation = Quaternion.identity;
         private Quaternion _clientPlatformCurrentLocalRotation = Quaternion.identity;
         private bool _clientPlatformPoseInitialized;
+        private MovingPlatform _kccPresentationPlatform;
         private bool _usingClientPlatformRelativeVelocity;
         private bool _ownerPlatformPresentationActive;
         private Vector3 _ownerWorldPresentationOffset;
@@ -528,10 +529,12 @@ namespace WaveByWave.Player
                 // Grounding will attach KCC to this Rigidbody normally in the same motor phase.
                 // The explicit override is only needed while the capsule is airborne.
                 SetKccAirbornePlatformFrame(null);
+                var platformChanged = _platform != supportingPlatform || !_platformAnchorLocked || !wasGrounded;
                 _platform = supportingPlatform;
                 _airborneFromPlatform = false;
-                _platformLocalAnchor = supportingPlatform.transform.InverseTransformPoint(
-                    _kccMotor.TransientPosition);
+                if (platformChanged)
+                    _platformLocalAnchor = GetPlatformLocalPoint(
+                        supportingPlatform, _kccMotor.TransientPosition);
                 _platformAnchorLocked = true;
                 _lastPlatformContactTime = Time.fixedTime;
                 _airbornePlatformMomentum = Vector3.zero;
@@ -561,6 +564,95 @@ namespace WaveByWave.Player
 
         public void AfterCharacterUpdate(float deltaTime)
         {
+            if (!_useKccMotor || !IsOwner || _sceneTransitioning)
+                return;
+
+            if (_platform == null || !_platform.UsesKccMover ||
+                (!_isGrounded && !_airborneFromPlatform))
+            {
+                ResetClientPlatformFrame();
+                return;
+            }
+
+            // Both transient poses belong to the completed KCC tick. Never
+            // subtract a render-time ship pose from a fixed-time motor pose.
+            var mover = _platform.KccMover;
+            var simulationWorldToLocal = Matrix4x4.TRS(mover.TransientPosition,
+                mover.TransientRotation, _platform.transform.lossyScale).inverse;
+            var localPosition = simulationWorldToLocal.MultiplyPoint3x4(_kccMotor.TransientPosition);
+
+            var holdingDeckPosition = _isGrounded && !_kccMotor.MustUnground() &&
+                                      _moveInput.sqrMagnitude <= 0.0001f && !_jumpQueued &&
+                                      _platformAnchorLocked;
+            if (holdingDeckPosition)
+            {
+                // The mover already transports the capsule by its angular velocity.
+                // Re-apply the fixed local anchor to remove accumulated solver error
+                // while the player is standing still on a rocking deck.
+                _kccMotor.SetTransientPosition(GetPlatformWorldPoint(mover, _platformLocalAnchor));
+                localPosition = _platformLocalAnchor;
+            }
+            else if (_isGrounded && !_kccMotor.MustUnground())
+            {
+                // Walking deliberately changes the local anchor. Store the completed
+                // tick pose, so releasing the key locks the point where the player
+                // actually stopped instead of the point where walking began.
+                _platformLocalAnchor = localPosition;
+                _platformAnchorLocked = true;
+            }
+
+            var localRotation = GetPlatformRelativeCharacterRotation(
+                mover.TransientRotation, _kccMotor.TransientRotation);
+
+            // KCC's default attached-rigidbody transport keeps the character upright by
+            // design. A ship deck is different: the player's body must share the ship's
+            // roll and pitch while retaining the yaw chosen by the player relative to deck.
+            _kccMotor.SetTransientRotation(mover.TransientRotation * localRotation);
+            if (!_clientPlatformPoseInitialized || _kccPresentationPlatform != _platform)
+            {
+                _clientPlatformPreviousLocalPosition = localPosition;
+                _clientPlatformPreviousLocalRotation = localRotation;
+            }
+            else
+            {
+                _clientPlatformPreviousLocalPosition = _clientPlatformCurrentLocalPosition;
+                _clientPlatformPreviousLocalRotation = _clientPlatformCurrentLocalRotation;
+            }
+            _clientPlatformCurrentLocalPosition = localPosition;
+            _clientPlatformCurrentLocalRotation = localRotation;
+            _clientPlatformPoseInitialized = true;
+            _kccPresentationPlatform = _platform;
+        }
+
+        private static Quaternion GetPlatformRelativeCharacterRotation(
+            Quaternion platformRotation, Quaternion characterRotation)
+        {
+            var localForward = Quaternion.Inverse(platformRotation) *
+                               (characterRotation * Vector3.forward);
+            localForward = Vector3.ProjectOnPlane(localForward, Vector3.up);
+            if (localForward.sqrMagnitude < 0.0001f)
+                localForward = Vector3.forward;
+
+            return Quaternion.LookRotation(localForward.normalized, Vector3.up);
+        }
+
+        private static Vector3 GetPlatformLocalPoint(MovingPlatform platform, Vector3 worldPoint)
+        {
+            var mover = platform != null ? platform.KccMover : null;
+            if (mover == null)
+                return platform != null ? platform.transform.InverseTransformPoint(worldPoint) : worldPoint;
+
+            var frame = Matrix4x4.TRS(mover.TransientPosition, mover.TransientRotation,
+                platform.transform.lossyScale);
+            return frame.inverse.MultiplyPoint3x4(worldPoint);
+        }
+
+        private static Vector3 GetPlatformWorldPoint(PhysicsMover mover, Vector3 localPoint)
+        {
+            var platform = mover != null ? mover.GetComponent<MovingPlatform>() : null;
+            var scale = platform != null ? platform.transform.lossyScale : Vector3.one;
+            return Matrix4x4.TRS(mover.TransientPosition, mover.TransientRotation, scale)
+                .MultiplyPoint3x4(localPoint);
         }
 
         public bool IsColliderValidForCollisions(Collider coll)
@@ -895,6 +987,7 @@ namespace WaveByWave.Player
         private void ResetClientPlatformFrame()
         {
             _clientPlatformPoseInitialized = false;
+            _kccPresentationPlatform = null;
             _usingClientPlatformRelativeVelocity = false;
         }
 
@@ -1055,11 +1148,11 @@ namespace WaveByWave.Player
             }
 
             var platformWorldPosition = _useKccMotor
-                ? transform.position
+                ? _presentationRoot.position
                 : _platformAnchorLocked
                     ? _platform.transform.TransformPoint(_platformLocalAnchor)
                     : transform.position;
-            var platformWorldRotation = _useKccMotor ? transform.rotation : body.rotation;
+            var platformWorldRotation = _useKccMotor ? _presentationRoot.rotation : body.rotation;
             if (!_useKccMotor && _platform.UsesInterpolatedNetworkMotion &&
                 TryGetClientPlatformPresentationPose(out var localPosition, out var localRotation))
             {
@@ -1187,11 +1280,17 @@ namespace WaveByWave.Player
 
             if (_useKccMotor)
             {
-                // KCC has already interpolated both the local motor and its ship mover in the
-                // same LateUpdate phase. Keep visual children at the motor root with no second
-                // correction pass; only a control station may override the root pose.
                 if (!SnapToActiveControlStation())
-                    ResetPresentationPose();
+                {
+                    // Display local walking/jumping in the ship's NGO render frame.
+                    // The motor root retains KCC collision simulation and world
+                    // interpolation; only the camera/visual child is rebased.
+                    if (_platform != null && _platform.UsesInterpolatedNetworkMotion &&
+                        _clientPlatformPoseInitialized && (_isGrounded || _airborneFromPlatform))
+                        ApplyOwnerPlatformPresentation();
+                    else
+                        ResetPresentationPose();
+                }
                 _camera?.RefreshPose();
                 PublishPlatformPose();
                 return;
@@ -1239,7 +1338,6 @@ namespace WaveByWave.Player
             }
             else if (_airborneFromPlatform || !_platformAnchorLocked || _moveInput.sqrMagnitude > 0.0001f)
             {
-                _platformLocalAnchor = _platform.transform.InverseTransformPoint(body.position);
                 targetPosition = transform.position;
                 targetRotation = transform.rotation;
             }

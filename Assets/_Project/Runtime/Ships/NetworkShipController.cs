@@ -199,8 +199,9 @@ namespace WaveByWave.Ships
                 NetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
             }
 
-            // Every ship instance participates in the same KCC mover pipeline: the server feeds
-            // its water-aligned authoritative target, while clients feed NGO's interpolated pose.
+            // Every instance uses KCC for fixed-step collisions. Clients receive
+            // render samples from PlatformNetworkTransform and display NGO's pose
+            // after KCC, with passenger motion interpolated in deck space.
             _movingPlatform?.EnableKccMover();
         }
 

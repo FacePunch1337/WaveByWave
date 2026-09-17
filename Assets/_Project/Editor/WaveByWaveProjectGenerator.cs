@@ -364,7 +364,7 @@ namespace WaveByWave.Editor
             collider.center = new Vector3(0f, 0.9f, 0f);
             collider.size = new Vector3(8f, 1.8f, 14f);
             root.AddComponent<MovingPlatform>();
-            var shipNetworkTransform = root.AddComponent<NetworkTransform>();
+            var shipNetworkTransform = root.AddComponent<PlatformNetworkTransform>();
             shipNetworkTransform.PositionInterpolationType = NetworkTransform.InterpolationTypes.Lerp;
             shipNetworkTransform.RotationInterpolationType = NetworkTransform.InterpolationTypes.Lerp;
             shipNetworkTransform.TickSyncChildren = true;

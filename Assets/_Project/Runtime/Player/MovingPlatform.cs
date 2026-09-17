@@ -4,9 +4,9 @@ using WaveByWave.Ships;
 
 namespace WaveByWave.Player
 {
-    // Capture the pose applied by NGO's PreLateUpdate before KCC performs its own LateUpdate
-    // interpolation. This makes the remote ship and the local owner motor use one clock.
-    [DefaultExecutionOrder(500)]
+    // KCC owns both the fixed-step collision pose and the visible interpolated
+    // platform pose. NGO samples are retained as the next fixed-step target.
+    [DefaultExecutionOrder(2000)]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Rigidbody), typeof(PhysicsMover))]
     public sealed class MovingPlatform : MonoBehaviour, IMoverController
@@ -39,6 +39,7 @@ namespace WaveByWave.Player
 
         public bool UsesKccMover => _kccMover != null && _kccMover.enabled;
         public Rigidbody Body => _body;
+        public PhysicsMover KccMover => _kccMover;
 
         public static bool TryResolve(Collider collider, out MovingPlatform platform)
         {
@@ -111,6 +112,16 @@ namespace WaveByWave.Player
             _networkPositionVelocity = Vector3.zero;
         }
 
+        public void CaptureNetworkRenderPose(Vector3 position, Quaternion rotation)
+        {
+            if (!UsesInterpolatedNetworkMotion)
+                return;
+
+            _networkKccTargetPosition = position;
+            _networkKccTargetRotation = rotation;
+            _hasNetworkKccTarget = true;
+        }
+
         public void UpdateMovement(out Vector3 goalPosition, out Quaternion goalRotation, float deltaTime)
         {
             // KCC requests every mover's goal before updating any character.
@@ -152,9 +163,9 @@ namespace WaveByWave.Player
             float deltaTime)
         {
             // CharacterPlayground movers provide a continuously changing goal every fixed tick.
-            // NGO updates its interpolated transform in render time, so filter that authoritative
-            // pose in fixed time. SmoothDamp keeps advancing between render samples without
-            // introducing a second, potentially conflicting velocity source.
+            // Filter NGO's render samples only for fixed-step collision simulation.
+            // This pose is not used for client rendering: applying both this filter
+            // and KCC world interpolation to the view makes deck motion oscillate.
             var currentPosition = _kccMover.TransientPosition;
             var currentRotation = _kccMover.TransientRotation;
             if ((_networkKccTargetPosition - currentPosition).sqrMagnitude >
@@ -242,16 +253,6 @@ namespace WaveByWave.Player
 
         private void LateUpdate()
         {
-            if (UsesKccMover && UsesInterpolatedNetworkMotion)
-            {
-                // NetworkTransform has applied its interpolated pose by PreLateUpdate. Preserve
-                // that pose as the next KCC mover target before KCC replaces the visible pose
-                // with its matching character/platform interpolation later in LateUpdate.
-                _networkKccTargetPosition = transform.position;
-                _networkKccTargetRotation = transform.rotation;
-                _hasNetworkKccTarget = true;
-            }
-
             if (_hasPreviousPose)
             {
                 var deltaTime = Mathf.Max(Time.deltaTime, 0.0001f);

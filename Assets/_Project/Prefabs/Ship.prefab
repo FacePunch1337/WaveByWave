@@ -51392,13 +51392,13 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   NetworkTransformExpanded: 0
   AutoOwnerAuthorityTickOffset: 1
-  PositionInterpolationType: 1
-  RotationInterpolationType: 1
+  PositionInterpolationType: 2
+  RotationInterpolationType: 2
   ScaleInterpolationType: 0
-  PositionLerpSmoothing: 1
-  PositionMaxInterpolationTime: 0.1
-  RotationLerpSmoothing: 1
-  RotationMaxInterpolationTime: 0.1
+  PositionLerpSmoothing: 0
+  PositionMaxInterpolationTime: 0.2
+  RotationLerpSmoothing: 0
+  RotationMaxInterpolationTime: 0.2
   ScaleLerpSmoothing: 1
   ScaleMaxInterpolationTime: 0.1
   AuthorityMode: 0

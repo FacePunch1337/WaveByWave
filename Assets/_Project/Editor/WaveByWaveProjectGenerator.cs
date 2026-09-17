@@ -365,8 +365,16 @@ namespace WaveByWave.Editor
             collider.size = new Vector3(8f, 1.8f, 14f);
             root.AddComponent<MovingPlatform>();
             var shipNetworkTransform = root.AddComponent<PlatformNetworkTransform>();
-            shipNetworkTransform.PositionInterpolationType = NetworkTransform.InterpolationTypes.Lerp;
-            shipNetworkTransform.RotationInterpolationType = NetworkTransform.InterpolationTypes.Lerp;
+            // Ships are rendered from a delayed network sample on clients. Smooth
+            // dampening preserves a continuous velocity when packets arrive with
+            // uneven spacing, while the extra per-frame lerp would introduce a
+            // second variable-rate filter and visible camera micro-jitter.
+            shipNetworkTransform.PositionInterpolationType = NetworkTransform.InterpolationTypes.SmoothDampening;
+            shipNetworkTransform.RotationInterpolationType = NetworkTransform.InterpolationTypes.SmoothDampening;
+            shipNetworkTransform.PositionLerpSmoothing = false;
+            shipNetworkTransform.RotationLerpSmoothing = false;
+            shipNetworkTransform.PositionMaxInterpolationTime = 0.2f;
+            shipNetworkTransform.RotationMaxInterpolationTime = 0.2f;
             shipNetworkTransform.TickSyncChildren = true;
             shipNetworkTransform.UseUnreliableDeltas = true;
             var wind = root.AddComponent<NetworkWindController>();

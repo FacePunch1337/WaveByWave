@@ -19,6 +19,16 @@ namespace WaveByWave.Core
         private readonly ServiceRegistry _services = new();
         private NetworkManager _networkManager;
 
+        // Server physics has to sample the same fixed network time as buoyancy.
+        // Rendering, however, must use one continuous value for the whole frame.
+        // A remote client's interpolated NetworkTime can be corrected in discrete
+        // tick-sized steps, so applying it directly to the water shader makes the
+        // wave phase visibly jump.
+        private bool _renderWaterTimeInitialized;
+        private float _renderWaterTimeOffset;
+
+        private const float RenderWaterTimeCorrectionSpeed = 18f;
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -44,46 +54,71 @@ namespace WaveByWave.Core
 
         private void FixedUpdate()
         {
-            // AlignToWater samples the same wave phase that will be rendered for this
-            // authoritative physics step. This runs before the ship's default-order
-            // FixedUpdate methods.
-            ApplyNetworkWaterTime(useFixedTime: true);
-        }
-
-        private void Update()
-        {
-            // A server-authoritative NetworkTransform is rendered from an interpolation
-            // point in the past on clients. Drive SW3 from that exact point as well so
-            // the visible wave crest stays underneath the replicated ship pose.
-            ApplyNetworkWaterTime(useFixedTime: false);
-        }
-
-        private void ApplyNetworkWaterTime(bool useFixedTime)
-        {
             if (_networkManager == null || !_networkManager.IsListening)
             {
                 WaterObject.CustomTime = -1f;
                 return;
             }
 
-            NetworkTime waterTime;
-            if (_networkManager.IsServer)
+            // Only the authoritative simulation samples water in FixedUpdate.
+            // Remote clients do not run buoyancy for the replicated ship, and
+            // leaving their render value untouched here avoids a second time source
+            // fighting the smoothed value written from Update.
+            if (!_networkManager.IsServer)
+                return;
+
+            // AlignToWater samples the same wave phase that will be rendered for this
+            // authoritative physics step. This runs before the ship's default-order
+            // FixedUpdate methods.
+            WaterObject.CustomTime = Mathf.Max(0.0001f, (float)_networkManager.ServerTime.FixedTime);
+        }
+
+        private void Update()
+        {
+            if (_networkManager == null || !_networkManager.IsListening)
             {
-                waterTime = _networkManager.ServerTime;
+                _renderWaterTimeInitialized = false;
+                WaterObject.CustomTime = -1f;
+                return;
+            }
+
+            // A server-authoritative NetworkTransform is rendered from an interpolation
+            // point in the past on clients. Use that point as the target, but advance
+            // the shader on the local render clock and correct the network offset
+            // gradually. This keeps the water phase continuous when network ticks are
+            // received or the interpolation clock is corrected.
+            var targetNetworkTime = GetNetworkWaterTime();
+            var localRenderTime = Time.time;
+            var targetOffset = (float)(targetNetworkTime - localRenderTime);
+
+            if (!_renderWaterTimeInitialized)
+            {
+                _renderWaterTimeOffset = targetOffset;
+                _renderWaterTimeInitialized = true;
             }
             else
             {
-                var interpolationTicks = Mathf.Max(
-                    1,
-                    _networkManager.NetworkTimeSystem.TickLatency +
-                    NetworkTransform.InterpolationBufferTickOffset);
-                waterTime = _networkManager.LocalTime.TimeTicksAgo(interpolationTicks);
+                var correction = 1f - Mathf.Exp(-RenderWaterTimeCorrectionSpeed * Mathf.Max(0f, Time.deltaTime));
+                _renderWaterTimeOffset = Mathf.Lerp(_renderWaterTimeOffset, targetOffset, correction);
             }
 
-            var time = useFixedTime ? waterTime.FixedTime : waterTime.Time;
-            // SW3 treats non-positive custom values as a request to fall back to local
-            // Unity time. Keep the first network frames on the synchronized timeline.
-            WaterObject.CustomTime = Mathf.Max(0.0001f, (float)time);
+            WaterObject.CustomTime = Mathf.Max(
+                0.0001f,
+                localRenderTime + _renderWaterTimeOffset);
+        }
+
+        private double GetNetworkWaterTime()
+        {
+            if (_networkManager.IsServer)
+            {
+                return _networkManager.ServerTime.Time;
+            }
+
+            var interpolationTicks = Mathf.Max(
+                1,
+                _networkManager.NetworkTimeSystem.TickLatency +
+                NetworkTransform.InterpolationBufferTickOffset);
+            return _networkManager.LocalTime.TimeTicksAgo(interpolationTicks).Time;
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode) => InjectScene(scene);

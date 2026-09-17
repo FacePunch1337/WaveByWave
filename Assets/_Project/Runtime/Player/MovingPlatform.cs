@@ -4,8 +4,8 @@ using WaveByWave.Ships;
 
 namespace WaveByWave.Player
 {
-    // KCC owns both the fixed-step collision pose and the visible interpolated
-    // platform pose. NGO samples are retained as the next fixed-step target.
+    // KCC owns the fixed-step collision pose. Remote rendering uses the same
+    // interpolated NGO pose as the passenger presentation and camera.
     [DefaultExecutionOrder(2000)]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Rigidbody), typeof(PhysicsMover))]
@@ -253,6 +253,14 @@ namespace WaveByWave.Player
 
         private void LateUpdate()
         {
+            if (UsesKccMover && UsesInterpolatedNetworkMotion && _hasNetworkKccTarget)
+            {
+                // KCC has completed its fixed-step interpolation. Restore the
+                // NGO render sample for this frame so the ship, passenger view
+                // and objects outside the ship share one render clock.
+                transform.SetPositionAndRotation(_networkKccTargetPosition, _networkKccTargetRotation);
+            }
+
             if (_hasPreviousPose)
             {
                 var deltaTime = Mathf.Max(Time.deltaTime, 0.0001f);

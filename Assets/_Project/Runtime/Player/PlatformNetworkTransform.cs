@@ -4,7 +4,7 @@ namespace WaveByWave.Player
 {
     /// <summary>
     /// Captures NGO's interpolated pose before KCC starts its next fixed step.
-    /// KCC then uses that sample as a target while keeping one render clock.
+    /// MovingPlatform applies that same sample after KCC for remote rendering.
     /// </summary>
     public sealed class PlatformNetworkTransform : NetworkTransform
     {

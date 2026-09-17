@@ -10,6 +10,7 @@
     "com.unity.multiplayer.playmode": "1.6.3",
     "com.unity.netcode": "1.10.0",
     "com.unity.netcode.gameobjects": "2.4.4",
+    "com.unity.physics": "1.4.2",
     "com.unity.render-pipelines.universal": "17.2.0",
     "com.unity.test-framework": "1.6.0",
     "com.unity.timeline": "1.8.9",

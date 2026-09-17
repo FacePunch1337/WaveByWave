@@ -88,6 +88,7 @@
 *.[aA][sS][sS][eE][tT][bB][uU][nN][dD][lL][eE] filter=lfs diff=lfs merge=lfs -text
 
 # Large generated meshes and Unity assets serialized in binary format.
+Assets/_Project/Resources/ShipCollisionMeshLibrary.asset filter=lfs diff=lfs merge=lfs -text
 Assets/_Project/Generated/CollisionMeshes/**/*.asset filter=lfs diff=lfs merge=lfs -text
 "Assets/KinematicCharacterController/Examples/Scenes/CharacterPlayground/LightingData.asset" filter=lfs diff=lfs merge=lfs -text
 "Assets/KinematicCharacterController/Examples/Terrain/New Terrain.asset" filter=lfs diff=lfs merge=lfs -text

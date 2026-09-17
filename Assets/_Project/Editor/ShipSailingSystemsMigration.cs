@@ -39,9 +39,9 @@ namespace WaveByWave.Editor
                     return;
 
                 var body = root.GetComponent<Rigidbody>();
-                if (body != null && body.collisionDetectionMode != CollisionDetectionMode.ContinuousSpeculative)
+                if (body != null && body.collisionDetectionMode != CollisionDetectionMode.Discrete)
                 {
-                    body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+                    body.collisionDetectionMode = CollisionDetectionMode.Discrete;
                     changed = true;
                 }
 

@@ -359,7 +359,7 @@ namespace WaveByWave.Editor
             var body = root.AddComponent<Rigidbody>();
             body.isKinematic = true;
             body.interpolation = RigidbodyInterpolation.Interpolate;
-            body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            body.collisionDetectionMode = CollisionDetectionMode.Discrete;
             var collider = root.AddComponent<BoxCollider>();
             collider.center = new Vector3(0f, 0.9f, 0f);
             collider.size = new Vector3(8f, 1.8f, 14f);

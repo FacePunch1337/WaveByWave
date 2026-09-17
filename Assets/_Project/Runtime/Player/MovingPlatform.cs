@@ -27,6 +27,7 @@ namespace WaveByWave.Player
         private Quaternion _networkKccTargetRotation = Quaternion.identity;
         private bool _hasNetworkKccTarget;
         private Vector3 _networkPositionVelocity;
+        private bool _moverFailureReported;
 
         /// <summary>
         /// True when this platform is being moved by NetworkTransform interpolation on a client.
@@ -112,9 +113,26 @@ namespace WaveByWave.Player
 
         public void UpdateMovement(out Vector3 goalPosition, out Quaternion goalRotation, float deltaTime)
         {
-            if (_networkShip != null &&
-                _networkShip.TryGetKccMoverTarget(out goalPosition, out goalRotation))
+            // KCC requests every mover's goal before updating any character.
+            // A ship query error must not abort that shared character phase.
+            try
             {
+                if (_networkShip != null &&
+                    _networkShip.TryGetKccMoverTarget(out goalPosition, out goalRotation))
+                {
+                    _moverFailureReported = false;
+                    return;
+                }
+            }
+            catch (System.Exception exception)
+            {
+                goalPosition = _kccMover != null ? _kccMover.TransientPosition : transform.position;
+                goalRotation = _kccMover != null ? _kccMover.TransientRotation : transform.rotation;
+                if (!_moverFailureReported)
+                {
+                    Debug.LogException(exception, this);
+                    _moverFailureReported = true;
+                }
                 return;
             }
 
@@ -189,6 +207,14 @@ namespace WaveByWave.Player
 
         public Vector3 GetPointVelocity(Vector3 worldPoint)
         {
+            if (UsesKccMover)
+            {
+                // Use the exact fixed-step goal that carries the capsule, including
+                // impact recovery. Mixing NGO velocity with render-time heave
+                // produces a different take-off velocity at a collision.
+                return _kccMover.Velocity + Vector3.Cross(_kccMover.AngularVelocity,
+                    worldPoint - _kccMover.TransientPosition);
+            }
             var radius = worldPoint - transform.position;
             var measuredVelocity = _linearVelocity + Vector3.Cross(_angularVelocity, radius);
             if (_networkShip == null || !_networkShip.IsSpawned)

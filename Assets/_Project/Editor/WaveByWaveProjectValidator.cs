@@ -86,6 +86,9 @@ namespace WaveByWave.Editor
             Require(ship.GetComponent<NetworkObject>(), "Ship NetworkObject");
             var shipController = Require(ship.GetComponent<NetworkShipController>(), "Ship controller");
             Require(ship.GetComponent<MovingPlatform>(), "Ship moving-platform compensation");
+            Require(ship.GetComponent<PlatformNetworkTransform>(), "Timestamped ship motion snapshots");
+            if (ship.GetComponent<NetworkTransform>() != null)
+                throw new InvalidOperationException("Ship motion must use physics snapshots without a second NetworkTransform writer.");
             var body = Require(ship.GetComponent<Rigidbody>(), "Ship Rigidbody");
             var collisionHull = Require(ship.GetComponent<BoxCollider>(), "Ship collision hull");
             if (!body.isKinematic)

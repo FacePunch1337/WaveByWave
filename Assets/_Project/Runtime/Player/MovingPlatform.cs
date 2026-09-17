@@ -4,17 +4,13 @@ using WaveByWave.Ships;
 
 namespace WaveByWave.Player
 {
-    // KCC owns both the fixed-step collision pose and the render interpolation.
-    // NGO samples are retained only as targets for the next fixed-step mover update.
+    // KCC owns the collision pose. Clients sample a timestamped physics-pose
+    // stream separately for the fixed step and for passenger presentation.
     [DefaultExecutionOrder(2000)]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Rigidbody), typeof(PhysicsMover))]
     public sealed class MovingPlatform : MonoBehaviour, IMoverController
     {
-        private const float NetworkPositionSmoothTime = 0.035f;
-        private const float NetworkRotationSharpness = 24f;
-        private const float NetworkTeleportDistance = 3f;
-
         private Vector3 _previousPosition;
         private Quaternion _previousRotation;
         private Vector3 _linearVelocity;
@@ -23,14 +19,11 @@ namespace WaveByWave.Player
         private NetworkShipController _networkShip;
         private Rigidbody _body;
         private PhysicsMover _kccMover;
-        private Vector3 _networkKccTargetPosition;
-        private Quaternion _networkKccTargetRotation = Quaternion.identity;
-        private bool _hasNetworkKccTarget;
-        private Vector3 _networkPositionVelocity;
+        private PlatformNetworkTransform _networkMotion;
         private bool _moverFailureReported;
 
         /// <summary>
-        /// True when this platform is being moved by NetworkTransform interpolation on a client.
+        /// True when this platform is being moved by buffered physics snapshots on a client.
         /// A dynamic player cannot use the replicated world velocity for this case because the
         /// platform pose advances in render time rather than in every physics step.
         /// </summary>
@@ -64,6 +57,7 @@ namespace WaveByWave.Player
             _networkShip = GetComponentInParent<NetworkShipController>();
             _body = GetComponentInParent<Rigidbody>();
             _kccMover = GetComponent<PhysicsMover>();
+            _networkMotion = GetComponent<PlatformNetworkTransform>();
 
             if (Application.isPlaying)
             {
@@ -79,12 +73,8 @@ namespace WaveByWave.Player
             if (_networkShip == null || !_networkShip.IsSpawned || _body == null)
                 return;
 
-            _networkKccTargetPosition = transform.position;
-            _networkKccTargetRotation = transform.rotation;
-            _hasNetworkKccTarget = UsesInterpolatedNetworkMotion;
-            _networkPositionVelocity = Vector3.zero;
-
             _kccMover ??= GetComponent<PhysicsMover>();
+            _networkMotion ??= GetComponent<PlatformNetworkTransform>();
             if (_kccMover == null)
             {
                 Debug.LogError("MovingPlatform requires a prefab-authored PhysicsMover.", this);
@@ -108,18 +98,6 @@ namespace WaveByWave.Player
                 _kccMover.MoverController = null;
 
             _kccMover.enabled = false;
-            _hasNetworkKccTarget = false;
-            _networkPositionVelocity = Vector3.zero;
-        }
-
-        public void CaptureNetworkRenderPose(Vector3 position, Quaternion rotation)
-        {
-            if (!UsesInterpolatedNetworkMotion)
-                return;
-
-            _networkKccTargetPosition = position;
-            _networkKccTargetRotation = rotation;
-            _hasNetworkKccTarget = true;
         }
 
         public void UpdateMovement(out Vector3 goalPosition, out Quaternion goalRotation, float deltaTime)
@@ -147,49 +125,21 @@ namespace WaveByWave.Player
                 return;
             }
 
-            if (_hasNetworkKccTarget)
+            if (UsesInterpolatedNetworkMotion)
             {
-                PredictNetworkMovement(out goalPosition, out goalRotation, deltaTime);
+                if (_networkMotion != null &&
+                    _networkMotion.TryGetFixedPose(out goalPosition, out goalRotation))
+                    return;
+
+                // Hold the completed physics pose until the first snapshot arrives.
+                // Never feed a rendered Transform back into mover simulation.
+                goalPosition = _kccMover.TransientPosition;
+                goalRotation = _kccMover.TransientRotation;
                 return;
             }
 
             goalPosition = transform.position;
             goalRotation = transform.rotation;
-        }
-
-        private void PredictNetworkMovement(
-            out Vector3 goalPosition,
-            out Quaternion goalRotation,
-            float deltaTime)
-        {
-            // CharacterPlayground movers provide a continuously changing goal every fixed tick.
-            // Filter NGO's render samples only for fixed-step collision simulation.
-            // This pose is not used for client rendering: applying both this filter
-            // and KCC world interpolation to the view makes deck motion oscillate.
-            var currentPosition = _kccMover.TransientPosition;
-            var currentRotation = _kccMover.TransientRotation;
-            if ((_networkKccTargetPosition - currentPosition).sqrMagnitude >
-                NetworkTeleportDistance * NetworkTeleportDistance)
-            {
-                _networkPositionVelocity = Vector3.zero;
-                goalPosition = _networkKccTargetPosition;
-                goalRotation = _networkKccTargetRotation;
-                return;
-            }
-
-            goalPosition = Vector3.SmoothDamp(
-                currentPosition,
-                _networkKccTargetPosition,
-                ref _networkPositionVelocity,
-                NetworkPositionSmoothTime,
-                Mathf.Infinity,
-                deltaTime);
-            var correctionBlend = 1f - Mathf.Exp(
-                -NetworkRotationSharpness * deltaTime);
-            goalRotation = Quaternion.Slerp(
-                currentRotation,
-                _networkKccTargetRotation,
-                correctionBlend);
         }
 
         /// <summary>
@@ -221,7 +171,7 @@ namespace WaveByWave.Player
             if (UsesKccMover)
             {
                 // Use the exact fixed-step goal that carries the capsule, including
-                // impact recovery. Mixing NGO velocity with render-time heave
+                // impact recovery. Mixing planar velocity with render-time heave
                 // produces a different take-off velocity at a collision.
                 return _kccMover.Velocity + Vector3.Cross(_kccMover.AngularVelocity,
                     worldPoint - _kccMover.TransientPosition);

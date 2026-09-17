@@ -1,9 +1,9 @@
 using StylizedWater3;
 using Unity.Netcode;
-using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using WaveByWave.Networking;
+using WaveByWave.Player;
 using WaveByWave.Simulation;
 
 namespace WaveByWave.Core
@@ -18,6 +18,7 @@ namespace WaveByWave.Core
 
         private readonly ServiceRegistry _services = new();
         private NetworkManager _networkManager;
+        private PlatformNetworkTransform _shipMotion;
 
         // Server physics has to sample the same fixed network time as buoyancy.
         // Rendering, however, must use one continuous value for the whole frame.
@@ -82,8 +83,8 @@ namespace WaveByWave.Core
                 return;
             }
 
-            // A server-authoritative NetworkTransform is rendered from an interpolation
-            // point in the past on clients. Use that point as the target, but advance
+            // The ship is rendered from buffered physics snapshots on clients.
+            // Use its presentation time as the target, but advance
             // the shader on the local render clock and correct the network offset
             // gradually. This keeps the water phase continuous when network ticks are
             // received or the interpolation clock is corrected.
@@ -114,11 +115,10 @@ namespace WaveByWave.Core
                 return _networkManager.ServerTime.Time;
             }
 
-            var interpolationTicks = Mathf.Max(
-                1,
-                _networkManager.NetworkTimeSystem.TickLatency +
-                NetworkTransform.InterpolationBufferTickOffset);
-            return _networkManager.LocalTime.TimeTicksAgo(interpolationTicks).Time;
+            if (_shipMotion != null && _shipMotion.IsSpawned)
+                return _shipMotion.PresentationServerTime;
+
+            return _networkManager.ServerTime.Time - PlatformNetworkTransform.DefaultInterpolationDelay;
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode) => InjectScene(scene);
@@ -132,6 +132,8 @@ namespace WaveByWave.Core
             {
                 foreach (var behaviour in root.GetComponentsInChildren<MonoBehaviour>(true))
                 {
+                    if (behaviour is PlatformNetworkTransform shipMotion)
+                        _shipMotion = shipMotion;
                     if (behaviour is IServiceConsumer consumer)
                         consumer.Inject(_services);
                 }

@@ -199,9 +199,9 @@ namespace WaveByWave.Ships
                 NetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
             }
 
-            // Every instance uses KCC for fixed-step collisions. Clients receive
-            // render samples from PlatformNetworkTransform and display NGO's pose
-            // after KCC, with passenger motion interpolated in deck space.
+            // Every instance uses KCC for fixed-step collisions. Clients sample
+            // timestamped physics snapshots independently for fixed and render time,
+            // with passenger motion interpolated in deck space.
             _movingPlatform?.EnableKccMover();
         }
 

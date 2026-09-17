@@ -810,7 +810,7 @@ namespace WaveByWave.Player
                 if (desiredGroundVelocity.sqrMagnitude > 0.0001f)
                     desiredGroundVelocity = desiredGroundVelocity.normalized * speed;
 
-                // A remote ship advances through NetworkTransform in render time. Its replicated
+                // A remote ship advances through buffered snapshots in render time. Its replicated
                 // velocity must not also be integrated by the local Rigidbody or the player is
                 // carried twice on some fixed ticks and not at all on others. Once attached, this
                 // motor stores velocity relative to that ship and frame displacement carries the
@@ -909,7 +909,7 @@ namespace WaveByWave.Player
             {
                 // Air physics remains world-space, but its completed fixed-step poses are sampled
                 // in the same platform frame used while grounded. Rendering never has to switch
-                // between the player's and ship's independently buffered NetworkTransforms.
+                // between the player's world interpolation and the ship's snapshot timeline.
                 SampleClientPlatformPose(platformTransform);
                 return;
             }
@@ -1205,7 +1205,7 @@ namespace WaveByWave.Player
                     _remotePlatformLocalRotation, targetLocalRotation, rotationBlend);
             }
 
-            // Apply after NetworkTransform interpolation. Platform motion is exact in this
+            // Apply after platform snapshot interpolation. Platform motion is exact in this
             // frame; only the player's own walking/jumping is smoothed in platform space.
             _presentationRoot.SetPositionAndRotation(
                 platformObject.transform.TransformPoint(_remotePlatformLocalPosition),
@@ -1282,7 +1282,7 @@ namespace WaveByWave.Player
             {
                 if (!SnapToActiveControlStation())
                 {
-                    // Display local walking/jumping in the ship's NGO render frame.
+                    // Display local walking/jumping in the ship's snapshot render frame.
                     // The motor root retains KCC collision simulation and world
                     // interpolation; only the camera/visual child is rebased.
                     if (_platform != null && _platform.UsesInterpolatedNetworkMotion &&
@@ -1298,7 +1298,7 @@ namespace WaveByWave.Player
 
             if (_platform != null)
             {
-                // Platform NetworkTransform interpolation happens before this LateUpdate. Keep
+                // Platform snapshot interpolation happens before this LateUpdate. Keep
                 // the rendered body/camera in the exact platform frame while physics remains in
                 // fixed time. This removes the render-time gap without teleporting the Rigidbody.
                 var usesContinuousAirborneFrame = _airborneFromPlatform &&

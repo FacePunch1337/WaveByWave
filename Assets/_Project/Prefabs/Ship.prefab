@@ -559,7 +559,7 @@ Transform:
   m_GameObject: {fileID: 58805911111550845}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 5.37, y: 4.2400002, z: -3.25}
+  m_LocalPosition: {x: 5.37, y: 4.24, z: -2.902}
   m_LocalScale: {x: 0.5, y: 0.49999994, z: 0.49999994}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -2287,7 +2287,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 7346228543219860454}
-  - {fileID: 2283864403508472071}
+  - {fileID: 9200099657}
   - {fileID: 2033222522540747639}
   - {fileID: 292209359239785530}
   - {fileID: 7988412160155193574}
@@ -29519,132 +29519,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.4018399, y: 0.008572474, z: 0.63966984}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!1 &3184218483040089882
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2283864403508472071}
-  - component: {fileID: 4485260005298341455}
-  - component: {fileID: 7883144380925711030}
-  - component: {fileID: 8252312732293024724}
-  - component: {fileID: 5660375809167146635}
-  m_Layer: 0
-  m_Name: Anchor Interaction
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &2283864403508472071
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3184218483040089882}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 3.8360007, y: 3.7399998, z: -4.77}
-  m_LocalScale: {x: 0.5, y: 0.49999994, z: 0.49999994}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1332178541684304014}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!33 &4485260005298341455
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3184218483040089882}
-  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
---- !u!135 &7883144380925711030
-SphereCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3184218483040089882}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Radius: 1
-  m_Center: {x: 0, y: 0, z: 0}
---- !u!23 &8252312732293024724
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3184218483040089882}
-  m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: d5f00e71333bf774ca15b9eb1db00d36, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 1
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_AdditionalVertexStreams: {fileID: 0}
---- !u!114 &5660375809167146635
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3184218483040089882}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8f1d52786a9ea0042a35f026a3998cfc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.ShipAnchor
-  ship: {fileID: 5920518771966846030}
-  indicatorRenderer: {fileID: 8252312732293024724}
 --- !u!1 &3188156765135635894
 GameObject:
   m_ObjectHideFlags: 0
@@ -41102,7 +40976,7 @@ Transform:
   m_GameObject: {fileID: 4219521693231063281}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 5.4, y: 4.24, z: -4.55}
+  m_LocalPosition: {x: 5.4, y: 4.24, z: -4.012}
   m_LocalScale: {x: 0.5, y: 0.49999994, z: 0.49999994}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -51389,6 +51263,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f5cb8f8a93c40b6b6ab742c979141cc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Player.PlatformNetworkTransform
+  ShowTopMostFoldoutHeaderGroup: 1
   interpolationDelay: 0.08
   maximumExtrapolationTime: 0.1
 --- !u!114 &2796224290388471588
@@ -51437,6 +51312,7 @@ MonoBehaviour:
   acceleration: 1.5
   coastingDeceleration: 0.55
   turnSpeed: 5
+  waterAlignment: {fileID: 2796224290388471588}
   baseCruiseSpeed: 2
   windSpeedBonus: 3
   windAccelerationBonus: 1.5
@@ -51444,14 +51320,13 @@ MonoBehaviour:
   buoyancyFrequency: 0.8
   buoyancyTiltFrequency: 0.6
   buoyancyDamping: 1
-  waterAlignment: {fileID: 2796224290388471588}
   collisionHull: {fileID: 0}
   obstacleLayers:
     serializedVersion: 2
     m_Bits: 4294967295
   collisionSkin: 0.04
   wind: {fileID: 5320100916160012370}
-  anchor: {fileID: 0}
+  anchor: {fileID: 9200099662}
   sailControl: {fileID: 0}
   mastControl: {fileID: 0}
   anchorBraking: 3
@@ -89064,3 +88939,100 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.32992047, y: 0.004598937, z: 0.21959777}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!1001 &3417416823808579475
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1332178541684304014}
+    m_Modifications:
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 3.908
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 3.411
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -4.736
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461979, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: m_Name
+      value: ShipAnchorCapstan
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461981, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: ship
+      value: 
+      objectReference: {fileID: 5920518771966846030}
+    - target: {fileID: 3417416814753461981, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: dropDuration
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 3417416814753461981, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+      propertyPath: soloRaiseDuration
+      value: 4
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+--- !u!4 &9200099657 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3417416814753461978, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+  m_PrefabInstance: {fileID: 3417416823808579475}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &9200099662 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3417416814753461981, guid: 64b17ea792cc46218e5bdcfecb6a35c9, type: 3}
+  m_PrefabInstance: {fileID: 3417416823808579475}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f1d52786a9ea0042a35f026a3998cfc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.ShipAnchor

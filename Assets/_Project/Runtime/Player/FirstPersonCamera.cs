@@ -20,6 +20,10 @@ namespace WaveByWave.Player
         private Vector3 _authoredLocalPosition;
         private float _yaw;
         private float _pitch;
+        private float _lookTransitionYawOffset;
+        private float _lookTransitionPitchOffset;
+        private float _lookTransitionStarted;
+        private float _lookTransitionDuration;
 
         private void Awake()
         {
@@ -49,6 +53,7 @@ namespace WaveByWave.Player
                 return;
 
             var worldForward = transform.forward;
+            _lookTransitionDuration = 0f;
             referenceFrame = frame;
             var frameRotation = referenceFrame != null ? referenceFrame.rotation : Quaternion.identity;
             var localForward = Quaternion.Inverse(frameRotation) * worldForward;
@@ -101,13 +106,45 @@ namespace WaveByWave.Player
 
         public void RefreshPose() => SnapToEyes();
 
+        public void SetLookRotation(Quaternion worldRotation)
+        {
+            _lookTransitionDuration = 0f;
+            var frameRotation = referenceFrame != null ? referenceFrame.rotation : Quaternion.identity;
+            var localForward = Quaternion.Inverse(frameRotation) * (worldRotation * Vector3.forward);
+            _yaw = Mathf.Atan2(localForward.x, localForward.z) * Mathf.Rad2Deg;
+            _pitch = Mathf.Clamp(-Mathf.Asin(Mathf.Clamp(localForward.y, -1f, 1f)) * Mathf.Rad2Deg,
+                pitchLimits.x, pitchLimits.y);
+            SnapToEyes();
+        }
+
+        public void BlendLookRotation(Quaternion worldRotation, float duration)
+        {
+            var frameRotation = referenceFrame != null ? referenceFrame.rotation : Quaternion.identity;
+            var localForward = Quaternion.Inverse(frameRotation) * transform.forward;
+            var currentYaw = Mathf.Atan2(localForward.x, localForward.z) * Mathf.Rad2Deg;
+            var currentPitch = -Mathf.Asin(Mathf.Clamp(localForward.y, -1f, 1f)) * Mathf.Rad2Deg;
+            SetLookRotation(worldRotation);
+            _lookTransitionYawOffset = Mathf.DeltaAngle(_yaw, currentYaw);
+            _lookTransitionPitchOffset = currentPitch - _pitch;
+            _lookTransitionStarted = Time.unscaledTime;
+            _lookTransitionDuration = Mathf.Max(0f, duration);
+            SnapToEyes();
+        }
+
         private void SnapToEyes()
         {
             if (eyeTarget == null)
                 return;
 
             var frameRotation = referenceFrame != null ? referenceFrame.rotation : Quaternion.identity;
-            var lookRotation = frameRotation * Quaternion.Euler(_pitch, _yaw, 0f);
+            var transitionWeight = _lookTransitionDuration > 0f
+                ? 1f - Mathf.SmoothStep(0f, 1f,
+                    Mathf.Clamp01((Time.unscaledTime - _lookTransitionStarted) / _lookTransitionDuration))
+                : 0f;
+            // Fade the grab offset rather than overwriting mouse input each frame.
+            var lookRotation = frameRotation * Quaternion.Euler(
+                Mathf.Clamp(_pitch + _lookTransitionPitchOffset * transitionWeight, pitchLimits.x, pitchLimits.y),
+                _yaw + _lookTransitionYawOffset * transitionWeight, 0f);
             if (transform == eyeTarget || transform.parent == eyeTarget)
             {
                 // The owner camera lives in the player prefab. Keeping its position local avoids

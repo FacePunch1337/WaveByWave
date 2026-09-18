@@ -45,6 +45,8 @@ namespace WaveByWave.Player
         [Header("Interaction")]
         [SerializeField, Min(0.5f)] private float interactionDistance = 3f;
         [SerializeField] private LayerMask interactionMask = ~0;
+        [Tooltip("Time to ease into an anchor handle, in the rotating handle's local frame.")]
+        [SerializeField, Min(0f)] private float anchorHandleApproachDuration = 0.4f;
 
         [Header("References")]
         [SerializeField] private Rigidbody body;
@@ -76,6 +78,22 @@ namespace WaveByWave.Player
         private ShipHelm _activeHelm;
         private ShipSailControl _activeSailControl;
         private ShipMastControl _activeMastControl;
+        private ShipAnchor _activeAnchor;
+        private Transform _anchorApproachStation;
+        private Vector3 _anchorApproachPositionOffset;
+        private Quaternion _anchorApproachRotationOffset;
+        private float _anchorApproachStarted;
+        private ShipAnchor _pendingAnchor;
+        private ShipAnchor _lookedAtAnchor;
+        private ShipAnchor _loweringAnchor;
+        private int _anchorHandleIndex = -1;
+        private bool _anchorOccupationConfirmed;
+        private float _anchorAssignmentDeadline;
+        private float _nextAnchorSend;
+        private bool _lastAnchorPush;
+        private float _anchorLowerHoldStarted;
+        private float _nextAnchorLowerHeartbeat;
+        private bool _anchorLowerCompleteSent;
         private float _nextHelmSend;
         private float _nextSailSend;
         private float _nextMastSend;
@@ -123,7 +141,14 @@ namespace WaveByWave.Player
         public bool IsAtHelm => _activeHelm != null;
         public bool IsAtSailControl => _activeSailControl != null;
         public bool IsAtMastControl => _activeMastControl != null;
-        public bool IsAtControlStation => IsAtHelm || IsAtSailControl || IsAtMastControl;
+        public bool IsAtAnchor => _activeAnchor != null;
+        public bool IsAtControlStation => IsAtHelm || IsAtSailControl || IsAtMastControl || IsAtAnchor;
+
+        public ShipAnchor AnchorBeingReleased => _loweringAnchor;
+        public Transform OwnerView => _camera != null ? _camera.transform : null;
+        public float AnchorReleaseHoldProgress => _loweringAnchor != null
+            ? Mathf.Clamp01((Time.unscaledTime - _anchorLowerHoldStarted) / _loweringAnchor.LowerHoldDuration)
+            : 0f;
 
         public void SetDesiredBodyRotation(Quaternion rotation)
         {
@@ -229,6 +254,10 @@ namespace WaveByWave.Player
 
             ActivateOwnerCamera();
             EnableKccMotor();
+            var anchorProgress = GetComponent<AnchorHoldProgress>();
+            if (anchorProgress == null)
+                anchorProgress = gameObject.AddComponent<AnchorHoldProgress>();
+            anchorProgress.Initialize(this);
             gameObject.name = $"Player_{OwnerClientId}";
         }
 
@@ -282,11 +311,21 @@ namespace WaveByWave.Player
 
         private void Update()
         {
-            if (!IsOwner || !IsSpawned || Keyboard.current == null)
+            if (!IsOwner || !IsSpawned)
                 return;
+
+            if (Keyboard.current == null)
+            {
+                CancelAnchorLowerHold();
+                return;
+            }
 
             if (_sceneTransitioning)
                 return;
+
+            if (_anchorHandleIndex >= 0 && (_activeAnchor == null ||
+                _activeAnchor.Ship == null || !_activeAnchor.Ship.IsSpawned))
+                LeaveAnchorHandle(false);
 
             if (SessionMenuPresenter.InputCaptured)
             {
@@ -323,14 +362,25 @@ namespace WaveByWave.Player
                 return;
             }
 
+            if (_activeAnchor != null)
+            {
+                UpdateAnchorInput();
+                return;
+            }
+
             CaptureMovementInput();
             UpdateInteraction();
-            UpdateItemActions();
+            if (!IsAtControlStation)
+                UpdateItemActions();
         }
 
         private void StopShipControlInputsForMenu()
         {
             ClearMovementInput();
+            CancelAnchorLowerHold();
+            if (_activeAnchor != null && _activeAnchor.Ship.IsSpawned)
+                _activeAnchor.Ship.SubmitAnchorPushServerRpc(false);
+            _lastAnchorPush = false;
             if (_activeHelm != null)
                 _activeHelm.Ship.SubmitHelmInputServerRpc(0f);
             if (_activeSailControl != null)
@@ -1134,7 +1184,7 @@ namespace WaveByWave.Player
                                              (_useKccMotor ||
                                               (_platform.UsesInterpolatedNetworkMotion &&
                                                _clientPlatformPoseInitialized));
-            if (_platform == null || (!_isGrounded && !hasContinuousAirborneFrame))
+            if (_platform == null || (!_isGrounded && !hasContinuousAirborneFrame && !IsAtControlStation))
             {
                 _hasReplicatedPlatform.Value = false;
                 return;
@@ -1168,6 +1218,20 @@ namespace WaveByWave.Player
             _hasReplicatedPlatform.Value = true;
         }
 
+        // Compare interaction positions in the same ship frame on the server.
+        // A client's delayed world Transform would otherwise select the wrong
+        // handle or fail the distance check on a fast moving vessel.
+        public bool TryGetPositionOnPlatform(NetworkObject platformObject, out Vector3 worldPosition)
+        {
+            worldPosition = default;
+            if (!_hasReplicatedPlatform.Value ||
+                !_replicatedPlatform.Value.TryGet(out var supportingObject, NetworkManager) ||
+                supportingObject != platformObject)
+                return false;
+            worldPosition = platformObject.transform.TransformPoint(_replicatedPlatformLocalPosition.Value);
+            return true;
+        }
+
         private void ApplyRemotePlatformPose()
         {
             if (!_hasReplicatedPlatform.Value ||
@@ -1179,6 +1243,29 @@ namespace WaveByWave.Player
                 return;
             }
 
+            // Occupancy is server-authored. Ease into the authored handle once;
+            // its subsequent circular motion follows the rotor directly.
+            var ship = platformObject.GetComponent<NetworkShipController>();
+            if (ship != null && ship.Anchor != null)
+            {
+                var handleIndex = ship.GetAnchorHandleForClient(OwnerClientId);
+                var station = ship.Anchor.GetHandleStation(handleIndex);
+                if (station != null)
+                {
+                    _remotePlatformObject = platformObject;
+                    _remotePlatformPoseInitialized = true;
+                    _remoteWorldPresentationActive = false;
+                    _remoteWorldPresentationOffset = Vector3.zero;
+                    _remoteWorldPresentationRotationOffset = Quaternion.identity;
+                    GetAnchorApproachPose(station, out var approachPosition, out var approachRotation);
+                    _remotePlatformLocalPosition = platformObject.transform.InverseTransformPoint(approachPosition);
+                    _remotePlatformLocalRotation = Quaternion.Inverse(platformObject.transform.rotation) * approachRotation;
+                    _presentationRoot.SetPositionAndRotation(approachPosition, approachRotation);
+                    return;
+                }
+            }
+
+            _anchorApproachStation = null;
             var targetLocalPosition = _replicatedPlatformLocalPosition.Value;
             var targetLocalRotation = _replicatedPlatformLocalRotation.Value;
             if (!_remotePlatformPoseInitialized || _remotePlatformObject != platformObject)
@@ -1214,6 +1301,7 @@ namespace WaveByWave.Player
 
         private void ApplyRemoteWorldPresentation()
         {
+            _anchorApproachStation = null;
             if (_presentationRoot == null)
                 return;
 
@@ -1256,6 +1344,7 @@ namespace WaveByWave.Player
 
         private void ResetRemotePlatformPose()
         {
+            _anchorApproachStation = null;
             _remotePlatformObject = null;
             _remotePlatformPoseInitialized = false;
             _remoteWorldPresentationActive = false;
@@ -1450,14 +1539,27 @@ namespace WaveByWave.Player
 
         private void UpdateInteraction()
         {
-            if (!Keyboard.current.eKey.wasPressedThisFrame)
-                return;
-
             var origin = cameraTarget.position;
             var direction = _camera != null ? _camera.transform.forward : transform.forward;
-            if (!Physics.SphereCast(origin, 0.3f, direction, out var hit, interactionDistance,
-                    interactionMask, QueryTriggerInteraction.Collide))
+            var hasHit = Physics.SphereCast(origin, 0.3f, direction, out var hit, interactionDistance,
+                interactionMask, QueryTriggerInteraction.Collide);
+            _lookedAtAnchor = hasHit ? hit.collider.GetComponentInParent<ShipAnchor>() : null;
+
+            if (_loweringAnchor != null)
+            {
+                UpdateAnchorLowerHold();
                 return;
+            }
+
+            if (!hasHit || !Keyboard.current.eKey.wasPressedThisFrame || _pendingAnchor != null)
+                return;
+
+            if (_lookedAtAnchor != null && _lookedAtAnchor.Ship != null &&
+                _lookedAtAnchor.Ship.CanBeginAnchorDrop)
+            {
+                BeginAnchorLowerHold(_lookedAtAnchor);
+                return;
+            }
 
             foreach (var behaviour in hit.collider.GetComponentsInParent<MonoBehaviour>())
             {
@@ -1491,7 +1593,7 @@ namespace WaveByWave.Player
 
         public void EnterHelm(ShipHelm helm)
         {
-            if (!IsOwner || helm == null || _activeSailControl != null || _activeMastControl != null)
+            if (!IsOwner || helm == null || IsAtControlStation || _pendingAnchor != null)
                 return;
 
             _activeHelm = helm;
@@ -1509,7 +1611,7 @@ namespace WaveByWave.Player
 
         public void EnterSailControl(ShipSailControl sailControl)
         {
-            if (!IsOwner || sailControl == null || _activeHelm != null || _activeMastControl != null)
+            if (!IsOwner || sailControl == null || IsAtControlStation || _pendingAnchor != null)
                 return;
 
             _activeSailControl = sailControl;
@@ -1528,7 +1630,7 @@ namespace WaveByWave.Player
 
         public void EnterMastControl(ShipMastControl mastControl)
         {
-            if (!IsOwner || mastControl == null || _activeHelm != null || _activeSailControl != null)
+            if (!IsOwner || mastControl == null || IsAtControlStation || _pendingAnchor != null)
                 return;
 
             _activeMastControl = mastControl;
@@ -1543,6 +1645,171 @@ namespace WaveByWave.Player
             SetOwnerPhysicsSimulation(false);
             SnapToActiveControlStation();
             mastControl.Ship.RequestMastControlServerRpc();
+        }
+
+        public void RequestAnchorHandle(ShipAnchor anchor)
+        {
+            if (!IsOwner || anchor == null || anchor.Ship == null || !anchor.Ship.IsSpawned ||
+                IsAtControlStation || _pendingAnchor != null || _sceneTransitioning)
+                return;
+            _pendingAnchor = anchor;
+            anchor.Ship.RequestAnchorHandleServerRpc();
+        }
+
+        public void HandleAnchorHandleResult(ShipAnchor anchor, int handleIndex)
+        {
+            if (!IsOwner)
+                return;
+            if (anchor == null || _pendingAnchor != anchor || _sceneTransitioning ||
+                SessionMenuPresenter.InputCaptured || IsAtControlStation)
+            {
+                if (handleIndex >= 0 && anchor != null && anchor.Ship.IsSpawned)
+                    anchor.Ship.ReleaseAnchorHandleServerRpc();
+                _pendingAnchor = null;
+                return;
+            }
+            _pendingAnchor = null;
+            var station = anchor.GetHandleStation(handleIndex);
+            if (station == null)
+            {
+                if (handleIndex >= 0 && anchor.Ship.IsSpawned)
+                    anchor.Ship.ReleaseAnchorHandleServerRpc();
+                return;
+            }
+
+            var initialLookRotation = _camera != null ? _camera.transform.rotation : station.rotation;
+            BeginAnchorApproach(station);
+            _activeAnchor = anchor;
+            _anchorHandleIndex = handleIndex;
+            _anchorOccupationConfirmed = false;
+            _anchorAssignmentDeadline = Time.unscaledTime + 2f;
+            _lastAnchorPush = false;
+            _nextAnchorSend = 0f;
+            ClearMovementInput();
+            _airbornePlatformMomentum = Vector3.zero;
+            var platform = anchor.Ship.GetComponent<MovingPlatform>();
+            if (platform != null)
+                AttachToPlatform(platform);
+            _isGrounded = true;
+            SetOwnerPhysicsSimulation(false);
+            SnapToActiveControlStation();
+            _camera?.SetReferenceFrame(anchor.Rotor);
+            _camera?.SetLookRotation(initialLookRotation);
+            _camera?.BlendLookRotation(station.rotation, anchorHandleApproachDuration);
+        }
+
+        private void UpdateAnchorInput()
+        {
+            var currentHandle = _activeAnchor.Ship.GetAnchorHandleForClient(OwnerClientId);
+            if (currentHandle == _anchorHandleIndex)
+                _anchorOccupationConfirmed = true;
+            else if (_anchorOccupationConfirmed || Time.unscaledTime >= _anchorAssignmentDeadline)
+            {
+                LeaveAnchorHandle();
+                return;
+            }
+
+            if (Keyboard.current.eKey.wasPressedThisFrame)
+            {
+                LeaveAnchorHandle();
+                return;
+            }
+
+            SnapToActiveControlStation();
+            var pushing = _loweringAnchor == null && !_activeAnchor.Ship.AnchorDropping &&
+                          _activeAnchor.Ship.AnchorRaiseProgress < 1f && Keyboard.current.wKey.isPressed;
+            if (pushing != _lastAnchorPush || Time.unscaledTime >= _nextAnchorSend)
+            {
+                _lastAnchorPush = pushing;
+                _nextAnchorSend = Time.unscaledTime + 0.05f;
+                _activeAnchor.Ship.SubmitAnchorPushServerRpc(pushing);
+            }
+            animationSync.SetLocomotion(pushing ? 1f : 0f, true, 0f);
+        }
+
+        private void LeaveAnchorHandle(bool notifyServer = true)
+        {
+            var anchor = _activeAnchor;
+            CancelAnchorLowerHold();
+            if (notifyServer && anchor != null && anchor.Ship.IsSpawned)
+                anchor.Ship.ReleaseAnchorHandleServerRpc();
+            _activeAnchor = null;
+            _anchorApproachStation = null;
+            _anchorHandleIndex = -1;
+            _anchorOccupationConfirmed = false;
+            ClearMovementInput();
+            if (_platform != null)
+                AttachToPlatform(_platform);
+            else
+                _camera?.SetReferenceFrame(null);
+            SetOwnerPhysicsSimulation(true, _platform != null
+                ? _platform.GetPointVelocity(body.position) : Vector3.zero);
+        }
+
+        private void BeginAnchorLowerHold(ShipAnchor anchor)
+        {
+            if (IsAtControlStation || _pendingAnchor != null || anchor == null || anchor.Ship == null ||
+                !anchor.Ship.IsSpawned || !anchor.Ship.CanBeginAnchorDrop)
+                return;
+            _loweringAnchor = anchor;
+            _anchorLowerHoldStarted = Time.unscaledTime;
+            _nextAnchorLowerHeartbeat = 0f;
+            _anchorLowerCompleteSent = false;
+            anchor.Ship.BeginAnchorLowerHoldServerRpc();
+        }
+
+        private void UpdateAnchorLowerHold()
+        {
+            var anchor = _loweringAnchor;
+            if (anchor == null || anchor.Ship == null || !anchor.Ship.IsSpawned ||
+                !anchor.Ship.CanBeginAnchorDrop || IsAtControlStation || _lookedAtAnchor != anchor)
+            {
+                CancelAnchorLowerHold();
+                return;
+            }
+            if (!Keyboard.current.eKey.isPressed)
+            {
+                var shortPress = !_anchorLowerCompleteSent &&
+                                 Time.unscaledTime - _anchorLowerHoldStarted <= 0.25f;
+                CancelAnchorLowerHold();
+                if (shortPress)
+                    anchor.Interact(this);
+                return;
+            }
+
+            if (Time.unscaledTime >= _nextAnchorLowerHeartbeat)
+            {
+                _nextAnchorLowerHeartbeat = Time.unscaledTime + 0.1f;
+                anchor.Ship.RefreshAnchorLowerHoldServerRpc();
+            }
+            if (!_anchorLowerCompleteSent && AnchorReleaseHoldProgress >= 1f)
+            {
+                _anchorLowerCompleteSent = true;
+                anchor.Ship.CompleteAnchorLowerHoldServerRpc();
+            }
+        }
+
+        private void CancelAnchorLowerHold()
+        {
+            if (_loweringAnchor != null && _loweringAnchor.Ship != null &&
+                _loweringAnchor.Ship.IsSpawned && NetworkManager != null && NetworkManager.IsListening)
+                _loweringAnchor.Ship.CancelAnchorLowerHoldServerRpc();
+            _loweringAnchor = null;
+        }
+
+        private void ResetAnchorInteraction()
+        {
+            _anchorApproachStation = null;
+            CancelAnchorLowerHold();
+            var anchor = _activeAnchor != null ? _activeAnchor : _pendingAnchor;
+            if (IsOwner && anchor != null && anchor.Ship != null && anchor.Ship.IsSpawned &&
+                NetworkManager != null && NetworkManager.IsListening)
+                anchor.Ship.ReleaseAnchorHandleServerRpc();
+            _activeAnchor = null;
+            _pendingAnchor = null;
+            _lookedAtAnchor = null;
+            _anchorHandleIndex = -1;
+            _anchorOccupationConfirmed = false;
         }
 
         private void UpdateHelmInput()
@@ -1643,15 +1910,44 @@ namespace WaveByWave.Player
                 station = _activeSailControl.Station;
             else if (_activeMastControl != null)
                 station = _activeMastControl.Station;
+            else if (_activeAnchor != null)
+                station = _activeAnchor.GetHandleStation(_anchorHandleIndex);
 
             if (station == null)
                 return false;
 
-            SetBodyPose(station.position, station.rotation);
-            _desiredBodyRotation = station.rotation;
+            var position = station.position;
+            var rotation = station.rotation;
+            if (_activeAnchor != null)
+                GetAnchorApproachPose(station, out position, out rotation);
+            SetBodyPose(position, rotation);
+            _desiredBodyRotation = rotation;
             UpdatePlatformAnchorFromCurrentPose();
             ResetPresentationPose();
             return true;
+        }
+
+        private void BeginAnchorApproach(Transform station)
+        {
+            _anchorApproachStation = station;
+            _anchorApproachStarted = Time.unscaledTime;
+            var presented = _presentationRoot != null ? _presentationRoot : transform;
+            _anchorApproachPositionOffset = station.InverseTransformPoint(presented.position);
+            _anchorApproachRotationOffset = Quaternion.Inverse(station.rotation) * presented.rotation;
+        }
+
+        private void GetAnchorApproachPose(Transform station, out Vector3 position, out Quaternion rotation)
+        {
+            if (_anchorApproachStation != station)
+                BeginAnchorApproach(station);
+            var progress = anchorHandleApproachDuration > 0f
+                ? Mathf.Clamp01((Time.unscaledTime - _anchorApproachStarted) / anchorHandleApproachDuration)
+                : 1f;
+            var blend = Mathf.SmoothStep(0f, 1f, progress);
+            // Only the initial offset fades out. Ship motion and capstan rotation
+            // are composed directly every frame, without a second world-space lag.
+            position = station.TransformPoint(_anchorApproachPositionOffset * (1f - blend));
+            rotation = station.rotation * Quaternion.Slerp(_anchorApproachRotationOffset, Quaternion.identity, blend);
         }
 
         private void UpdatePlatformAnchorFromCurrentPose()
@@ -1707,6 +2003,7 @@ namespace WaveByWave.Player
 
             _sceneTransitioning = true;
             StopShipControlInputsForMenu();
+            ResetAnchorInteraction();
             RemoveAnyNetworkParent();
             _activeHelm = null;
             _activeSailControl = null;
@@ -1815,6 +2112,7 @@ namespace WaveByWave.Player
         {
             RemoveAnyNetworkParent();
             SetOwnerPhysicsSimulation(false);
+            ResetAnchorInteraction();
 
             _activeHelm = null;
             _activeSailControl = null;
@@ -1862,6 +2160,7 @@ namespace WaveByWave.Player
 
         public override void OnNetworkDespawn()
         {
+            ResetAnchorInteraction();
             RestoreOwnerBodyLayers();
             if (_kccMotor != null)
             {

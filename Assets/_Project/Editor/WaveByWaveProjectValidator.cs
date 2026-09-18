@@ -86,6 +86,15 @@ namespace WaveByWave.Editor
             Require(ship.GetComponent<NetworkObject>(), "Ship NetworkObject");
             var shipController = Require(ship.GetComponent<NetworkShipController>(), "Ship controller");
             Require(ship.GetComponent<MovingPlatform>(), "Ship moving-platform compensation");
+            var anchor = Require(ship.GetComponentInChildren<ShipAnchor>(true), "Ship anchor capstan");
+            if (anchor.HandleCount < 1)
+                throw new InvalidOperationException("The anchor capstan needs authored handle stations.");
+            for (var i = 0; i < anchor.HandleCount; i++)
+            {
+                var station = Require(anchor.GetHandleStation(i), $"Anchor handle station {i + 1}");
+                if (!station.IsChildOf(anchor.Rotor))
+                    throw new InvalidOperationException("Anchor stations must turn with the capstan handles.");
+            }
             Require(ship.GetComponent<PlatformNetworkTransform>(), "Timestamped ship motion snapshots");
             if (ship.GetComponent<NetworkTransform>() != null)
                 throw new InvalidOperationException("Ship motion must use physics snapshots without a second NetworkTransform writer.");
@@ -104,6 +113,8 @@ namespace WaveByWave.Editor
             if (alignment.transform != ship.transform)
                 throw new InvalidOperationException("AlignToWater must be attached directly to the network ship root.");
             var shipSerialized = new SerializedObject(shipController);
+            if (shipSerialized.FindProperty("anchor")?.objectReferenceValue != anchor)
+                throw new InvalidOperationException("NetworkShipController must reference the anchor capstan.");
             if (shipSerialized.FindProperty("collisionHull")?.objectReferenceValue != collisionHull)
                 throw new InvalidOperationException("NetworkShipController must reference the root collision hull.");
 

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using StylizedWater3;
 using Unity.Netcode;
 using UnityEngine;
@@ -75,6 +76,17 @@ namespace WaveByWave.Ships
         private readonly NetworkVariable<float> _replicatedTurnRate = new();
         private readonly NetworkVariable<Vector3> _replicatedPlanarVelocity = new();
         private readonly NetworkVariable<bool> _anchorLowered = new(true);
+        private readonly NetworkVariable<bool> _anchorDropping = new();
+        private readonly NetworkVariable<float> _anchorRaiseProgress = new();
+        private readonly NetworkVariable<float> _anchorCapstanAngle = new();
+        private readonly NetworkVariable<int> _anchorPushingCount = new();
+        private NetworkList<ulong> _anchorOperators;
+        private AnchorPushInput[] _anchorPushInputs;
+        private readonly Dictionary<ulong, AnchorLowerHold> _anchorLowerHolds = new();
+        private readonly List<ulong> _expiredAnchorHolds = new();
+        private const double AnchorInputTimeout = 0.4;
+        private double _anchorDropStarted;
+        private float _anchorDropStartProgress;
         private readonly NetworkVariable<float> _sailDeployment = new(0f);
         private readonly NetworkVariable<ulong> _sailOperatorClientId = new(NoHelmsman);
         private readonly NetworkVariable<float> _mastAngle = new();
@@ -96,12 +108,43 @@ namespace WaveByWave.Ships
         private Vector3 _resolvedTargetPosition;
         private Quaternion _resolvedTargetRotation;
 
+        private struct AnchorPushInput
+        {
+            public bool Pushing;
+            public double LastReceived;
+        }
+
+        private sealed class AnchorLowerHold
+        {
+            public double Started;
+            public double LastReceived;
+            public bool CompletionRequested;
+        }
+
         public ulong HelmsmanClientId => _helmsmanClientId.Value;
         public float HelmAngle => _helmAngle.Value;
         public float HelmHalfRange => Mathf.Max(0.5f, helmTotalRotation * 0.5f);
         public float CurrentSpeed => _replicatedSpeed.Value;
         public float CurrentTurnRate => _replicatedTurnRate.Value;
         public bool AnchorLowered => _anchorLowered.Value;
+        public bool AnchorDropping => _anchorDropping.Value;
+        public bool CanBeginAnchorDrop => !AnchorDropping && AnchorRaiseProgress >= 1f && AnchorHoldingCount == 0;
+        public int AnchorHoldingCount
+        {
+            get
+            {
+                var count = 0;
+                if (_anchorOperators != null)
+                    for (var i = 0; i < _anchorOperators.Count; i++)
+                        if (_anchorOperators[i] != NoHelmsman)
+                            count++;
+                return count;
+            }
+        }
+        public ShipAnchor Anchor => anchor;
+        public float AnchorRaiseProgress => _anchorRaiseProgress.Value;
+        public float AnchorCapstanAngle => _anchorCapstanAngle.Value;
+        public int AnchorPushingCount => _anchorPushingCount.Value;
         public float SailDeployment => _sailDeployment.Value;
         public float InitialSailDeployment => initialSailDeployment;
         public float MastAngle => _mastAngle.Value;
@@ -145,6 +188,7 @@ namespace WaveByWave.Ships
 
         private void Awake()
         {
+            _anchorOperators = new NetworkList<ulong>();
             body ??= GetComponent<Rigidbody>();
             waterAlignment ??= GetComponent<AlignToWater>();
             collisionHull ??= GetComponent<BoxCollider>();
@@ -181,6 +225,16 @@ namespace WaveByWave.Ships
 
             if (IsServer)
             {
+                _anchorOperators.Clear();
+                _anchorPushInputs = new AnchorPushInput[anchor != null ? anchor.HandleCount : 0];
+                for (var i = 0; i < _anchorPushInputs.Length; i++)
+                    _anchorOperators.Add(NoHelmsman);
+                _anchorLowerHolds.Clear();
+                _anchorLowered.Value = true;
+                _anchorDropping.Value = false;
+                _anchorRaiseProgress.Value = 0f;
+                _anchorCapstanAngle.Value = 0f;
+                _anchorPushingCount.Value = 0;
                 _heading = transform.eulerAngles.y;
                 _planarPosition = transform.position;
                 _helmAngle.Value = 0f;
@@ -207,6 +261,8 @@ namespace WaveByWave.Ships
 
         public override void OnNetworkDespawn()
         {
+            _anchorLowerHolds.Clear();
+            _anchorPushInputs = null;
             if (NetworkManager != null)
                 NetworkManager.OnClientDisconnectCallback -= OnClientDisconnected;
 
@@ -221,6 +277,8 @@ namespace WaveByWave.Ships
         {
             if (!IsSpawned || !IsServer)
                 return;
+
+            UpdateAnchorOperation();
 
             _movingPlatform?.RestoreKccSimulationPose();
             _collisionStartPosition = body.position;
@@ -426,6 +484,8 @@ namespace WaveByWave.Ships
         public void RequestHelmServerRpc(ServerRpcParams rpcParams = default)
         {
             var sender = rpcParams.Receive.SenderClientId;
+            if (GetAnchorHandleForClient(sender) >= 0)
+                return;
             if (_helmsmanClientId.Value != NoHelmsman && _helmsmanClientId.Value != sender)
                 return;
 
@@ -455,19 +515,238 @@ namespace WaveByWave.Ships
         }
 
         [ServerRpc(RequireOwnership = false)]
-        public void ToggleAnchorServerRpc(ServerRpcParams rpcParams = default)
+        public void RequestAnchorHandleServerRpc(ServerRpcParams rpcParams = default)
         {
-            var interactionPoint = anchor != null ? anchor.transform : transform;
-            if (!IsPlayerNearInteraction(rpcParams.Receive.SenderClientId, interactionPoint, 5f))
-                return;
+            var sender = rpcParams.Receive.SenderClientId;
+            var selected = GetAnchorHandleForClient(sender);
+            if (selected < 0 && anchor != null &&
+                _helmsmanClientId.Value != sender && _sailOperatorClientId.Value != sender &&
+                _mastOperatorClientId.Value != sender &&
+                IsPlayerNearInteraction(sender, anchor.transform, 5f) &&
+                TryGetPlayerInteractionPosition(sender, out var playerPosition))
+            {
+                var nearestDistance = float.PositiveInfinity;
+                for (var i = 0; i < _anchorOperators.Count; i++)
+                {
+                    var station = anchor.GetHandleStation(i);
+                    if (_anchorOperators[i] != NoHelmsman || station == null)
+                        continue;
+                    var distance = (station.position - playerPosition).sqrMagnitude;
+                    if (distance < nearestDistance)
+                    {
+                        selected = i;
+                        nearestDistance = distance;
+                    }
+                }
+                if (selected >= 0)
+                {
+                    _anchorOperators[selected] = sender;
+                    _anchorPushInputs[selected] = default;
+                }
+            }
 
-            _anchorLowered.Value = !_anchorLowered.Value;
+            if (selected >= 0)
+            {
+                _anchorDropping.Value = false;
+                // Grabbing the capstan cancels an outstanding release hold,
+                // including a completion still waiting for the next fixed step.
+                _anchorLowerHolds.Clear();
+            }
+            AnchorHandleResultClientRpc(sender, selected);
+        }
+
+        [ClientRpc]
+        private void AnchorHandleResultClientRpc(ulong clientId, int handleIndex)
+        {
+            if (NetworkManager.LocalClientId != clientId)
+                return;
+            NetworkManager.LocalClient.PlayerObject?.GetComponent<NetworkPlayerController>()
+                ?.HandleAnchorHandleResult(anchor, handleIndex);
+        }
+
+        public int GetAnchorHandleForClient(ulong clientId)
+        {
+            if (_anchorOperators == null)
+                return -1;
+            for (var i = 0; i < _anchorOperators.Count; i++)
+                if (_anchorOperators[i] == clientId)
+                    return i;
+            return -1;
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        public void ReleaseAnchorHandleServerRpc(ServerRpcParams rpcParams = default) =>
+            ReleaseAnchorHandle(rpcParams.Receive.SenderClientId);
+
+        private void ReleaseAnchorHandle(ulong clientId)
+        {
+            var index = GetAnchorHandleForClient(clientId);
+            if (index < 0)
+                return;
+            _anchorOperators[index] = NoHelmsman;
+            if (_anchorPushInputs != null)
+                _anchorPushInputs[index] = default;
+        }
+
+        [ServerRpc(RequireOwnership = false, Delivery = RpcDelivery.Unreliable)]
+        public void SubmitAnchorPushServerRpc(bool pushing, ServerRpcParams rpcParams = default)
+        {
+            var index = GetAnchorHandleForClient(rpcParams.Receive.SenderClientId);
+            if (index < 0 || _anchorPushInputs == null)
+                return;
+            _anchorPushInputs[index] = new AnchorPushInput
+            {
+                Pushing = pushing,
+                LastReceived = Time.unscaledTimeAsDouble
+            };
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        public void BeginAnchorLowerHoldServerRpc(ServerRpcParams rpcParams = default)
+        {
+            var sender = rpcParams.Receive.SenderClientId;
+            if (anchor == null || !CanBeginAnchorDrop || _anchorLowerHolds.ContainsKey(sender) ||
+                !IsPlayerNearInteraction(sender, anchor.transform, 5f))
+                return;
+            _anchorLowerHolds[sender] = new AnchorLowerHold
+            {
+                Started = Time.unscaledTimeAsDouble,
+                LastReceived = Time.unscaledTimeAsDouble
+            };
+        }
+
+        [ServerRpc(RequireOwnership = false, Delivery = RpcDelivery.Unreliable)]
+        public void RefreshAnchorLowerHoldServerRpc(ServerRpcParams rpcParams = default)
+        {
+            if (_anchorLowerHolds.TryGetValue(rpcParams.Receive.SenderClientId, out var hold))
+                hold.LastReceived = Time.unscaledTimeAsDouble;
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        public void CompleteAnchorLowerHoldServerRpc(ServerRpcParams rpcParams = default)
+        {
+            if (_anchorLowerHolds.TryGetValue(rpcParams.Receive.SenderClientId, out var hold))
+            {
+                hold.CompletionRequested = true;
+                hold.LastReceived = Time.unscaledTimeAsDouble;
+            }
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        public void CancelAnchorLowerHoldServerRpc(ServerRpcParams rpcParams = default)
+        {
+            var sender = rpcParams.Receive.SenderClientId;
+            // Filling the bar commits the action. A release on the following
+            // frame must not undo a completed hold while its RPC is in flight.
+            if (_anchorLowerHolds.TryGetValue(sender, out var hold) && !hold.CompletionRequested)
+                _anchorLowerHolds.Remove(sender);
+        }
+
+        private void UpdateAnchorOperation()
+        {
+            if (anchor == null || _anchorPushInputs == null)
+                return;
+            var now = Time.unscaledTimeAsDouble;
+            var pushingCount = 0;
+            var holdingCount = 0;
+            for (var i = 0; i < _anchorOperators.Count; i++)
+            {
+                var operatorId = _anchorOperators[i];
+                if (operatorId == NoHelmsman)
+                    continue;
+                if (!IsPlayerNearInteraction(operatorId, anchor.transform, 5f))
+                {
+                    ReleaseAnchorHandle(operatorId);
+                    continue;
+                }
+                holdingCount++;
+                var input = _anchorPushInputs[i];
+                if (!AnchorDropping && AnchorRaiseProgress < 1f && input.Pushing &&
+                    now - input.LastReceived <= AnchorInputTimeout)
+                    pushingCount++;
+            }
+            _anchorPushingCount.Value = pushingCount;
+            if (holdingCount > 0 && pushingCount == holdingCount)
+            {
+                SetAnchorRaiseProgress(Mathf.Min(1f, AnchorRaiseProgress +
+                    Time.fixedDeltaTime * pushingCount / anchor.SoloRaiseDuration));
+                if (_anchorRaiseProgress.Value >= 1f)
+                {
+                    _anchorLowered.Value = false;
+                    _anchorPushingCount.Value = 0;
+                }
+            }
+
+            // Grabbing any free handle arrests a falling anchor at its current
+            // height. Letting go of all handles at a partial height resumes the
+            // fall, whether it was caught or raised from the seabed.
+            if (!AnchorDropping && holdingCount == 0 && AnchorRaiseProgress > 0f && AnchorRaiseProgress < 1f)
+                StartAnchorDrop();
+            if (AnchorDropping)
+            {
+                var elapsed = System.Math.Max(0d, Time.fixedTimeAsDouble - _anchorDropStarted);
+                var progress = elapsed + 0.000001d >= _anchorDropStartProgress * anchor.DropDuration
+                    ? 0f
+                    : _anchorDropStartProgress - (float)(elapsed / anchor.DropDuration);
+                SetAnchorRaiseProgress(progress);
+                if (AnchorRaiseProgress <= 0f)
+                    _anchorDropping.Value = false;
+            }
+
+            _expiredAnchorHolds.Clear();
+            var lowerAnchor = false;
+            foreach (var entry in _anchorLowerHolds)
+            {
+                var hold = entry.Value;
+                if (!CanBeginAnchorDrop || now - hold.LastReceived > AnchorInputTimeout ||
+                    !IsPlayerNearInteraction(entry.Key, anchor.transform, 5f))
+                {
+                    _expiredAnchorHolds.Add(entry.Key);
+                    continue;
+                }
+                // A deadline alone never drops the anchor. Only a client that kept
+                // E held until its bar filled sends this confirmation. An early
+                // release cannot lower it, even when cancellation is delayed.
+                if (hold.CompletionRequested && now - hold.Started >= anchor.LowerHoldDuration)
+                    lowerAnchor = true;
+            }
+            foreach (var clientId in _expiredAnchorHolds)
+                _anchorLowerHolds.Remove(clientId);
+            if (lowerAnchor)
+            {
+                // Only an unoccupied capstan can free-spin. A new interaction
+                // can catch the shaft without resetting its position.
+                _anchorPushingCount.Value = 0;
+                StartAnchorDrop();
+                _anchorLowerHolds.Clear();
+            }
+        }
+
+        private void SetAnchorRaiseProgress(float progress)
+        {
+            _anchorCapstanAngle.Value += (progress - AnchorRaiseProgress) * anchor.RaisingRotationDegrees;
+            _anchorRaiseProgress.Value = progress;
+            // A dropped anchor brakes at the bottom; an anchored ship is freed
+            // when raising finishes. A partial catch preserves that state.
+            if (progress <= 0f)
+                _anchorLowered.Value = true;
+            else if (progress >= 1f)
+                _anchorLowered.Value = false;
+        }
+
+        private void StartAnchorDrop()
+        {
+            _anchorDropStarted = Time.fixedTimeAsDouble;
+            _anchorDropStartProgress = AnchorRaiseProgress;
+            _anchorDropping.Value = true;
         }
 
         [ServerRpc(RequireOwnership = false)]
         public void RequestSailControlServerRpc(ServerRpcParams rpcParams = default)
         {
             var sender = rpcParams.Receive.SenderClientId;
+            if (GetAnchorHandleForClient(sender) >= 0)
+                return;
             if (_sailOperatorClientId.Value != NoHelmsman && _sailOperatorClientId.Value != sender)
                 return;
 
@@ -501,6 +780,8 @@ namespace WaveByWave.Ships
         public void RequestMastControlServerRpc(ServerRpcParams rpcParams = default)
         {
             var sender = rpcParams.Receive.SenderClientId;
+            if (GetAnchorHandleForClient(sender) >= 0)
+                return;
             if (_mastOperatorClientId.Value != NoHelmsman && _mastOperatorClientId.Value != sender)
                 return;
 
@@ -544,15 +825,28 @@ namespace WaveByWave.Ships
 
         private bool IsPlayerNearInteraction(ulong clientId, Transform interactionPoint, float range)
         {
-            if (!NetworkManager.ConnectedClients.TryGetValue(clientId, out var client) ||
-                client.PlayerObject == null || interactionPoint == null)
+            if (interactionPoint == null || !TryGetPlayerInteractionPosition(clientId, out var position))
                 return false;
 
-            return (client.PlayerObject.transform.position - interactionPoint.position).sqrMagnitude <= range * range;
+            return (position - interactionPoint.position).sqrMagnitude <= range * range;
+        }
+
+        private bool TryGetPlayerInteractionPosition(ulong clientId, out Vector3 position)
+        {
+            position = default;
+            if (!NetworkManager.ConnectedClients.TryGetValue(clientId, out var client) || client.PlayerObject == null)
+                return false;
+            var player = client.PlayerObject.GetComponent<NetworkPlayerController>();
+            if (player != null && player.TryGetPositionOnPlatform(NetworkObject, out position))
+                return true;
+            position = client.PlayerObject.transform.position;
+            return true;
         }
 
         private void OnClientDisconnected(ulong clientId)
         {
+            ReleaseAnchorHandle(clientId);
+            _anchorLowerHolds.Remove(clientId);
             if (_helmsmanClientId.Value == clientId)
             {
                 _helmsmanClientId.Value = NoHelmsman;

@@ -9,6 +9,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using KinematicCharacterController;
 using WaveByWave.Player;
+using WaveByWave.Ships;
 using PhysicsCollider = Unity.Physics.Collider;
 using EngineCollider = UnityEngine.Collider;
 using EngineMeshCollider = UnityEngine.MeshCollider;
@@ -769,6 +770,11 @@ namespace WaveByWave.Collision
 
         public static bool IsSolidModel(MeshFilter filter)
         {
+            // Capstan handles rotate independently of the hull. Freezing them
+            // into its cached triangle geometry would leave invisible contacts
+            // at their original positions. The mechanism has its own PhysX collider.
+            if (filter.GetComponentInParent<ShipAnchor>() != null)
+                return false;
             var renderer = filter.GetComponent<MeshRenderer>();
             if (renderer == null || !renderer.enabled)
                 return false;

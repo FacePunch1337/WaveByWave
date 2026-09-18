@@ -412,11 +412,14 @@ namespace WaveByWave.Editor
             SetObjectReference(helm, "station", station);
             SetObjectReference(ship, "helm", helm);
 
-            var anchorPoint = CreateShipInteractionPoint("Anchor Interaction", root.transform,
-                new Vector3(-2f, 2f, -3.8f), palette.Gold);
-            var anchor = anchorPoint.AddComponent<ShipAnchor>();
+            var capstanPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Prefabs + "/ShipAnchorCapstan.prefab");
+            if (capstanPrefab == null)
+                throw new InvalidOperationException("ShipAnchorCapstan.prefab is required to generate the ship.");
+            var anchorPoint = (GameObject)PrefabUtility.InstantiatePrefab(capstanPrefab);
+            anchorPoint.transform.SetParent(root.transform, false);
+            anchorPoint.transform.localPosition = new Vector3(-2f, 1.175f, -2.2f);
+            var anchor = anchorPoint.GetComponent<ShipAnchor>();
             SetObjectReference(anchor, "ship", ship);
-            SetObjectReference(anchor, "indicatorRenderer", anchorPoint.GetComponent<Renderer>());
             SetObjectReference(ship, "anchor", anchor);
 
             var sailPoint = CreateShipInteractionPoint("Sail Control", root.transform,

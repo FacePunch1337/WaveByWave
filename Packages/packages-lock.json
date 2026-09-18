@@ -1,11 +1,10 @@
 {
   "dependencies": {
     "com.community.netcode.transport.facepunch": {
-      "version": "https://github.com/Unity-Technologies/multiplayer-community-contributions.git?path=/Transports/com.community.netcode.transport.facepunch",
+      "version": "file:com.community.netcode.transport.facepunch",
       "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "0fab638470379ace12b0149dfb41c043d23dbce5"
+      "source": "embedded",
+      "dependencies": {}
     },
     "com.unity.ai.navigation": {
       "version": "2.0.9",

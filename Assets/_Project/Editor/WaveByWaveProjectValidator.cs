@@ -54,6 +54,10 @@ namespace WaveByWave.Editor
             Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Player.prefab"), "Player prefab");
             Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Ship.prefab"), "Ship prefab");
             Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/WorldItem.prefab"), "WorldItem prefab");
+            var worldItem = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/WorldItem.prefab");
+            if (worldItem.GetComponent<Rigidbody>() != null || worldItem.GetComponent<NetworkTransform>() != null ||
+                worldItem.GetComponent<NetworkRigidbody>() != null || !worldItem.GetComponent<Collider>().isTrigger)
+                throw new InvalidOperationException("Loot must use procedural placement and only a pickup trigger, without Rigidbody or NetworkTransform.");
             Require(AssetDatabase.LoadAssetAtPath<NetworkPrefabsList>("Assets/_Project/Data/NetworkPrefabs.asset"), "Network prefab list");
             Require(AssetDatabase.LoadAssetAtPath<WaveProfile>("Assets/Stylized Water 3/Profiles/Ocean Wave Profile.asset"), "Ocean wave profile");
 
@@ -79,13 +83,23 @@ namespace WaveByWave.Editor
             var inventory = Require(player.GetComponent<PlayerInventory>(), "Player inventory");
             var inventorySerialized = new SerializedObject(inventory);
             var startingItems = inventorySerialized.FindProperty("startingItemIds");
-            if (startingItems == null || startingItems.arraySize != 5)
-                throw new InvalidOperationException("Player must start with exactly five prototype tools.");
+            if (startingItems == null || startingItems.arraySize != 8)
+                throw new InvalidOperationException("Player must start with five tools and cannonball, plank and food stacks.");
 
             var ship = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Ship.prefab");
             Require(ship.GetComponent<NetworkObject>(), "Ship NetworkObject");
             var shipController = Require(ship.GetComponent<NetworkShipController>(), "Ship controller");
             Require(ship.GetComponent<MovingPlatform>(), "Ship moving-platform compensation");
+            var battery = Require(ship.GetComponent<ShipCannonBattery>(), "Ship cannon battery");
+            var cannons = ship.GetComponentsInChildren<ShipCannon>(true);
+            if (cannons.Length != 2)
+                throw new InvalidOperationException("The ship needs exactly two broadside cannons.");
+            foreach (var cannon in cannons)
+            {
+                if (cannon.Station == cannon.transform)
+                    throw new InvalidOperationException("Cannons need authored operator stations.");
+            }
+            Require(ship.GetComponentInChildren<ShipTreasureChest>(true), "Crew treasure chest");
             var anchor = Require(ship.GetComponentInChildren<ShipAnchor>(true), "Ship anchor capstan");
             if (anchor.HandleCount < 1)
                 throw new InvalidOperationException("The anchor capstan needs authored handle stations.");

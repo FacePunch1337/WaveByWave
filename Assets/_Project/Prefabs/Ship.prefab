@@ -2293,6 +2293,9 @@ Transform:
   - {fileID: 7988412160155193574}
   - {fileID: 5510913852577974333}
   - {fileID: 1695714390728094786}
+  - {fileID: 9300011001}
+  - {fileID: 9300019401}
+  - {fileID: 9300029913}
   m_Father: {fileID: 6075218433816052282}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &273421134127026537
@@ -33625,7 +33628,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2820900380911493833
 Transform:
   m_ObjectHideFlags: 0
@@ -51147,6 +51150,7 @@ GameObject:
   - component: {fileID: 5920518771966846030}
   - component: {fileID: 5320100916160012370}
   - component: {fileID: 5574653032040607}
+  - component: {fileID: 9300090006}
   m_Layer: 0
   m_Name: Ship
   m_TagString: Untagged
@@ -51382,6 +51386,30 @@ MonoBehaviour:
   contactFriction: 0.025
   maximumRecoveryStep: 0.15
   maximumRecoverySpeed: 0.75
+--- !u!114 &9300090006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5248081386866439349}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be59540013902a6488d001dceabb886a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.ShipCannonBattery
+  ShowTopMostFoldoutHeaderGroup: 1
+  cannons:
+  - {fileID: 9300011006}
+  - {fileID: 9300019406}
+  waterSplashPrefab: {fileID: 1402041941817024963, guid: ade152f810abc93439076107c5a46d15, type: 3}
+  effectMaterial: {fileID: 2100000, guid: 30d99fca3b2241cc9ae092e9b3560506, type: 2}
+  ballMaterial: {fileID: 2100000, guid: b14701b1af404797af5e5fee34b57410, type: 2}
+  treasureChest: {fileID: 9300029918}
+  hitLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  maximumHealth: 400
 --- !u!1 &5255303147192302173
 GameObject:
   m_ObjectHideFlags: 0
@@ -88939,6 +88967,225 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.32992047, y: 0.004598937, z: 0.21959777}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!1001 &9300010000
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1332178541684304014}
+    m_Modifications:
+    - target: {fileID: 1000, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_Name
+      value: Port Cannon
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 2.32
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 2.01
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0.83
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.70710677
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0.70710677
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+--- !u!4 &9300011001 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+  m_PrefabInstance: {fileID: 9300010000}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &9300011006 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1006, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+  m_PrefabInstance: {fileID: 9300010000}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d62ef82ac18445b40bd113020d6db4c1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.ShipCannon
+--- !u!1001 &9300020000
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1332178541684304014}
+    m_Modifications:
+    - target: {fileID: 1000, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_Name
+      value: Starboard Cannon
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 5.48
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 2.01
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0.83
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.70710677
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0.70710677
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+--- !u!4 &9300019401 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1001, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+  m_PrefabInstance: {fileID: 9300020000}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &9300019406 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1006, guid: e09f5a0916e44c709369b996377ad9f8, type: 3}
+  m_PrefabInstance: {fileID: 9300020000}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d62ef82ac18445b40bd113020d6db4c1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.ShipCannon
+--- !u!1001 &9300030000
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1332178541684304014}
+    m_Modifications:
+    - target: {fileID: 1000, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_Name
+      value: Crew Treasure Chest
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 3.865
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 2.15
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -1.548
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+--- !u!4 &9300029913 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1001, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+  m_PrefabInstance: {fileID: 9300030000}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &9300029918 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1006, guid: 80807d8af06541e0b84303d30bf52eda, type: 3}
+  m_PrefabInstance: {fileID: 9300030000}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a963f96965e5968488e5512c18d3269c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.ShipTreasureChest
 --- !u!1001 &3417416823808579475
 PrefabInstance:
   m_ObjectHideFlags: 0

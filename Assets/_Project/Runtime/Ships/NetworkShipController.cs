@@ -4,6 +4,7 @@ using Unity.Netcode;
 using UnityEngine;
 using WaveByWave.Player;
 using WaveByWave.Collision;
+using WaveByWave.Items;
 
 namespace WaveByWave.Ships
 {
@@ -75,6 +76,8 @@ namespace WaveByWave.Ships
         private readonly NetworkVariable<float> _replicatedSpeed = new();
         private readonly NetworkVariable<float> _replicatedTurnRate = new();
         private readonly NetworkVariable<Vector3> _replicatedPlanarVelocity = new();
+        private readonly NetworkVariable<float> _speedUpgradeBonus = new();
+        private readonly NetworkVariable<float> _turnUpgradeBonus = new();
         private readonly NetworkVariable<bool> _anchorLowered = new(true);
         private readonly NetworkVariable<bool> _anchorDropping = new();
         private readonly NetworkVariable<float> _anchorRaiseProgress = new();
@@ -145,6 +148,19 @@ namespace WaveByWave.Ships
         public float AnchorRaiseProgress => _anchorRaiseProgress.Value;
         public float AnchorCapstanAngle => _anchorCapstanAngle.Value;
         public int AnchorPushingCount => _anchorPushingCount.Value;
+        public bool IsClientOperatingNavigationStation(ulong clientId) =>
+            _helmsmanClientId.Value == clientId || _sailOperatorClientId.Value == clientId ||
+            _mastOperatorClientId.Value == clientId || GetAnchorHandleForClient(clientId) >= 0;
+        private bool IsClientAtCannon(ulong clientId) => TryGetComponent<ShipCannonBattery>(out var battery) &&
+            battery.GetOperatorCannon(clientId) >= 0;
+        public void ApplySailingUpgradeServer(ShipUpgradeStat stat, float bonus)
+        {
+            if (!IsServer || float.IsNaN(bonus) || float.IsInfinity(bonus)) return;
+            if (stat == ShipUpgradeStat.Speed)
+                _speedUpgradeBonus.Value = Mathf.Clamp(_speedUpgradeBonus.Value + bonus, 0f, 2f);
+            else if (stat == ShipUpgradeStat.Maneuverability)
+                _turnUpgradeBonus.Value = Mathf.Clamp(_turnUpgradeBonus.Value + bonus, 0f, 2f);
+        }
         public float SailDeployment => _sailDeployment.Value;
         public float InitialSailDeployment => initialSailDeployment;
         public float MastAngle => _mastAngle.Value;
@@ -311,9 +327,10 @@ namespace WaveByWave.Ships
                 : Mathf.Abs(Vector3.Dot(windDirection, currentForward));
             var deployment = Mathf.Clamp01(_sailDeployment.Value);
             var sailLoad = deployment * Mathf.Clamp01(sailCapture);
-            var speedLimit = Mathf.Max(0.1f, maximumSpeed);
-            var cruiseSpeed = Mathf.Clamp(baseCruiseSpeed, 0.1f, speedLimit);
-            var targetSpeed = Mathf.Min(speedLimit, cruiseSpeed * deployment + windSpeedBonus * sailLoad);
+            var speedFactor = 1f + _speedUpgradeBonus.Value;
+            var speedLimit = Mathf.Max(0.1f, maximumSpeed * speedFactor);
+            var cruiseSpeed = Mathf.Clamp(baseCruiseSpeed * speedFactor, 0.1f, speedLimit);
+            var targetSpeed = Mathf.Min(speedLimit, cruiseSpeed * deployment + windSpeedBonus * speedFactor * sailLoad);
             targetSpeed *= 1f - Mathf.Abs(rudder) * fullRudderSpeedPenalty;
             var planarVelocity = Vector3.ProjectOnPlane(_linearVelocity, Vector3.up);
             if (_anchorLowered.Value)
@@ -351,7 +368,7 @@ namespace WaveByWave.Ships
             var flowBasedAuthority = Mathf.Lerp(minimumRudderAuthority, 1f,
                 Mathf.Clamp01(planarVelocity.magnitude / Mathf.Max(0.1f, fullRudderAuthoritySpeed)));
             var rudderAuthority = Mathf.Lerp(1f, flowBasedAuthority, deployment);
-            var targetYaw = rudder * turnSpeed * rudderAuthority * Mathf.Deg2Rad;
+            var targetYaw = rudder * turnSpeed * (1f + _turnUpgradeBonus.Value) * rudderAuthority * Mathf.Deg2Rad;
             var yawAcceleration = Mathf.Abs(targetYaw) > Mathf.Abs(_angularVelocity.y)
                 ? turnAcceleration : turnDeceleration;
             _angularVelocity.y = Mathf.MoveTowards(_angularVelocity.y, targetYaw,
@@ -484,6 +501,7 @@ namespace WaveByWave.Ships
         public void RequestHelmServerRpc(ServerRpcParams rpcParams = default)
         {
             var sender = rpcParams.Receive.SenderClientId;
+            if (IsClientAtCannon(sender)) return;
             if (GetAnchorHandleForClient(sender) >= 0)
                 return;
             if (_helmsmanClientId.Value != NoHelmsman && _helmsmanClientId.Value != sender)
@@ -518,6 +536,7 @@ namespace WaveByWave.Ships
         public void RequestAnchorHandleServerRpc(ServerRpcParams rpcParams = default)
         {
             var sender = rpcParams.Receive.SenderClientId;
+            if (IsClientAtCannon(sender)) { AnchorHandleResultClientRpc(sender, -1); return; }
             var selected = GetAnchorHandleForClient(sender);
             if (selected < 0 && anchor != null &&
                 _helmsmanClientId.Value != sender && _sailOperatorClientId.Value != sender &&
@@ -745,6 +764,7 @@ namespace WaveByWave.Ships
         public void RequestSailControlServerRpc(ServerRpcParams rpcParams = default)
         {
             var sender = rpcParams.Receive.SenderClientId;
+            if (IsClientAtCannon(sender)) return;
             if (GetAnchorHandleForClient(sender) >= 0)
                 return;
             if (_sailOperatorClientId.Value != NoHelmsman && _sailOperatorClientId.Value != sender)
@@ -780,6 +800,7 @@ namespace WaveByWave.Ships
         public void RequestMastControlServerRpc(ServerRpcParams rpcParams = default)
         {
             var sender = rpcParams.Receive.SenderClientId;
+            if (IsClientAtCannon(sender)) return;
             if (GetAnchorHandleForClient(sender) >= 0)
                 return;
             if (_mastOperatorClientId.Value != NoHelmsman && _mastOperatorClientId.Value != sender)

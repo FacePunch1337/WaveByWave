@@ -1319,6 +1319,7 @@ namespace Unity.Netcode
             {
                 ConnectionManager.LocalClient.SetRole(false, false);
                 IsListening = false;
+                ShutdownInternal();
                 throw;
             }
 
@@ -1366,6 +1367,7 @@ namespace Unity.Netcode
                 Debug.LogException(ex);
                 ConnectionManager.LocalClient.SetRole(false, false);
                 IsListening = false;
+                ShutdownInternal();
             }
 
             return IsListening;
@@ -1412,6 +1414,7 @@ namespace Unity.Netcode
                 Debug.LogException(ex);
                 ConnectionManager.LocalClient.SetRole(false, false);
                 IsListening = false;
+                ShutdownInternal();
             }
 
             return IsListening;

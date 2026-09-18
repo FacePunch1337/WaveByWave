@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 210ac2a8d9b8ab7408c384371a5bc949, type: 3}
+  m_Name: Item_plank
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Items.ItemDefinition
+  id: plank
+  displayName: "Доски"
+  description: "ЛКМ на корабле: восстановить прочность корпуса."
+  category: 4
+  rarity: 0
+  icon: {fileID: 0}
+  maximumStack: 20
+  supplyKind: 2
+  potency: 60
+  treasureExperience: 0
+  upgradeStat: 0
+  upgradeBonus: 0.1
+  worldVisualPrefab: {fileID: 1000, guid: bbb3177c9a56562c9c471330a4ccdeca, type: 3}
+  restingEulerAngles: {x: 0, y: 0, z: 0}

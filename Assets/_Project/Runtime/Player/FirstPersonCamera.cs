@@ -24,6 +24,10 @@ namespace WaveByWave.Player
         private float _lookTransitionPitchOffset;
         private float _lookTransitionStarted;
         private float _lookTransitionDuration;
+        private bool _aimLimited;
+        private Vector2 _aimYawLimits, _aimPitchLimits;
+        private float _aimSpeed;
+        public Vector2 AimAngles => new(_yaw, -_pitch);
 
         private void Awake()
         {
@@ -78,12 +82,26 @@ namespace WaveByWave.Player
 
         private void Update()
         {
-            if (eyeTarget == null || SessionMenuPresenter.InputCaptured || Mouse.current == null)
+            if (eyeTarget == null || SessionMenuPresenter.InputCaptured)
                 return;
 
-            var delta = Mouse.current.delta.ReadValue() * sensitivity;
+            var delta = Mouse.current != null ? Mouse.current.delta.ReadValue() * sensitivity : Vector2.zero;
+            if (_aimLimited)
+            {
+                var maxDelta = _aimSpeed * Time.unscaledDeltaTime;
+                if (Keyboard.current != null)
+                {
+                    delta.x += ((Keyboard.current.dKey.isPressed ? 1f : 0f) -
+                        (Keyboard.current.aKey.isPressed ? 1f : 0f)) * maxDelta;
+                    delta.y += ((Keyboard.current.wKey.isPressed ? 1f : 0f) -
+                        (Keyboard.current.sKey.isPressed ? 1f : 0f)) * maxDelta;
+                }
+                delta.x = Mathf.Clamp(delta.x, -maxDelta, maxDelta);
+                delta.y = Mathf.Clamp(delta.y, -maxDelta, maxDelta);
+            }
             _yaw += delta.x;
             _pitch = Mathf.Clamp(_pitch - delta.y, pitchLimits.x, pitchLimits.y);
+            ClampAim();
 
             // At the helm the station owns the body's rotation, while the player may still look around freely.
             if (characterBody != null && (_player == null || !_player.IsAtControlStation))
@@ -105,6 +123,21 @@ namespace WaveByWave.Player
         private void LateUpdate() => SnapToEyes();
 
         public void RefreshPose() => SnapToEyes();
+
+        public void SetAimLimits(Vector2 yaw, Vector2 elevation, float speed)
+        {
+            _aimLimited = true;
+            _aimYawLimits = yaw;
+            _aimPitchLimits = new Vector2(-elevation.y, -elevation.x);
+            _aimSpeed = speed;
+        }
+        public void ClearAimLimits() => _aimLimited = false;
+        private void ClampAim()
+        {
+            if (!_aimLimited) return;
+            _yaw = Mathf.Clamp(_yaw, _aimYawLimits.x, _aimYawLimits.y);
+            _pitch = Mathf.Clamp(_pitch, _aimPitchLimits.x, _aimPitchLimits.y);
+        }
 
         public void SetLookRotation(Quaternion worldRotation)
         {

@@ -85,7 +85,9 @@ namespace WaveByWave.Player
                 var slot = _inventory.GetSlot(i);
                 _labels[i].text = slot.IsEmpty
                     ? $"{i + 1}\n—"
-                    : $"{i + 1}\n{_inventory.GetDisplayName(slot)}";
+                    : $"{i + 1}\n{_inventory.GetDisplayName(slot)}{(slot.Amount > 1 ? $" ×{slot.Amount}" : "")}";
+                _labels[i].color = _inventory.TryGetDefinition(i, out var definition)
+                    ? definition.RarityColor : Color.white;
                 _backgrounds[i].color = i == _inventory.SelectedIndex
                     ? new Color(0.75f, 0.42f, 0.08f, 0.95f)
                     : new Color(0.035f, 0.055f, 0.075f, 0.9f);

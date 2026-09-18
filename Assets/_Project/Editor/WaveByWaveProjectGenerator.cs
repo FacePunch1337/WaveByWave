@@ -52,7 +52,8 @@ namespace WaveByWave.Editor
                 var palette = CreateMaterials();
                 var catalog = CreateItemCatalog();
                 var controller = CreateAnimatorController();
-                var worldItem = CreateWorldItemPrefab(palette.Gold);
+                var worldItem = CreateWorldItemPrefab(AssetDatabase.LoadAssetAtPath<Material>(Materials + "/LootSurface.mat")
+                    ?? palette.Gold, catalog);
                 var player = CreatePlayerPrefab(catalog, controller, worldItem, palette.Player);
                 var ship = CreateShipPrefab(palette, AssetDatabase.LoadAssetAtPath<WaveProfile>(
                     "Assets/Stylized Water 3/Profiles/Ocean Wave Profile.asset"));
@@ -80,6 +81,8 @@ namespace WaveByWave.Editor
             EnsureFolder(Generated);
             EnsureFolder(Scenes);
             EnsureFolder(Prefabs);
+            EnsureFolder(Prefabs + "/Items");
+            EnsureFolder(Prefabs + "/Items/Visuals");
             EnsureFolder(Data);
             EnsureFolder(Materials);
             EnsureFolder(Animations);
@@ -158,6 +161,13 @@ namespace WaveByWave.Editor
                 CreateItem("bucket", "Ведро", "Вычерпывает воду из трюма.", ItemCategory.Tool),
                 CreateItem("shovel", "Лопата", "Выкапывает отмеченные клады.", ItemCategory.Tool)
             };
+            // Preserve authored loot variants and supply settings when rebuilding
+            // prototype scenes instead of replacing the catalog with five tools.
+            foreach (var assetGuid in AssetDatabase.FindAssets("t:ItemDefinition", new[] { Data }))
+            {
+                var definition = AssetDatabase.LoadAssetAtPath<ItemDefinition>(AssetDatabase.GUIDToAssetPath(assetGuid));
+                if (definition != null && !definitions.Contains(definition)) definitions.Add(definition);
+            }
 
             var path = Data + "/ItemCatalog.asset";
             var catalog = AssetDatabase.LoadAssetAtPath<ItemCatalog>(path);
@@ -259,19 +269,17 @@ namespace WaveByWave.Editor
             return clip;
         }
 
-        private static WorldItem CreateWorldItemPrefab(Material material)
+        private static WorldItem CreateWorldItemPrefab(Material material, ItemCatalog catalog)
         {
             var root = GameObject.CreatePrimitive(PrimitiveType.Cube);
             root.name = "WorldItem";
             root.transform.localScale = Vector3.one * 0.45f;
             root.GetComponent<MeshRenderer>().sharedMaterial = material;
-            root.AddComponent<NetworkObject>();
-            root.AddComponent<NetworkTransform>();
-            var body = root.AddComponent<Rigidbody>();
-            body.mass = 0.5f;
-            body.interpolation = RigidbodyInterpolation.Interpolate;
-            root.AddComponent<NetworkRigidbody>();
+            root.GetComponent<Collider>().isTrigger = true;
+            root.AddComponent<NetworkObject>().SynchronizeTransform = false;
             var item = root.AddComponent<WorldItem>();
+            SetObjectReference(item, "catalog", catalog);
+            SetObjectReference(item, "glowMaterial", AssetDatabase.LoadAssetAtPath<Material>(Materials + "/LootGlow.mat"));
 
             var path = Prefabs + "/WorldItem.prefab";
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
@@ -473,6 +481,34 @@ namespace WaveByWave.Editor
             SetObjectReference(helm, "wheelVisual", wheel.transform);
             SetVector3(helm, "localRotationAxis", Vector3.up);
 
+            var cannonPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Prefabs + "/ShipCannon.prefab");
+            var chestPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Prefabs + "/ShipTreasureChest.prefab");
+            if (cannonPrefab == null || chestPrefab == null)
+                throw new System.InvalidOperationException("Ship cannon and treasure chest prefabs are missing.");
+            var battery = root.AddComponent<ShipCannonBattery>();
+            var guns = new ShipCannon[2];
+            for (var i = 0; i < 2; i++)
+            {
+                var gun = (GameObject)PrefabUtility.InstantiatePrefab(cannonPrefab);
+                gun.transform.SetParent(root.transform, false);
+                gun.transform.localPosition = new Vector3(i == 0 ? -3f : 3f, 1.175f, 0f);
+                gun.transform.localRotation = Quaternion.Euler(0f, i == 0 ? -90f : 90f, 0f);
+                guns[i] = gun.GetComponent<ShipCannon>();
+            }
+            var chest = (GameObject)PrefabUtility.InstantiatePrefab(chestPrefab);
+            chest.transform.SetParent(root.transform, false);
+            chest.transform.localPosition = new Vector3(1.5f, 1.175f, -2f);
+            var serializedBattery = new SerializedObject(battery);
+            var cannonArray = serializedBattery.FindProperty("cannons");
+            cannonArray.arraySize = guns.Length;
+            for (var i = 0; i < guns.Length; i++) cannonArray.GetArrayElementAtIndex(i).objectReferenceValue = guns[i];
+            serializedBattery.ApplyModifiedPropertiesWithoutUndo();
+            SetObjectReference(battery, "treasureChest", chest.GetComponent<ShipTreasureChest>());
+            SetObjectReference(battery, "ballMaterial", AssetDatabase.LoadAssetAtPath<Material>(Materials + "/CannonIron.mat"));
+            SetObjectReference(battery, "effectMaterial", AssetDatabase.LoadAssetAtPath<Material>(Materials + "/LootGlow.mat"));
+            SetObjectReference(battery, "waterSplashPrefab", AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Stylized Water 3/Prefabs/Particles/BigSplash.prefab"));
+
             var path = Prefabs + "/Ship.prefab";
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
@@ -493,6 +529,12 @@ namespace WaveByWave.Editor
                 list.Remove(list.PrefabList[0]);
             list.Add(new NetworkPrefab { Override = NetworkPrefabOverride.None, Prefab = player });
             list.Add(new NetworkPrefab { Override = NetworkPrefabOverride.None, Prefab = item.gameObject });
+            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { Prefabs + "/Items" }))
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(guid));
+                if (prefab != null && prefab.GetComponent<WorldItem>() != null)
+                    list.Add(new NetworkPrefab { Override = NetworkPrefabOverride.None, Prefab = prefab });
+            }
             EditorUtility.SetDirty(list);
             return list;
         }

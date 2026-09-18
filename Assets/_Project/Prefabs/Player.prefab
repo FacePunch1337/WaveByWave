@@ -414,6 +414,10 @@ MonoBehaviour:
   - hook
   - bucket
   - shovel
+  - cannonball
+  - plank
+  - food
+  startingItemAmounts: 0100000001000000010000000100000001000000140000000500000005000000
 --- !u!114 &5343483037834142729
 MonoBehaviour:
   m_ObjectHideFlags: 0

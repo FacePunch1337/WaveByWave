@@ -10,6 +10,7 @@ using UnityEngine.SceneManagement;
 using KinematicCharacterController;
 using WaveByWave.Player;
 using WaveByWave.Ships;
+using WaveByWave.Items;
 using PhysicsCollider = Unity.Physics.Collider;
 using EngineCollider = UnityEngine.Collider;
 using EngineMeshCollider = UnityEngine.MeshCollider;
@@ -770,10 +771,13 @@ namespace WaveByWave.Collision
 
         public static bool IsSolidModel(MeshFilter filter)
         {
-            // Capstan handles rotate independently of the hull. Freezing them
+            // Placing a loot prefab under the ship in a scene must not make
+            // its preview/model part of the ship's cached collision geometry.
+            if (filter.GetComponentInParent<WorldItem>() != null) return false;
+            // Mechanisms rotate independently of the hull. Freezing them
             // into its cached triangle geometry would leave invisible contacts
             // at their original positions. The mechanism has its own PhysX collider.
-            if (filter.GetComponentInParent<ShipAnchor>() != null)
+            if (filter.GetComponentInParent<ShipAnchor>() != null || filter.GetComponentInParent<ShipCannon>() != null)
                 return false;
             var renderer = filter.GetComponent<MeshRenderer>();
             if (renderer == null || !renderer.enabled)

@@ -1,5 +1,8 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using Netcode.Transports.Facepunch;
 using Steamworks;
@@ -10,6 +13,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using WaveByWave.Core;
 using WaveByWave.Player;
+using UdpSocket = System.Net.Sockets.Socket;
 
 namespace WaveByWave.Networking
 {
@@ -18,6 +22,7 @@ namespace WaveByWave.Networking
     {
         private const string LobbyNameKey = "wave_by_wave_name";
         private const string BuildKey = "wave_by_wave_build";
+        private const string RelayPortKey = "wave_by_wave_relay_port";
 
         public static NetworkSessionCoordinator Instance { get; private set; }
         public event Action StateChanged;
@@ -41,6 +46,9 @@ namespace WaveByWave.Networking
         private bool _callbacksBound;
         private bool _networkSceneCallbacksBound;
         private bool _starting;
+        private bool _ownsSteamClient;
+        private bool _disposed;
+        private readonly List<TaskCompletionSource<bool>> _frameWaiters = new();
 
         private void Awake()
         {
@@ -54,23 +62,31 @@ namespace WaveByWave.Networking
             networkManager ??= GetComponent<NetworkManager>();
             steamTransport ??= GetComponent<FacepunchTransport>();
             localTransport ??= GetComponent<UnityTransport>();
+            if (networkManager != null)
+                networkManager.OnClientConnectedCallback += OnClientConnected;
 
             if (!SteamClient.IsValid && steamAppId != 0)
             {
                 try
                 {
                     SteamClient.Init(steamAppId, false);
+                    _ownsSteamClient = true;
                 }
                 catch (Exception exception)
                 {
                     Debug.LogWarning($"Steam недоступен, будет использован локальный transport: {exception.Message}");
                 }
             }
+            if (SteamClient.IsValid)
+            {
+                try { SteamNetworkingUtils.InitRelayNetworkAccess(); }
+                catch (Exception exception) { Debug.LogWarning($"Steam relay: {exception.Message}"); }
+            }
         }
 
         private void Update()
         {
-            if (SteamClient.IsValid)
+            if (!_disposed && SteamClient.IsValid)
                 SteamClient.RunCallbacks();
         }
 
@@ -118,38 +134,53 @@ namespace WaveByWave.Networking
 
         public async Task CreateSteamLobbyAndHostAsync()
         {
-            if (_starting || !SteamAvailable || networkManager == null)
+            if (_starting || _disposed || !SteamAvailable || networkManager == null)
                 return;
 
             _starting = true;
             SetStatus("Создание Steam-лобби…");
-            await ShutdownNetworkAsync();
 
             try
             {
+                // Do not start/stop Steam sockets inside Steam's callback dispatcher.
+                await WaitForNextFrameAsync();
+                await LeaveLobbyAndShutdownAsync();
+                if (_disposed) return;
+                if (!SteamClient.IsValid) throw new InvalidOperationException("Steam API недоступен.");
                 var created = await SteamMatchmaking.CreateLobbyAsync(4);
                 if (!created.HasValue)
                     throw new InvalidOperationException("Steam не вернул созданное лобби.");
+                if (_disposed) { if (SteamClient.IsValid) created.Value.Leave(); return; }
 
                 CurrentLobby = created.Value;
                 CurrentLobby.SetPublic();
-                CurrentLobby.SetJoinable(true);
+                CurrentLobby.SetJoinable(false);
                 CurrentLobby.SetData(LobbyNameKey, $"{SteamClient.Name} — Wave by Wave");
                 CurrentLobby.SetData(BuildKey, Application.version);
 
+                await WaitForNextFrameAsync();
+                if (_disposed) return;
                 UseSteamTransport();
+                steamTransport.virtualPort = 1 + (Guid.NewGuid().GetHashCode() & 0x7fff);
+                if (!steamTransport.TryPrepareServer())
+                    throw new InvalidOperationException($"Steam relay недоступен: {steamTransport.StartupError}");
+                CurrentLobby.SetData(RelayPortKey, steamTransport.virtualPort.ToString());
                 if (!networkManager.StartHost())
                     throw new InvalidOperationException("NGO не смог запустить host.");
                 BindNetworkSceneCallbacks();
 
                 CurrentLobby.SetGameServer(SteamClient.SteamId);
+                CurrentLobby.SetJoinable(true);
                 SetStatus($"Steam-лобби создано • {CurrentLobby.MemberCount}/4");
             }
             catch (Exception exception)
             {
                 Debug.LogWarning($"Steam lobby failed, switching to local transport: {exception.Message}");
-                CurrentLobby = default;
-                StartLocalHost();
+                if (!_disposed)
+                {
+                    try { await StartLocalHostCoreAsync(); }
+                    catch (Exception fallbackException) { SetStatus($"Не удалось запустить сеть: {fallbackException.Message}"); }
+                }
             }
             finally
             {
@@ -201,35 +232,119 @@ namespace WaveByWave.Networking
 
         public async void StartLocalClient()
         {
-            if (_starting)
+            if (_starting || _disposed || networkManager == null)
                 return;
 
             _starting = true;
-            await LeaveLobbyAndShutdownAsync();
-            UseLocalTransport();
-            var started = networkManager.StartClient();
-            if (started)
-                BindNetworkSceneCallbacks();
-            SetStatus(started ? $"Подключение к {localAddress}:{localPort}…" : "Локальный client не запустился.");
-            _starting = false;
+            try
+            {
+                SetStatus("Остановка предыдущей сессии…");
+                await LeaveLobbyAndShutdownAsync();
+                if (_disposed) return;
+                UseLocalTransport();
+                var started = networkManager.StartClient();
+                if (started) BindNetworkSceneCallbacks();
+                var targetPort = GetLocalConnectionPort();
+                SetStatus(started ? $"Подключение к {localAddress}:{targetPort}…" : "Локальный client не запустился.");
+                if (started) await WaitForLocalConnectionAsync(targetPort);
+            }
+            catch (Exception exception) { SetStatus($"Ошибка локального подключения: {exception.Message}"); }
+            finally { _starting = false; }
         }
 
         public async void StartLocalHost()
         {
-            if (_starting && networkManager != null && networkManager.IsListening)
+            if (_starting || _disposed || networkManager == null)
                 return;
 
+            _starting = true;
+            try { await StartLocalHostCoreAsync(); }
+            catch (Exception exception) { SetStatus($"Локальный host не запустился: {exception.Message}"); }
+            finally { _starting = false; }
+        }
+
+        private async Task StartLocalHostCoreAsync()
+        {
             await LeaveLobbyAndShutdownAsync();
-            UseLocalTransport();
+            if (_disposed) return;
+            var hostPort = ValidateLocalHostPort();
+            UseLocalTransport(hostPort);
             var started = networkManager != null && networkManager.StartHost();
             if (started)
                 BindNetworkSceneCallbacks();
-            SetStatus(started ? $"Локальный host • {localAddress}:{localPort}" : "Локальный host не запустился.");
+            SetStatus(started ? $"Локальный host • {localAddress}:{hostPort}" : "Локальный host не запустился.");
+        }
+
+        private ushort GetLocalConnectionPort() => GetLocalPortOverride() ??
+            (localPort != 0 ? localPort : (ushort)7777);
+
+        private ushort ValidateLocalHostPort()
+        {
+            var port = GetLocalConnectionPort();
+            // Local Host and Local Connect must agree on the same configured endpoint.
+            // Silently choosing another port creates an unreachable second session.
+            using var socket = new UdpSocket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            try
+            {
+                socket.ExclusiveAddressUse = true;
+                socket.Bind(new IPEndPoint(IPAddress.Any, port));
+                return port;
+            }
+            catch (SocketException exception) when (exception.SocketErrorCode == SocketError.AddressAlreadyInUse ||
+                exception.SocketErrorCode == SocketError.AccessDenied)
+            {
+                throw new InvalidOperationException($"UDP-порт {port} занят или недоступен. Если хост уже запущен, используйте Local Connect.");
+            }
+        }
+
+        private async Task WaitForLocalConnectionAsync(ushort port)
+        {
+            var deadline = Time.realtimeSinceStartup + 8f;
+            while (!_disposed && networkManager != null && networkManager.IsListening &&
+                !networkManager.IsConnectedClient && !networkManager.IsApproved && Time.realtimeSinceStartup < deadline)
+                await WaitForNextFrameAsync();
+            if (_disposed || networkManager == null) return;
+            if (networkManager.IsConnectedClient)
+            {
+                SetStatus($"Подключено к {localAddress}:{port}");
+                return;
+            }
+            if (networkManager.IsApproved)
+            {
+                // Scene synchronization can take longer than the socket handshake.
+                // Leave it to NGO's scene timeout once the host has accepted us.
+                SetStatus("Хост принял подключение • синхронизация сцены…");
+                return;
+            }
+            var reason = networkManager.DisconnectReason;
+            await ShutdownNetworkAsync();
+            if (!_disposed)
+                SetStatus(string.IsNullOrWhiteSpace(reason)
+                    ? $"Нет подключения к {localAddress}:{port}. Убедитесь, что на другом экземпляре включён Local Host."
+                    : $"Подключение отклонено: {reason}");
+        }
+
+        private static ushort? GetLocalPortOverride()
+        {
+            // Use the same explicit override as NGO/UTP, including its status text.
+            var arguments = Environment.GetCommandLineArgs();
+            for (var i = 0; i + 1 < arguments.Length; i++)
+                if (arguments[i] == "-port" && ushort.TryParse(arguments[i + 1], out var port) && port > 0)
+                    return port;
+            return null;
+        }
+
+        private void OnClientConnected(ulong clientId)
+        {
+            if (_disposed || networkManager == null || networkManager.IsServer ||
+                clientId != networkManager.LocalClientId) return;
+            SetStatus(ReferenceEquals(networkManager.NetworkConfig.NetworkTransport, localTransport)
+                ? $"Подключено к {localAddress}:{GetLocalConnectionPort()}" : "Подключено к Steam-хосту");
         }
 
         private async void OnGameLobbyJoinRequested(Lobby lobby, SteamId friendId)
         {
-            if (_starting)
+            if (_starting || _disposed)
                 return;
 
             _starting = true;
@@ -237,11 +352,8 @@ namespace WaveByWave.Networking
 
             try
             {
-                // Leave Steam's callback dispatch before shutting down the current host.
-                // FacepunchTransport 2.0.0 shuts down the global Steam client together
-                // with its socket, so joining in the same callback otherwise hits a null
-                // SteamMatchmaking interface inside Lobby.Join().
-                await Task.Yield();
+                // Leave Steam's callback dispatch before changing sockets/session.
+                await WaitForNextFrameAsync();
                 await LeaveLobbyAndShutdownAsync();
                 if (!SteamAvailable || !SteamClient.IsValid)
                     throw new InvalidOperationException("Steam API не удалось перезапустить после остановки host.");
@@ -251,8 +363,14 @@ namespace WaveByWave.Networking
                     throw new InvalidOperationException($"Steam Join вернул {result}.");
 
                 CurrentLobby = lobby;
+                await WaitForNextFrameAsync();
+                if (_disposed) return;
                 UseSteamTransport();
                 steamTransport.targetSteamId = lobby.Owner.Id;
+                var relayPort = lobby.GetData(RelayPortKey);
+                steamTransport.virtualPort = int.TryParse(relayPort, out var parsedPort) && parsedPort >= 0 ? parsedPort : 0;
+                if (!steamTransport.TryPrepareClient())
+                    throw new InvalidOperationException($"Steam-подключение недоступно: {steamTransport.StartupError}");
                 if (!networkManager.StartClient())
                     throw new InvalidOperationException("NGO не смог запустить client.");
                 BindNetworkSceneCallbacks();
@@ -261,8 +379,12 @@ namespace WaveByWave.Networking
             }
             catch (Exception exception)
             {
-                Debug.LogError(exception);
-                SetStatus($"Ошибка подключения: {exception.Message}");
+                if (!_disposed)
+                {
+                    try { await LeaveLobbyAndShutdownAsync(); }
+                    catch (Exception cleanupException) { Debug.LogWarning($"Остановка сессии: {cleanupException.Message}"); }
+                    SetStatus($"Ошибка подключения: {exception.Message}");
+                }
             }
             finally
             {
@@ -286,60 +408,31 @@ namespace WaveByWave.Networking
             networkManager.NetworkConfig.NetworkTransport = steamTransport;
         }
 
-        private void UseLocalTransport()
+        private void UseLocalTransport(ushort? serverPort = null)
         {
             if (networkManager == null || localTransport == null)
-                return;
+                throw new InvalidOperationException("Локальный transport не настроен.");
 
-            localTransport.SetConnectionData(localAddress, localPort);
+            var targetPort = serverPort ?? GetLocalConnectionPort();
+            localTransport.SetConnectionData(localAddress, targetPort, "0.0.0.0");
             networkManager.NetworkConfig.NetworkTransport = localTransport;
         }
 
         private async Task LeaveLobbyAndShutdownAsync()
         {
+            await WaitForNextFrameAsync();
+            if (_disposed) return;
             if (CurrentLobby.Id != 0)
             {
-                CurrentLobby.Leave();
+                if (SteamClient.IsValid) CurrentLobby.Leave();
                 CurrentLobby = default;
             }
 
-            var restoreSteam =
-                SteamClient.IsValid &&
-                networkManager != null &&
-                steamTransport != null &&
-                ReferenceEquals(networkManager.NetworkConfig.NetworkTransport, steamTransport) &&
-                (networkManager.IsListening || networkManager.ShutdownInProgress);
-
-            if (restoreSteam)
-                UnbindSteamCallbacks();
-
             await ShutdownNetworkAsync();
-
-            if (restoreSteam)
-                RestoreSteamAfterTransportShutdown();
-        }
-
-        private void RestoreSteamAfterTransportShutdown()
-        {
-            try
-            {
-                if (!SteamClient.IsValid)
-                    SteamClient.Init(steamAppId, false);
-
-                SteamAvailable = SteamClient.IsValid;
-                if (!SteamAvailable)
-                    return;
-
-                // The transport keeps its own initialized flag after Shutdown(), so it
-                // will not request relay access again when NGO starts it a second time.
-                SteamNetworkingUtils.InitRelayNetworkAccess();
-                BindSteamCallbacks();
-            }
-            catch (Exception exception)
-            {
-                SteamAvailable = false;
-                Debug.LogError($"Не удалось восстановить Steam после остановки transport: {exception}");
-            }
+            if (_disposed) return;
+            // Also close a socket prepared before NGO started. Shutdown is idempotent.
+            steamTransport?.Shutdown();
+            SteamAvailable = SteamClient.IsValid;
         }
 
         private async Task ShutdownNetworkAsync()
@@ -350,8 +443,29 @@ namespace WaveByWave.Networking
             UnbindNetworkSceneCallbacks();
             networkManager.Shutdown();
             var deadline = Time.realtimeSinceStartup + 3f;
-            while (networkManager != null && networkManager.ShutdownInProgress && Time.realtimeSinceStartup < deadline)
-                await Task.Yield();
+            while (!_disposed && networkManager != null && networkManager.ShutdownInProgress && Time.realtimeSinceStartup < deadline)
+                await WaitForNextFrameAsync();
+            if (_disposed) return;
+            if (networkManager != null && networkManager.ShutdownInProgress)
+                throw new InvalidOperationException("Предыдущая сессия ещё останавливается; повторите запуск после остановки.");
+        }
+
+        private Task WaitForNextFrameAsync()
+        {
+            if (_disposed) return Task.CompletedTask;
+            var completion = new TaskCompletionSource<bool>();
+            _frameWaiters.Add(completion);
+            StartCoroutine(CompleteOnNextFrame(completion));
+            return completion.Task;
+        }
+
+        private IEnumerator CompleteOnNextFrame(TaskCompletionSource<bool> completion)
+        {
+            // Task.Yield only posts a continuation; it does not guarantee a Unity frame.
+            // NGO needs subsequent player-loop updates to finish shutting down.
+            yield return null;
+            _frameWaiters.Remove(completion);
+            completion.TrySetResult(true);
         }
 
         private void BindNetworkSceneCallbacks()
@@ -425,15 +539,26 @@ namespace WaveByWave.Networking
 
         public void Dispose()
         {
+            if (networkManager != null)
+                networkManager.OnClientConnectedCallback -= OnClientConnected;
             UnbindNetworkSceneCallbacks();
             UnbindSteamCallbacks();
         }
 
         private void OnDestroy()
         {
+            _disposed = true;
+            var waiters = _frameWaiters.ToArray();
+            _frameWaiters.Clear();
+            foreach (var waiter in waiters) waiter.TrySetCanceled();
             Dispose();
             if (Instance == this)
+            {
                 Instance = null;
+                if (CurrentLobby.Id != 0 && SteamClient.IsValid) CurrentLobby.Leave();
+                steamTransport?.Shutdown();
+                if (_ownsSteamClient && SteamClient.IsValid) SteamClient.Shutdown();
+            }
         }
     }
 }

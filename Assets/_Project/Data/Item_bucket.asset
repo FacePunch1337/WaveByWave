@@ -19,3 +19,5 @@ MonoBehaviour:
   category: 1
   rarity: 0
   icon: {fileID: 0}
+  worldVisualPrefab: {fileID: 1000, guid: faf44d7f03c756cca7d20d40d6c03bae, type: 3}
+  restingEulerAngles: {x: 0, y: 0, z: 0}

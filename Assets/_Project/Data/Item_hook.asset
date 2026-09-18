@@ -19,5 +19,11 @@ MonoBehaviour:
   category: 1
   rarity: 0
   icon: {fileID: 0}
+  maximumStack: 1
+  supplyKind: 0
+  potency: 40
+  treasureExperience: 25
+  upgradeStat: 0
+  upgradeBonus: 0.1
   worldVisualPrefab: {fileID: 1000, guid: 2b148d4cabd05a3babc53d4699020f65, type: 3}
   restingEulerAngles: {x: 90, y: 0, z: 0}

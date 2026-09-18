@@ -233,14 +233,15 @@ namespace WaveByWave.Player
                 return;
 
             var item = Instantiate(worldItemPrefab, position, Quaternion.identity);
-            item.SetState(slot.ItemId, slot.Amount);
+            item.SetState(slot.ItemId, 1);
             if (!item.PrepareDrop(position, direction, support))
             {
                 Destroy(item.gameObject);
                 return;
             }
             item.NetworkObject.Spawn();
-            _slots[selectedIndex] = default;
+            slot.Amount--;
+            _slots[selectedIndex] = slot.Amount == 0 ? default : slot;
         }
 
         [ServerRpc]

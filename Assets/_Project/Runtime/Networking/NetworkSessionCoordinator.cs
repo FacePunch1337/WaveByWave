@@ -12,6 +12,7 @@ using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using WaveByWave.Core;
+using WaveByWave.Items;
 using WaveByWave.Player;
 using UdpSocket = System.Net.Sockets.Socket;
 
@@ -207,6 +208,7 @@ namespace WaveByWave.Networking
                 return;
             }
 
+            ClearDynamicWorldItems();
             PreparePlayersForSceneTransition();
             var result = networkManager.SceneManager.LoadScene(GameScenes.Ocean, LoadSceneMode.Single);
             if (result != SceneEventProgressStatus.Started)
@@ -221,6 +223,7 @@ namespace WaveByWave.Networking
             if (networkManager != null && networkManager.IsServer)
             {
                 PreparePlayersForSceneTransition();
+                ResetVoyageStateAndRecreatePlayers();
                 var result = networkManager.SceneManager.LoadScene(GameScenes.Port, LoadSceneMode.Single);
                 if (result != SceneEventProgressStatus.Started)
                 {
@@ -517,6 +520,59 @@ namespace WaveByWave.Networking
                 if (player.IsOwner)
                     player.PrepareForSceneTransitionLocally();
                 player.RemoveNetworkParentOnServer();
+            }
+        }
+
+        private void ResetVoyageStateAndRecreatePlayers()
+        {
+            if (networkManager == null || !networkManager.IsServer)
+                return;
+
+            ClearDynamicWorldItems();
+
+            var playerPrefab = networkManager.NetworkConfig.PlayerPrefab;
+            var playerPrefabObject = playerPrefab != null ? playerPrefab.GetComponent<NetworkObject>() : null;
+            if (playerPrefabObject == null)
+            {
+                Debug.LogError("PlayerPrefab is missing, voyage players cannot be recreated.");
+                return;
+            }
+
+            var clientIds = new ulong[networkManager.ConnectedClientsList.Count];
+            for (var i = 0; i < networkManager.ConnectedClientsList.Count; i++)
+            {
+                var client = networkManager.ConnectedClientsList[i];
+                clientIds[i] = client.ClientId;
+                if (client.PlayerObject != null && client.PlayerObject.IsSpawned)
+                    client.PlayerObject.Despawn(true);
+            }
+
+            // A fresh prefab instance creates a new inventory NetworkList and invokes
+            // the normal starting-item setup. Future meta currency can be copied here;
+            // voyage inventory and progression intentionally are not carried to port.
+            foreach (var clientId in clientIds)
+            {
+                var player = networkManager.SpawnManager.InstantiateAndSpawn(
+                    playerPrefabObject, clientId, false, true);
+                if (player == null)
+                    Debug.LogError($"Не удалось пересоздать игрока {clientId} после завершения заплыва.");
+            }
+        }
+
+        private void ClearDynamicWorldItems()
+        {
+            if (networkManager == null || !networkManager.IsServer || networkManager.SpawnManager == null)
+                return;
+
+            // Use NGO's authoritative spawned-object registry so items in the
+            // DontDestroyOnLoad scene are included in the cleanup.
+            var spawnedObjects = new List<NetworkObject>(networkManager.SpawnManager.SpawnedObjectsList);
+            foreach (var networkObject in spawnedObjects)
+            {
+                if (networkObject == null || !networkObject.IsSpawned || networkObject.IsSceneObject == true)
+                    continue;
+                if (networkObject.TryGetComponent<WorldItem>(out _))
+                    networkObject.Despawn(true);
             }
         }
 

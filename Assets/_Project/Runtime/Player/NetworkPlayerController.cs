@@ -6,6 +6,7 @@ using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using WaveByWave.Items;
 using WaveByWave.Networking;
 using WaveByWave.Ships;
 using WaveByWave.UI;
@@ -1641,6 +1642,30 @@ namespace WaveByWave.Player
                 (_presentationRoot != null ? _presentationRoot.up : transform.up) * 0.9f;
             var distance = interactionDistance + Vector3.Distance(playerPosition, ray.origin);
             var hits = GetInteractionRayHits(ray, distance, out var count);
+
+            // Pickups under the reticle have priority over nearby station volumes.
+            // This prevents a cannon or helm from stealing E when an item is visibly
+            // targeted beside it.
+            var nearestPickupDistance = float.PositiveInfinity;
+            IPlayerInteractable nearestPickup = null;
+            for (var i = 0; i < count; i++)
+            {
+                var collider = hits[i].collider;
+                if (IgnoreInteractionCollider(collider)) continue;
+                var pickup = collider.GetComponentInParent<WorldItem>();
+                if (pickup == null || hits[i].distance >= nearestPickupDistance) continue;
+                var pickupPoint = collider.ClosestPoint(playerPosition);
+                if ((pickupPoint - playerPosition).sqrMagnitude > interactionDistance * interactionDistance ||
+                    !HasInteractionLineOfSight(ray.origin, pickupPoint, pickup)) continue;
+                nearestPickupDistance = hits[i].distance;
+                nearestPickup = pickup;
+            }
+            if (nearestPickup != null)
+            {
+                aimedDirectly = true;
+                return nearestPickup;
+            }
+
             var nearestDistance = float.PositiveInfinity;
             Collider nearest = null;
             for (var i = 0; i < count; i++)
@@ -1718,7 +1743,7 @@ namespace WaveByWave.Player
             {
                 var collider = hits[i].collider;
                 if (IgnoreInteractionCollider(collider) || collider.isTrigger ||
-                    collider.GetComponentInParent<IPlayerInteractable>() == target) continue;
+                    collider.GetComponentInParent<IPlayerInteractable>() != null) continue;
                 // Ignore contact exactly at the target's surface, but reject an intervening wall.
                 if (hits[i].distance < distance - 0.01f) return false;
             }

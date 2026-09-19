@@ -1759,12 +1759,12 @@ namespace WaveByWave.Player
                 heldItem.EquipmentKind != ItemEquipmentKind.Carry;
             if (!equipmentAction && Mouse.current.leftButton.wasPressedThisFrame)
             {
-                animationSync.PlayAction("Primary");
+               // animationSync.PlayAction("Primary");
                 inventory.UseSelected(false);
             }
             else if (!equipmentAction && Mouse.current.rightButton.wasPressedThisFrame)
             {
-                animationSync.PlayAction("Special");
+               // animationSync.PlayAction("Special");
                 inventory.UseSelected(true);
             }
 

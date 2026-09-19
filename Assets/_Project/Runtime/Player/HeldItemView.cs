@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using WaveByWave.Items;
@@ -22,6 +23,16 @@ namespace WaveByWave.Player
         private float _fov, _aimBlend, _blockBlend, _blockHitUntil;
         private Material _ropeMaterial;
         private bool _initialized;
+        // Remote look direction arrives over the network at a throttled, non-interpolated rate;
+        // smoothing it locally removes the visible stepping when the owner turns their camera.
+        private Vector3 _smoothedLook;
+        private bool _smoothedLookInitialized;
+        // Remote playback is timed locally from the moment a new action state is observed,
+        // so network latency / ServerTime offset cannot swallow short actions like a musket shot.
+        private EquipmentMotionState _lastState;
+        private bool _stateSeen;
+        private float _localActionStart = float.NegativeInfinity;
+        private readonly HashSet<EquipmentAction> _warnedMissing = new();
 
         public void Initialize(PlayerEquipment equipment, NetworkPlayerController player, PlayerInventory inventory)
         { _equipment = equipment; _player = player; _inventory = inventory; }
@@ -43,16 +54,13 @@ namespace WaveByWave.Player
             _motion.name = "Motion"; _motion.SetParent(_rig, false);
             if (_equipment.IsOwner)
             {
+                // Hands and sleeves must come from the first-person hands prefab; no procedural fallback is generated.
                 _rightHand = _motion.Find("Right hand");
                 _leftHand = _motion.Find("Left hand");
-                if (_rightHand == null)
-                { _rightHand = Part("Right hand", PrimitiveType.Cube, _equipment.HandMaterial); _rightHand.localScale = new Vector3(0.085f, 0.09f, 0.12f); }
-                if (_leftHand == null)
-                { _leftHand = Part("Left hand", PrimitiveType.Cube, _equipment.HandMaterial); _leftHand.localScale = new Vector3(0.085f, 0.09f, 0.12f); }
                 _rightSleeve = _motion.Find("Right sleeve");
                 _leftSleeve = _motion.Find("Left sleeve");
-                if (_rightSleeve == null) _rightSleeve = Part("Right sleeve", PrimitiveType.Cylinder, _equipment.SleeveMaterial);
-                if (_leftSleeve == null) _leftSleeve = Part("Left sleeve", PrimitiveType.Cylinder, _equipment.SleeveMaterial);
+                if (_rightHand == null || _leftHand == null || _rightSleeve == null || _leftSleeve == null)
+                    Debug.LogWarning("HeldItemView: first-person hands prefab is missing one of 'Right hand', 'Left hand', 'Right sleeve', 'Left sleeve'. Those parts will not be shown.");
                 foreach (var collider in _motion.GetComponentsInChildren<Collider>()) { collider.enabled = false; Destroy(collider); }
                 foreach (var body in _motion.GetComponentsInChildren<Rigidbody>()) Destroy(body);
                 // The controller exposes clips to Animation Window. Runtime motion is sampled below.
@@ -61,6 +69,11 @@ namespace WaveByWave.Player
             else
             {
                 _rig.SetParent(transform, false);
+                // Owner's Motion comes from the hands prefab, which has an Animator (disabled at runtime).
+                // A bare GameObject has none, and AnimationClip.SampleAnimation on non-legacy clips
+                // may silently do nothing without one. Add the same disabled Animator here.
+                if (_motion.GetComponent<Animator>() == null)
+                    _motion.gameObject.AddComponent<Animator>().enabled = false;
                 _animator = _bodyVisual != null ? _bodyVisual.GetComponentInChildren<Animator>() : null;
                 if (_animator != null && _animator.isHuman)
                 {
@@ -86,15 +99,6 @@ namespace WaveByWave.Player
             if (_ropeMaterial.HasProperty("_Smoothness")) _ropeMaterial.SetFloat("_Smoothness", 0.2f);
             _rope.sharedMaterial = _ropeMaterial; _rope.enabled = false;
             _initialized = true; return true;
-        }
-        private Transform Part(string name, PrimitiveType type, Material material)
-        {
-            var part = GameObject.CreatePrimitive(type); part.name = name; part.transform.SetParent(_motion, false);
-            var collider = part.GetComponent<Collider>(); collider.enabled = false; Destroy(collider);
-            var renderer = part.GetComponent<Renderer>();
-            renderer.sharedMaterial = material != null ? material : _equipment.MetalMaterial;
-            renderer.shadowCastingMode = ShadowCastingMode.Off;
-            return part.transform;
         }
         private void SetItem(ItemDefinition definition)
         {
@@ -135,14 +139,21 @@ namespace WaveByWave.Player
                 _camera.fieldOfView = Mathf.Lerp(_camera.fieldOfView,
                     visible && _equipment.IsAiming && definition.EquipmentKind == ItemEquipmentKind.Musket ? 48f : _fov,
                     1f - Mathf.Exp(-12f * Time.unscaledDeltaTime));
-            if (!visible || _item == null) { if (_hookVisual != null) _hookVisual.SetActive(false); return; }
+            if (!visible || _item == null)
+            {
+                if (_hookVisual != null) _hookVisual.SetActive(false);
+                if (!visible) _smoothedLookInitialized = false; // re-snap next time it becomes visible, avoid a stale slerp source
+                return;
+            }
             if (!_equipment.IsOwner)
             {
                 var source = _bodyVisual != null ? _bodyVisual : transform;
-                var forward = _equipment.LookDirection;
-                if (forward.sqrMagnitude < 0.01f) forward = source.forward;
+                var target = _equipment.LookDirection;
+                if (target.sqrMagnitude < 0.0001f) target = source.forward;
+                if (!_smoothedLookInitialized) { _smoothedLook = target; _smoothedLookInitialized = true; }
+                else _smoothedLook = Vector3.Slerp(_smoothedLook, target, 1f - Mathf.Exp(-15f * Time.deltaTime));
                 _rig.SetPositionAndRotation(source.position + source.up * 1.35f,
-                    Quaternion.LookRotation(forward, source.up));
+                    Quaternion.LookRotation(_smoothedLook, source.up));
             }
             _aimBlend = Mathf.MoveTowards(_aimBlend, _equipment.IsAiming ? 1f : 0f, Time.unscaledDeltaTime * 7f);
             _item.localPosition = definition.EquipmentKind == ItemEquipmentKind.Musket
@@ -165,14 +176,19 @@ namespace WaveByWave.Player
                 left += _rig.up * (Mathf.Sin(_equipment.ReloadProgress * Mathf.PI * 4f) * 0.12f);
             if (_equipment.IsOwner)
             {
-                _rightHand.position = right; _rightHand.rotation = _item.rotation * Quaternion.Euler(0f, 0f, 10f);
-                _leftHand.gameObject.SetActive(twoHanded); _leftSleeve.gameObject.SetActive(twoHanded);
-                _leftHand.position = left; _leftHand.rotation = _item.rotation;
-                Sleeve(_rightSleeve, _motion.TransformPoint(new Vector3(0.42f, -0.65f, 0.1f)), right);
-                if (twoHanded) Sleeve(_leftSleeve, _motion.TransformPoint(new Vector3(-0.4f, -0.65f, 0.1f)), left);
+                // Hands/sleeves are optional now: only driven if the prefab actually provided them.
+                if (_rightHand != null)
+                { _rightHand.position = right; _rightHand.rotation = _item.rotation * Quaternion.Euler(0f, 0f, 10f); }
+                if (_leftHand != null) _leftHand.gameObject.SetActive(twoHanded);
+                if (_leftSleeve != null) _leftSleeve.gameObject.SetActive(twoHanded);
+                if (_leftHand != null) { _leftHand.position = left; _leftHand.rotation = _item.rotation; }
+                if (_rightSleeve != null) Sleeve(_rightSleeve, _motion.TransformPoint(new Vector3(0.42f, -0.65f, 0.1f)), right);
+                if (twoHanded && _leftSleeve != null) Sleeve(_leftSleeve, _motion.TransformPoint(new Vector3(-0.4f, -0.65f, 0.1f)), left);
             }
             else
             {
+                // Предмет — дочерний объект Motion, а клип уже сэмплирован в SampleMotion,
+                // поэтому right/left уже содержат анимацию. Просто тянем руки к ним.
                 SolveArm(_rightUpper, _rightLower, _rightBone, right, _rig.right - _rig.up);
                 if (twoHanded) SolveArm(_leftUpper, _leftLower, _leftBone, left, -_rig.right - _rig.up);
             }
@@ -183,6 +199,7 @@ namespace WaveByWave.Player
         {
             var state = _equipment.DisplayMotion;
             var elapsed = (float)(_equipment.NetworkManager.ServerTime.Time - state.Started);
+            if (!_equipment.IsOwner) elapsed = RemoteElapsed(state, elapsed);
             var action = elapsed >= 0f && elapsed < state.Duration ? state.Action : EquipmentAction.None;
             if (action == EquipmentAction.None)
             {
@@ -194,13 +211,33 @@ namespace WaveByWave.Player
                 else if (_equipment.IsAiming && definition.EquipmentKind == ItemEquipmentKind.Musket) action = EquipmentAction.MusketAim;
             }
             var clip = _equipment.Motions != null ? _equipment.Motions.Get(action) : null;
-            if (clip == null) return;
+            if (clip == null)
+            {
+                if (action != EquipmentAction.None && _warnedMissing.Add(action))
+                    Debug.LogWarning($"HeldItemView: no clip for {action} (EquipmentMotionSet is " +
+                        $"{(_equipment.Motions == null ? "MISSING" : "assigned")}, owner={_equipment.IsOwner}).");
+                return;
+            }
             var hold = action == EquipmentAction.SwordBlock || action == EquipmentAction.MusketAim;
             var time = hold ? action == EquipmentAction.SwordBlock ? _blockBlend * clip.length : clip.length :
                 action == EquipmentAction.MusketReload || action == EquipmentAction.HookCharge
                 ? Mathf.Clamp01(elapsed) * clip.length : action == EquipmentAction.HookReel ? elapsed % Mathf.Max(0.01f, clip.length)
                 : Mathf.Clamp01(elapsed / Mathf.Max(0.01f, state.Duration)) * clip.length;
             clip.SampleAnimation(_motion.gameObject, time);
+        }
+        // For other players' actions: detect a new action state and time it from the local clock.
+        // Actions that are already stale when first seen (join, re-equip) are not replayed.
+        private float RemoteElapsed(EquipmentMotionState state, float serverElapsed)
+        {
+            var changed = !_stateSeen || state.Sequence != _lastState.Sequence ||
+                state.Started != _lastState.Started || state.Action != _lastState.Action;
+            if (changed)
+            {
+                _stateSeen = true; _lastState = state;
+                var recent = state.Action != EquipmentAction.None && serverElapsed < state.Duration + 0.5f;
+                _localActionStart = recent ? Time.unscaledTime : float.NegativeInfinity;
+            }
+            return Time.unscaledTime - _localActionStart;
         }
         private static Vector3 Grip(ItemEquipmentKind kind) => kind switch
         {

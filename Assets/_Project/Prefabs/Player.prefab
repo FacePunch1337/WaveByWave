@@ -211,7 +211,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1550780468
+  GlobalObjectIdHash: 703817674
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -613,9 +613,33 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 5745219096532022790}
     m_Modifications:
+    - target: {fileID: 1307225286061896920, guid: 8fa01489c9c66ac489ecc685b0f7d140, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1307225286061897072, guid: 8fa01489c9c66ac489ecc685b0f7d140, type: 3}
       propertyPath: m_Name
       value: PlayerCharacter
+      objectReference: {fileID: 0}
+    - target: {fileID: 1307225286062319900, guid: 8fa01489c9c66ac489ecc685b0f7d140, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.97766924
+      objectReference: {fileID: 0}
+    - target: {fileID: 1307225286062319900, guid: 8fa01489c9c66ac489ecc685b0f7d140, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.00000005960463
+      objectReference: {fileID: 0}
+    - target: {fileID: 1307225286062319900, guid: 8fa01489c9c66ac489ecc685b0f7d140, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0.00000004703178
+      objectReference: {fileID: 0}
+    - target: {fileID: 1307225286062319900, guid: 8fa01489c9c66ac489ecc685b0f7d140, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0.21014991
+      objectReference: {fileID: 0}
+    - target: {fileID: 1307225286062319900, guid: 8fa01489c9c66ac489ecc685b0f7d140, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: -24.262
       objectReference: {fileID: 0}
     - target: {fileID: 1307225286062319952, guid: 8fa01489c9c66ac489ecc685b0f7d140, type: 3}
       propertyPath: m_LocalPosition.x

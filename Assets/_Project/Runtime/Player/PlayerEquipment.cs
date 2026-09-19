@@ -54,6 +54,9 @@ namespace WaveByWave.Player
 
         private readonly NetworkVariable<float> _stamina = new(100f);
         private readonly NetworkVariable<bool> _blocking = new(), _aiming = new(), _bucketFull = new();
+        // Зарядка крюка видна всем клиентам: флаг и время начала (серверное время).
+        private readonly NetworkVariable<bool> _charging = new();
+        private readonly NetworkVariable<double> _chargeStartNet = new();
         private readonly NetworkVariable<double> _reloadEnd = new();
         private readonly NetworkVariable<EquipmentMotionState> _motion = new();
         private readonly NetworkVariable<EquipmentHookState> _hook = new();
@@ -102,8 +105,10 @@ namespace WaveByWave.Player
         public bool Available => _available.Value;
         public bool IsAiming => IsOwner ? _localAim : _aiming.Value;
         public bool BucketFull => _bucketFull.Value;
-        public bool ChargingHook => IsOwner && _localCharge;
-        public float HookCharge => ChargingHook ? Mathf.Clamp01((Time.unscaledTime - _localChargeStarted) / hookChargeDuration) : 0f;
+        public bool ChargingHook => IsOwner ? _localCharge : _charging.Value;
+        public float HookCharge => IsOwner
+            ? (_localCharge ? Mathf.Clamp01((Time.unscaledTime - _localChargeStarted) / hookChargeDuration) : 0f)
+            : (_charging.Value ? Mathf.Clamp01((float)(Now - _chargeStartNet.Value) / hookChargeDuration) : 0f);
         public float ReloadProgress => Mathf.Clamp01(1f - (float)(_reloadEnd.Value - Now) / reloadDuration);
         public bool Reloading => IsSpawned && _reloadEnd.Value > Now;
         public EquipmentMotionState Motion => _motion.Value;
@@ -282,7 +287,8 @@ namespace WaveByWave.Player
                     ItemEquipmentKind.Sword => EquipmentAction.SwordSwing,
                     ItemEquipmentKind.Musket => EquipmentAction.MusketShot,
                     ItemEquipmentKind.Bucket => EquipmentAction.BucketScoop,
-                    ItemEquipmentKind.Shovel => EquipmentAction.ShovelDig, _ => EquipmentAction.None
+                    ItemEquipmentKind.Shovel => EquipmentAction.ShovelDig,
+                    _ => EquipmentAction.None
                 };
                 if (action != EquipmentAction.None) SendAction(action);
             }
@@ -305,8 +311,11 @@ namespace WaveByWave.Player
                 action == EquipmentAction.BucketSplash && !BucketFull) return;
             var duration = action switch
             {
-                EquipmentAction.SwordSwing => swordSwingDuration, EquipmentAction.MusketShot => 0.2f,
-                EquipmentAction.HookThrow => 0.4f, EquipmentAction.BucketSplash => 0.65f, _ => 0.8f
+                EquipmentAction.SwordSwing => swordSwingDuration,
+                EquipmentAction.MusketShot => 0.2f,
+                EquipmentAction.HookThrow => 0.4f,
+                EquipmentAction.BucketSplash => 0.65f,
+                _ => 0.8f
             };
             _predictedMotion = new EquipmentMotionState { Action = action, Started = Now, Duration = duration };
             _localActionNext = Now + duration;
@@ -369,12 +378,15 @@ namespace WaveByWave.Player
             _aiming.Value = aim && item.EquipmentKind == ItemEquipmentKind.Musket;
             _serverReeling = reel && item.EquipmentKind == ItemEquipmentKind.Hook;
             if (charge && item.EquipmentKind == ItemEquipmentKind.Hook && _hook.Value.Phase == HookPhase.Stowed)
-            { if (_chargeStarted < 0d) _chargeStarted = Now; }
-            else _chargeStarted = -1d;
+            {
+                if (_chargeStarted < 0d) { _chargeStarted = Now; _chargeStartNet.Value = Now; }
+                _charging.Value = true;
+            }
+            else { _chargeStarted = -1d; _charging.Value = false; }
         }
         private bool _serverReeling;
         private void StopHeldServer()
-        { _blocking.Value = _aiming.Value = false; _serverReeling = false; _chargeStarted = -1d; }
+        { _blocking.Value = _aiming.Value = false; _charging.Value = false; _serverReeling = false; _chargeStarted = -1d; }
         [ServerRpc]
         private void ActionServerRpc(EquipmentAction action, int slot, uint revision,
             Vector3 requestedOrigin, Vector3 requestedDirection, NetworkObjectReference support)
@@ -405,9 +417,15 @@ namespace WaveByWave.Player
                     // Keep the barrel on this side of an obstacle at point-blank range.
                     if (SegmentHit(origin, muzzle, 0.02f, null, out var muzzleHit, out _))
                         muzzle = muzzleHit.point + muzzleHit.normal * 0.05f;
-                    var bullet = new Bullet { Id = ++_nextBullet, Origin = muzzle,
-                        Velocity = (aimPoint - muzzle).normalized * bulletSpeed + inherited, Started = Now, Simulated = Now,
-                        Damage = item.Potency };
+                    var bullet = new Bullet
+                    {
+                        Id = ++_nextBullet,
+                        Origin = muzzle,
+                        Velocity = (aimPoint - muzzle).normalized * bulletSpeed + inherited,
+                        Started = Now,
+                        Simulated = Now,
+                        Damage = item.Potency
+                    };
                     _bullets.Add(bullet);
                     _reloadEnd.Value = Now + reloadDuration;
                     PlayServer(action, 0.2f);
@@ -422,9 +440,15 @@ namespace WaveByWave.Player
                     var launch = (direction + Vector3.up * 0.35f).normalized * Mathf.Lerp(hookMinimumSpeed, hookMaximumSpeed, charge)
                         + carrierVelocity;
                     _hookPosition = origin + direction * 0.3f;
-                    _hook.Value = new EquipmentHookState { Phase = HookPhase.Flying, Origin = _hookPosition,
-                        Velocity = launch, Started = Now };
+                    _hook.Value = new EquipmentHookState
+                    {
+                        Phase = HookPhase.Flying,
+                        Origin = _hookPosition,
+                        Velocity = launch,
+                        Started = Now
+                    };
                     _hookSampleTime = Now; _chargeStarted = -1d;
+                    _charging.Value = false;
                     PlayServer(action, 0.4f);
                     break;
                 case EquipmentAction.BucketScoop when item.EquipmentKind == ItemEquipmentKind.Bucket:
@@ -438,19 +462,19 @@ namespace WaveByWave.Player
                             !HasSolidBetween(origin, new Vector3(probe.x, height, probe.z));
                         scoopPoint = new Vector3(probe.x, height, probe.z);
                     }
+                    PlayServer(action, 0.8f);
                     if (!filled) return;
                     _bucketFull.Value = true; onWaterScooped.Invoke(scoopPoint, bucketLitres);
-                    PlayServer(action, 0.8f);
                     ToolEffectClientRpc(scoopPoint, true);
                     break;
                 case EquipmentAction.BucketSplash when item.EquipmentKind == ItemEquipmentKind.Bucket:
                     if (!_bucketFull.Value) return;
                     _bucketFull.Value = false;
+                    PlayServer(action, 0.65f);
                     var pourPoint = origin + direction * 1.2f;
                     if (TryBucketSource(origin, direction, out var destination, out var targetPoint))
                     { destination.AddWaterServer(bucketLitres, targetPoint); pourPoint = targetPoint; }
                     onWaterPoured.Invoke(pourPoint, bucketLitres);
-                    PlayServer(action, 0.65f);
                     PourClientRpc(origin + direction * 0.4f, direction);
                     break;
                 case EquipmentAction.ShovelDig when item.EquipmentKind == ItemEquipmentKind.Shovel:
@@ -465,8 +489,13 @@ namespace WaveByWave.Player
         private void PlayServer(EquipmentAction action, float duration)
         {
             _cooldown = Now + duration;
-            _motion.Value = new EquipmentMotionState { Action = action, Sequence = _motion.Value.Sequence + 1,
-                Started = Now, Duration = duration };
+            _motion.Value = new EquipmentMotionState
+            {
+                Action = action,
+                Sequence = _motion.Value.Sequence + 1,
+                Started = Now,
+                Duration = duration
+            };
         }
         public bool TryBlockHitServer(float damage, Vector3 attackerPosition)
         {
@@ -645,17 +674,27 @@ namespace WaveByWave.Player
                 nextPosition = obstacle.point + obstacle.normal * 0.07f;
             CaptureItemsServer(previous, nextPosition);
             _hookPosition = nextPosition;
-            _hook.Value = new EquipmentHookState { Phase = HookPhase.Reeling, Origin = previous,
-                Velocity = (nextPosition - previous) / 0.05f, Started = Now };
+            _hook.Value = new EquipmentHookState
+            {
+                Phase = HookPhase.Reeling,
+                Origin = previous,
+                Velocity = (nextPosition - previous) / 0.05f,
+                Started = Now
+            };
             if (Vector3.Distance(nextPosition, hand) < 0.45f)
                 ResetHookServer();
         }
         private void LandHookServer(Vector3 position, NetworkObject support)
         {
             if (support != null && !support.IsSpawned) support = null;
-            _hook.Value = new EquipmentHookState { Phase = HookPhase.Landed,
+            _hook.Value = new EquipmentHookState
+            {
+                Phase = HookPhase.Landed,
                 Origin = support != null ? WorldItem.GetPhysicsFrame(support).inverse.MultiplyPoint3x4(position) : position,
-                HasSupport = support != null, Support = support != null ? new NetworkObjectReference(support) : default, Started = Now };
+                HasSupport = support != null,
+                Support = support != null ? new NetworkObjectReference(support) : default,
+                Started = Now
+            };
             _hookSampleTime = Now;
         }
         private bool TryHookSurface(ref Vector3 position, out NetworkObject support)
@@ -714,9 +753,11 @@ namespace WaveByWave.Player
                 item.ReleaseFromHookServer(this, release, releaseSupport, water);
             }
             _hookItems.Clear(); _claimedThisThrow.Clear(); _hook.Value = default; _serverReeling = false; _chargeStarted = -1d;
+            _charging.Value = false;
         }
 
-        [ClientRpc] private void ShotClientRpc(int id, Vector3 origin, Vector3 velocity, double started)
+        [ClientRpc]
+        private void ShotClientRpc(int id, Vector3 origin, Vector3 velocity, double started)
         {
             var visual = EquipmentProjectileVisual.Create(this, origin, velocity, bulletGravity, started,
                 bulletLifetime, bulletRadius, metalMaterial, effectMaterial);
@@ -724,17 +765,21 @@ namespace WaveByWave.Player
             if (!IsOwner)
                 CannonEffects.Muzzle(_view != null ? _view.MuzzlePosition(origin) : origin, velocity.normalized, effectMaterial);
         }
-        [ClientRpc] private void BulletImpactClientRpc(int id, Vector3 point, Vector3 normal, bool water, bool show, double at)
+        [ClientRpc]
+        private void BulletImpactClientRpc(int id, Vector3 point, Vector3 normal, bool water, bool show, double at)
         {
             if (!_bulletVisuals.TryGetValue(id, out var visual)) return;
             if (visual != null) visual.SetImpact(point, normal, water, show, at, waterSplashPrefab, effectMaterial, metalMaterial);
             _bulletVisuals.Remove(id);
         }
-        [ClientRpc] private void ToolEffectClientRpc(Vector3 position, bool water)
+        [ClientRpc]
+        private void ToolEffectClientRpc(Vector3 position, bool water)
         { CannonEffects.Hit(position, Vector3.up, water, water ? waterSplashPrefab : null, effectMaterial, metalMaterial); }
-        [ClientRpc] private void PourClientRpc(Vector3 origin, Vector3 direction)
+        [ClientRpc]
+        private void PourClientRpc(Vector3 origin, Vector3 direction)
         { EquipmentProjectileVisual.CreateWaterPour(origin, direction, effectMaterial); }
-        [ClientRpc] private void BlockClientRpc()
+        [ClientRpc]
+        private void BlockClientRpc()
         { if (_view != null) _view.BlockImpact(); }
         private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
         private static bool Finite(Vector3 p) => Finite(p.x) && Finite(p.y) && Finite(p.z);

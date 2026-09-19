@@ -20,10 +20,16 @@ MonoBehaviour:
   category: 0
   rarity: 0
   icon: {fileID: 0}
+  maximumStack: 1
+  supplyKind: 0
+  potency: 40
+  treasureExperience: 25
+  upgradeStat: 0
+  upgradeBonus: 0.1
   worldVisualPrefab: {fileID: 1000, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
   restingEulerAngles: {x: 90, y: 0, z: 0}
   equipmentKind: 2
   overrideHeldPose: 1
   heldPosition: {x: 0.32, y: -0.12, z: 0.78}
-  heldEulerAngles: {x: -10, y: 0, z: -20}
+  heldEulerAngles: {x: 0, y: 90, z: 20}
   heldScale: 0.65

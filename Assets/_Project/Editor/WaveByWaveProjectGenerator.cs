@@ -353,6 +353,22 @@ namespace WaveByWave.Editor
             SetObjectReference(player, "cameraTarget", cameraTarget);
             SetObjectReference(player, "ownerCamera", firstPersonCamera);
             SetObjectReference(player, "firstPersonHiddenRoot", visual.transform);
+            var equipment = root.AddComponent<PlayerEquipment>();
+            SetObjectReference(equipment, "motions", AssetDatabase.LoadAssetAtPath<EquipmentMotionSet>(
+                Root + "/Resources/EquipmentMotions.asset"));
+            SetObjectReference(equipment, "firstPersonHandsPrefab", AssetDatabase.LoadAssetAtPath<GameObject>(
+                Prefabs + "/FirstPersonHands.prefab"));
+            SetObjectReference(equipment, "metalMaterial", AssetDatabase.LoadAssetAtPath<Material>(
+                Root + "/Generated/Materials/CannonIron.mat"));
+            SetObjectReference(equipment, "effectMaterial", AssetDatabase.LoadAssetAtPath<Material>(
+                Root + "/Generated/Materials/LootGlow.mat"));
+            SetObjectReference(equipment, "handMaterial", AssetDatabase.LoadAssetAtPath<Material>(
+                Root + "/Generated/Materials/LootSurface.mat"));
+            SetObjectReference(equipment, "sleeveMaterial", material);
+            SetObjectReference(equipment, "waterWaveProfile", AssetDatabase.LoadAssetAtPath<WaveProfile>(
+                "Assets/Stylized Water 3/Profiles/Ocean Wave Profile.asset"));
+            SetObjectReference(equipment, "waterSplashPrefab", AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Stylized Water 3/Prefabs/Particles/BigSplash.prefab"));
 
             var path = Prefabs + "/Player.prefab";
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);

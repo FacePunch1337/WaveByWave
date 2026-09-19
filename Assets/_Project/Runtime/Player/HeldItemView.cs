@@ -1,0 +1,270 @@
+using UnityEngine;
+using UnityEngine.Rendering;
+using WaveByWave.Items;
+
+namespace WaveByWave.Player
+{
+    // Runs after the final player/ship presentation frame. Never changes KCC or the camera's pose.
+    [DefaultExecutionOrder(9700)]
+    public sealed class HeldItemView : MonoBehaviour
+    {
+        private PlayerEquipment _equipment;
+        private NetworkPlayerController _player;
+        private PlayerInventory _inventory;
+        private Transform _rig, _motion, _item, _rightHand, _leftHand, _rightSleeve, _leftSleeve;
+        private Transform _bodyVisual;
+        private Animator _animator;
+        private Transform _rightUpper, _rightLower, _rightBone, _leftUpper, _leftLower, _leftBone;
+        private GameObject _hookVisual, _bucketWater;
+        private LineRenderer _rope;
+        private ItemDefinition _definition;
+        private Camera _camera;
+        private float _fov, _aimBlend, _blockBlend, _blockHitUntil;
+        private Material _ropeMaterial;
+        private bool _initialized;
+
+        public void Initialize(PlayerEquipment equipment, NetworkPlayerController player, PlayerInventory inventory)
+        { _equipment = equipment; _player = player; _inventory = inventory; }
+
+        private bool EnsureRig()
+        {
+            if (_initialized) return true;
+            if (_equipment.IsOwner && _player.OwnerView == null) return false;
+            _bodyVisual = transform.Find("Presentation Root/Visual");
+            if (_bodyVisual == null) _bodyVisual = transform.Find("Visual");
+            _rig = new GameObject(_equipment.IsOwner ? "First person equipment" : "Third person equipment").transform;
+            if (_equipment.IsOwner)
+            {
+                _rig.SetParent(_player.OwnerView, false);
+                _camera = _player.OwnerView.GetComponent<Camera>(); _fov = _camera != null ? _camera.fieldOfView : 75f;
+            }
+            _motion = _equipment.IsOwner && _equipment.FirstPersonHandsPrefab != null
+                ? Instantiate(_equipment.FirstPersonHandsPrefab, _rig).transform : new GameObject("Motion").transform;
+            _motion.name = "Motion"; _motion.SetParent(_rig, false);
+            if (_equipment.IsOwner)
+            {
+                _rightHand = _motion.Find("Right hand");
+                _leftHand = _motion.Find("Left hand");
+                if (_rightHand == null)
+                { _rightHand = Part("Right hand", PrimitiveType.Cube, _equipment.HandMaterial); _rightHand.localScale = new Vector3(0.085f, 0.09f, 0.12f); }
+                if (_leftHand == null)
+                { _leftHand = Part("Left hand", PrimitiveType.Cube, _equipment.HandMaterial); _leftHand.localScale = new Vector3(0.085f, 0.09f, 0.12f); }
+                _rightSleeve = _motion.Find("Right sleeve");
+                _leftSleeve = _motion.Find("Left sleeve");
+                if (_rightSleeve == null) _rightSleeve = Part("Right sleeve", PrimitiveType.Cylinder, _equipment.SleeveMaterial);
+                if (_leftSleeve == null) _leftSleeve = Part("Left sleeve", PrimitiveType.Cylinder, _equipment.SleeveMaterial);
+                foreach (var collider in _motion.GetComponentsInChildren<Collider>()) { collider.enabled = false; Destroy(collider); }
+                foreach (var body in _motion.GetComponentsInChildren<Rigidbody>()) Destroy(body);
+                // The controller exposes clips to Animation Window. Runtime motion is sampled below.
+                foreach (var animator in _motion.GetComponentsInChildren<Animator>()) animator.enabled = false;
+            }
+            else
+            {
+                _rig.SetParent(transform, false);
+                _animator = _bodyVisual != null ? _bodyVisual.GetComponentInChildren<Animator>() : null;
+                if (_animator != null && _animator.isHuman)
+                {
+                    _rightUpper = _animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                    _rightLower = _animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
+                    _rightBone = _animator.GetBoneTransform(HumanBodyBones.RightHand);
+                    _leftUpper = _animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+                    _leftLower = _animator.GetBoneTransform(HumanBodyBones.LeftLowerArm);
+                    _leftBone = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
+                }
+            }
+            var ropeObject = new GameObject("Hook rope", typeof(LineRenderer));
+            ropeObject.transform.SetParent(_rig, false);
+            _rope = ropeObject.GetComponent<LineRenderer>(); _rope.useWorldSpace = true; _rope.positionCount = 16;
+            _rope.startWidth = _rope.endWidth = 0.018f;
+            _rope.generateLightingData = true; _rope.shadowCastingMode = ShadowCastingMode.Off; _rope.receiveShadows = false;
+            _rope.startColor = _rope.endColor = new Color(0.62f, 0.45f, 0.25f);
+            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            _ropeMaterial = _equipment.MetalMaterial != null ? new Material(_equipment.MetalMaterial) : new Material(shader);
+            _ropeMaterial.SetColor("_BaseColor", new Color(0.62f, 0.45f, 0.25f));
+            if (_ropeMaterial.HasProperty("_Metallic")) _ropeMaterial.SetFloat("_Metallic", 0f);
+            if (_ropeMaterial.HasProperty("_Smoothness")) _ropeMaterial.SetFloat("_Smoothness", 0.2f);
+            _rope.sharedMaterial = _ropeMaterial; _rope.enabled = false;
+            _initialized = true; return true;
+        }
+        private Transform Part(string name, PrimitiveType type, Material material)
+        {
+            var part = GameObject.CreatePrimitive(type); part.name = name; part.transform.SetParent(_motion, false);
+            var collider = part.GetComponent<Collider>(); collider.enabled = false; Destroy(collider);
+            var renderer = part.GetComponent<Renderer>();
+            renderer.sharedMaterial = material != null ? material : _equipment.MetalMaterial;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            return part.transform;
+        }
+        private void SetItem(ItemDefinition definition)
+        {
+            _definition = definition;
+            if (_item != null) Destroy(_item.gameObject);
+            if (_hookVisual != null) Destroy(_hookVisual);
+            _item = null; _bucketWater = null; _hookVisual = null;
+            if (definition == null || definition.WorldVisualPrefab == null) return;
+            _item = Instantiate(definition.WorldVisualPrefab, _motion).transform;
+            _item.name = "Held " + definition.Id;
+            foreach (var collider in _item.GetComponentsInChildren<Collider>()) { collider.enabled = false; Destroy(collider); }
+            foreach (var body in _item.GetComponentsInChildren<Rigidbody>()) Destroy(body);
+            foreach (var renderer in _item.GetComponentsInChildren<Renderer>())
+                if (_equipment.IsOwner) renderer.shadowCastingMode = ShadowCastingMode.Off;
+            if (definition.EquipmentKind == ItemEquipmentKind.Bucket)
+            {
+                var water = GameObject.CreatePrimitive(PrimitiveType.Cylinder); water.name = "Bucket contents";
+                water.transform.SetParent(_item, false); water.transform.localPosition = new Vector3(0f, 0.15f, 0f);
+                water.transform.localScale = new Vector3(0.49f, 0.012f, 0.49f);
+                var collider = water.GetComponent<Collider>(); collider.enabled = false; Destroy(collider);
+                water.GetComponent<Renderer>().sharedMaterial = _equipment.EffectMaterial;
+                _bucketWater = water; water.SetActive(false);
+            }
+        }
+        public void BlockImpact() => _blockHitUntil = Time.unscaledTime + 0.2f;
+        public Vector3 MuzzlePosition(Vector3 fallback) => _item != null && _definition != null &&
+            _definition.EquipmentKind == ItemEquipmentKind.Musket ? _item.TransformPoint(new Vector3(0f, 0.8f, 0.04f)) : fallback;
+
+        private void LateUpdate()
+        {
+            if (_equipment == null || !_equipment.IsSpawned || !EnsureRig()) return;
+            _inventory.TryGetDefinition(_inventory.EquippedIndex, out var definition);
+            if (_definition != definition) SetItem(definition);
+            var visible = definition != null && _equipment.Available && !_player.IsAtControlStation &&
+                (!_equipment.IsOwner || (_player.OwnerView.gameObject.activeInHierarchy && !PlayerEquipment.InputCaptured));
+            _rig.gameObject.SetActive(visible);
+            if (_equipment.IsOwner && _camera != null)
+                _camera.fieldOfView = Mathf.Lerp(_camera.fieldOfView,
+                    visible && _equipment.IsAiming && definition.EquipmentKind == ItemEquipmentKind.Musket ? 48f : _fov,
+                    1f - Mathf.Exp(-12f * Time.unscaledDeltaTime));
+            if (!visible || _item == null) { if (_hookVisual != null) _hookVisual.SetActive(false); return; }
+            if (!_equipment.IsOwner)
+            {
+                var source = _bodyVisual != null ? _bodyVisual : transform;
+                var forward = _equipment.LookDirection;
+                if (forward.sqrMagnitude < 0.01f) forward = source.forward;
+                _rig.SetPositionAndRotation(source.position + source.up * 1.35f,
+                    Quaternion.LookRotation(forward, source.up));
+            }
+            _aimBlend = Mathf.MoveTowards(_aimBlend, _equipment.IsAiming ? 1f : 0f, Time.unscaledDeltaTime * 7f);
+            _item.localPosition = definition.EquipmentKind == ItemEquipmentKind.Musket
+                ? Vector3.Lerp(definition.HeldPosition, new Vector3(0f, -0.13f, 0.7f), _aimBlend) : definition.HeldPosition;
+            _item.localRotation = Quaternion.Euler(definition.HeldEulerAngles);
+            _item.localScale = Vector3.one * definition.HeldScale;
+            _motion.localPosition = Vector3.zero; _motion.localRotation = Quaternion.identity; _motion.localScale = Vector3.one;
+            _blockBlend = Mathf.MoveTowards(_blockBlend, _equipment.IsBlocking ? 1f : 0f, Time.unscaledDeltaTime * 7f);
+            SampleMotion(definition);
+            if (_blockHitUntil > Time.unscaledTime)
+                _motion.localPosition += Vector3.back * (0.08f * Mathf.Sin((_blockHitUntil - Time.unscaledTime) / 0.2f * Mathf.PI));
+            var right = _item.TransformPoint(Grip(definition.EquipmentKind));
+            var left = definition.EquipmentKind == ItemEquipmentKind.Musket
+                ? _item.TransformPoint(new Vector3(0f, 0.2f, 0.02f)) :
+                definition.EquipmentKind == ItemEquipmentKind.Shovel ? _item.TransformPoint(new Vector3(0f, -0.15f, 0f)) :
+                _item.TransformPoint(new Vector3(-0.25f, 0f, 0f));
+            var twoHanded = definition.EquipmentKind == ItemEquipmentKind.Musket ||
+                definition.EquipmentKind == ItemEquipmentKind.Shovel || definition.EquipmentKind == ItemEquipmentKind.Carry;
+            if (_equipment.Reloading && definition.EquipmentKind == ItemEquipmentKind.Musket)
+                left += _rig.up * (Mathf.Sin(_equipment.ReloadProgress * Mathf.PI * 4f) * 0.12f);
+            if (_equipment.IsOwner)
+            {
+                _rightHand.position = right; _rightHand.rotation = _item.rotation * Quaternion.Euler(0f, 0f, 10f);
+                _leftHand.gameObject.SetActive(twoHanded); _leftSleeve.gameObject.SetActive(twoHanded);
+                _leftHand.position = left; _leftHand.rotation = _item.rotation;
+                Sleeve(_rightSleeve, _motion.TransformPoint(new Vector3(0.42f, -0.65f, 0.1f)), right);
+                if (twoHanded) Sleeve(_leftSleeve, _motion.TransformPoint(new Vector3(-0.4f, -0.65f, 0.1f)), left);
+            }
+            else
+            {
+                SolveArm(_rightUpper, _rightLower, _rightBone, right, _rig.right - _rig.up);
+                if (twoHanded) SolveArm(_leftUpper, _leftLower, _leftBone, left, -_rig.right - _rig.up);
+            }
+            if (_bucketWater != null) _bucketWater.SetActive(_equipment.BucketFull);
+            UpdateHook(definition, right);
+        }
+        private void SampleMotion(ItemDefinition definition)
+        {
+            var state = _equipment.DisplayMotion;
+            var elapsed = (float)(_equipment.NetworkManager.ServerTime.Time - state.Started);
+            var action = elapsed >= 0f && elapsed < state.Duration ? state.Action : EquipmentAction.None;
+            if (action == EquipmentAction.None)
+            {
+                if (_blockBlend > 0f && definition.EquipmentKind == ItemEquipmentKind.Sword) action = EquipmentAction.SwordBlock;
+                else if (_equipment.Reloading && definition.EquipmentKind == ItemEquipmentKind.Musket)
+                { action = EquipmentAction.MusketReload; elapsed = _equipment.ReloadProgress; }
+                else if (_equipment.ChargingHook) { action = EquipmentAction.HookCharge; elapsed = _equipment.HookCharge; }
+                else if (_equipment.Hook.Phase == HookPhase.Reeling) { action = EquipmentAction.HookReel; elapsed = Time.time % 0.5f; }
+                else if (_equipment.IsAiming && definition.EquipmentKind == ItemEquipmentKind.Musket) action = EquipmentAction.MusketAim;
+            }
+            var clip = _equipment.Motions != null ? _equipment.Motions.Get(action) : null;
+            if (clip == null) return;
+            var hold = action == EquipmentAction.SwordBlock || action == EquipmentAction.MusketAim;
+            var time = hold ? action == EquipmentAction.SwordBlock ? _blockBlend * clip.length : clip.length :
+                action == EquipmentAction.MusketReload || action == EquipmentAction.HookCharge
+                ? Mathf.Clamp01(elapsed) * clip.length : action == EquipmentAction.HookReel ? elapsed % Mathf.Max(0.01f, clip.length)
+                : Mathf.Clamp01(elapsed / Mathf.Max(0.01f, state.Duration)) * clip.length;
+            clip.SampleAnimation(_motion.gameObject, time);
+        }
+        private static Vector3 Grip(ItemEquipmentKind kind) => kind switch
+        {
+            ItemEquipmentKind.Sword => new Vector3(0f, -0.64f, 0f),
+            ItemEquipmentKind.Musket => new Vector3(0.05f, -0.32f, 0.03f),
+            ItemEquipmentKind.Bucket => new Vector3(0f, 0.53f, 0f),
+            ItemEquipmentKind.Shovel => new Vector3(0f, 0.55f, 0f),
+            ItemEquipmentKind.Hook => new Vector3(0f, -0.3f, 0f),
+            _ => new Vector3(0.12f, -0.1f, 0f)
+        };
+        private static void Sleeve(Transform sleeve, Vector3 from, Vector3 to)
+        {
+            var delta = to - from; sleeve.position = (from + to) * 0.5f;
+            sleeve.rotation = Quaternion.FromToRotation(Vector3.up, delta.normalized);
+            sleeve.localScale = new Vector3(0.09f, delta.magnitude * 0.5f, 0.09f);
+        }
+        private static void SolveArm(Transform upper, Transform lower, Transform hand, Vector3 target, Vector3 pole)
+        {
+            if (upper == null || lower == null || hand == null) return;
+            var a = Vector3.Distance(upper.position, lower.position); var b = Vector3.Distance(lower.position, hand.position);
+            var delta = target - upper.position; var distance = Mathf.Clamp(delta.magnitude, Mathf.Abs(a - b) + 0.001f, a + b - 0.001f);
+            if (a < 0.001f || b < 0.001f || delta.sqrMagnitude < 0.0001f) return;
+            var direction = delta.normalized;
+            var along = (a * a + distance * distance - b * b) / (2f * distance);
+            var perpendicular = Vector3.ProjectOnPlane(pole, direction).normalized;
+            var elbow = upper.position + direction * along + perpendicular * Mathf.Sqrt(Mathf.Max(0f, a * a - along * along));
+            upper.rotation = Quaternion.FromToRotation(lower.position - upper.position, elbow - upper.position) * upper.rotation;
+            lower.rotation = Quaternion.FromToRotation(hand.position - lower.position, target - lower.position) * lower.rotation;
+        }
+        private void UpdateHook(ItemDefinition definition, Vector3 hand)
+        {
+            var active = definition.EquipmentKind == ItemEquipmentKind.Hook && _equipment.Hook.Phase != HookPhase.Stowed;
+            _item.gameObject.SetActive(!active);
+            _rope.enabled = active;
+            if (!active) { if (_hookVisual != null) _hookVisual.SetActive(false); return; }
+            if (_hookVisual == null)
+            {
+                _hookVisual = Instantiate(definition.WorldVisualPrefab); _hookVisual.name = "Thrown hook";
+                _hookVisual.transform.localScale = Vector3.one * 0.35f;
+                foreach (var collider in _hookVisual.GetComponentsInChildren<Collider>()) { collider.enabled = false; Destroy(collider); }
+                foreach (var body in _hookVisual.GetComponentsInChildren<Rigidbody>()) Destroy(body);
+            }
+            _hookVisual.SetActive(true); var end = _equipment.RenderedHookPosition;
+            _hookVisual.transform.position = end;
+            var state = _equipment.Hook;
+            var velocity = state.Phase == HookPhase.Flying ? state.Velocity + Vector3.down *
+                (_equipment.HookGravity * Mathf.Max(0f, (float)(_equipment.NetworkManager.ServerTime.Time - state.Started)))
+                : state.Phase == HookPhase.Reeling ? hand - end : Vector3.zero;
+            _hookVisual.transform.rotation = velocity.sqrMagnitude > 0.001f
+                ? Quaternion.LookRotation(velocity) * Quaternion.Euler(90f, 0f, 0f) : Quaternion.Euler(90f, 0f, 0f);
+            var distance = Vector3.Distance(hand, end);
+            for (var i = 0; i < _rope.positionCount; i++)
+            {
+                var t = i / (float)(_rope.positionCount - 1);
+                _rope.SetPosition(i, Vector3.Lerp(hand, end, t) + Vector3.down *
+                    (4f * Mathf.Min(0.45f, distance * 0.018f) * t * (1f - t)));
+            }
+        }
+        private void OnDestroy()
+        {
+            if (_camera != null) _camera.fieldOfView = _fov;
+            if (_rig != null) Destroy(_rig.gameObject);
+            if (_hookVisual != null) Destroy(_hookVisual);
+            if (_ropeMaterial != null) Destroy(_ropeMaterial);
+        }
+    }
+}

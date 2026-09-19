@@ -356,7 +356,7 @@ namespace WaveByWave.Player
                 _pendingCannon = null;
             }
 
-            if (SessionMenuPresenter.InputCaptured)
+            if (PlayerEquipment.InputCaptured)
             {
                 if (!_menuWasOpen)
                     StopShipControlInputsForMenu();
@@ -1473,7 +1473,7 @@ namespace WaveByWave.Player
         {
             // Query after ship, player and camera presentation agree with this frame's HUD.
             // A station's release key must not also interact again in the same frame.
-            if (!_interactionInputBlockedThisFrame && !SessionMenuPresenter.InputCaptured &&
+            if (!_interactionInputBlockedThisFrame && !PlayerEquipment.InputCaptured &&
                 !IsAtControlStation && Keyboard.current != null &&
                 (Keyboard.current.eKey.wasPressedThisFrame || _loweringAnchor != null))
                 UpdateInteraction();
@@ -1755,18 +1755,20 @@ namespace WaveByWave.Player
             if (Mouse.current == null)
                 return;
 
-            if (Mouse.current.leftButton.wasPressedThisFrame)
+            var equipmentAction = inventory.TryGetDefinition(inventory.SelectedIndex, out var heldItem) &&
+                heldItem.EquipmentKind != ItemEquipmentKind.Carry;
+            if (!equipmentAction && Mouse.current.leftButton.wasPressedThisFrame)
             {
                 animationSync.PlayAction("Primary");
                 inventory.UseSelected(false);
             }
-            else if (Mouse.current.rightButton.wasPressedThisFrame)
+            else if (!equipmentAction && Mouse.current.rightButton.wasPressedThisFrame)
             {
                 animationSync.PlayAction("Special");
                 inventory.UseSelected(true);
             }
 
-            if (Keyboard.current.gKey.wasPressedThisFrame)
+            if (Keyboard.current != null && Keyboard.current.gKey.wasPressedThisFrame)
                 inventory.DropSelected();
         }
 
@@ -1840,7 +1842,7 @@ namespace WaveByWave.Player
             if (!IsOwner)
                 return;
             if (anchor == null || _pendingAnchor != anchor || _sceneTransitioning ||
-                SessionMenuPresenter.InputCaptured || IsAtControlStation)
+                PlayerEquipment.InputCaptured || IsAtControlStation)
             {
                 if (handleIndex >= 0 && anchor != null && anchor.Ship.IsSpawned)
                     anchor.Ship.ReleaseAnchorHandleServerRpc();
@@ -1919,7 +1921,7 @@ namespace WaveByWave.Player
         {
             if (!IsOwner) return;
             if (cannon == null) { _pendingCannon = null; return; }
-            if (_pendingCannon != cannon || _sceneTransitioning || SessionMenuPresenter.InputCaptured || IsAtControlStation)
+            if (_pendingCannon != cannon || _sceneTransitioning || PlayerEquipment.InputCaptured || IsAtControlStation)
             {
                 if (battery.IsSpawned) battery.ReleaseCannonServerRpc();
                 _pendingCannon = null;

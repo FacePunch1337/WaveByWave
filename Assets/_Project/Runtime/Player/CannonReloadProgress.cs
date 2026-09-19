@@ -103,7 +103,7 @@ namespace WaveByWave.Player
             if (_hud == null) return;
             var visible = _player != null && _player.IsOwner && _player.IsSpawned &&
                 _player.OwnerView != null && _player.OwnerView.gameObject.activeInHierarchy &&
-                !SessionMenuPresenter.InputCaptured;
+                !PlayerEquipment.InputCaptured;
             _hud.SetActive(visible);
             if (!visible) return;
 
@@ -117,8 +117,19 @@ namespace WaveByWave.Player
             var loading = battery != null && battery.IsSpawned;
             var state = loading ? battery.GetState(battery.GetCannonIndex(cannon)) : default;
             loading = loading && state.Operator == _player.OwnerClientId && state.ReloadEnd > 0d;
+            var equipment = _player.GetComponent<PlayerEquipment>();
+            var handheld = equipment != null && !_player.IsAtControlStation &&
+                _player.Inventory.TryGetDefinition(_player.Inventory.SelectedIndex, out var item) &&
+                item.EquipmentKind == WaveByWave.Items.ItemEquipmentKind.Musket && equipment.Reloading;
+            var charge = equipment != null && equipment.ChargingHook;
+            loading = loading || handheld || charge;
             _indicator.SetActive(loading);
             if (!loading) return;
+            if (handheld || charge)
+            {
+                _fill.fillAmount = charge ? equipment.HookCharge : equipment.ReloadProgress;
+                return;
+            }
             // Use authoritative reload time, independently of delayed ship presentation.
             var remaining = state.ReloadEnd - battery.NetworkManager.ServerTime.Time;
             _fill.fillAmount = Mathf.Clamp01(1f - (float)remaining / cannon.ReloadDuration);

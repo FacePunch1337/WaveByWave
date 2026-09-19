@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be781acb620f4c0f96de000000000001, type: 3}
+  m_Name: EquipmentMotions
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Player.EquipmentMotionSet
+  swordSwing: {fileID: 7400000, guid: be781acb620f4c0f96de00000000000a, type: 2}
+  swordBlock: {fileID: 7400000, guid: be781acb620f4c0f96de00000000000b, type: 2}
+  musketShot: {fileID: 7400000, guid: be781acb620f4c0f96de00000000000c, type: 2}
+  musketReload: {fileID: 7400000, guid: be781acb620f4c0f96de00000000000d, type: 2}
+  musketAim: {fileID: 7400000, guid: be781acb620f4c0f96de00000000000e, type: 2}
+  hookCharge: {fileID: 7400000, guid: be781acb620f4c0f96de00000000000f, type: 2}
+  hookThrow: {fileID: 7400000, guid: be781acb620f4c0f96de000000000010, type: 2}
+  hookReel: {fileID: 7400000, guid: be781acb620f4c0f96de000000000011, type: 2}
+  bucketScoop: {fileID: 7400000, guid: be781acb620f4c0f96de000000000012, type: 2}
+  bucketSplash: {fileID: 7400000, guid: be781acb620f4c0f96de000000000013, type: 2}
+  shovelDig: {fileID: 7400000, guid: be781acb620f4c0f96de000000000014, type: 2}
+

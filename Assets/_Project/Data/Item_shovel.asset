@@ -21,3 +21,8 @@ MonoBehaviour:
   icon: {fileID: 0}
   worldVisualPrefab: {fileID: 1000, guid: 371dc58e6f9652939b57f53edabfd9e6, type: 3}
   restingEulerAngles: {x: 90, y: 0, z: 0}
+  equipmentKind: 6
+  overrideHeldPose: 1
+  heldPosition: {x: 0.32, y: -0.5, z: 0.75}
+  heldEulerAngles: {x: 20, y: 0, z: -15}
+  heldScale: 0.65

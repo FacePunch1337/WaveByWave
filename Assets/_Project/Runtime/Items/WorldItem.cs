@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -22,6 +23,8 @@ namespace WaveByWave.Items
         private readonly NetworkVariable<FixedString64Bytes> _itemId = new();
         private readonly NetworkVariable<ushort> _amount = new(1);
         private readonly NetworkVariable<WorldItemPlacement> _placement = new();
+        private readonly NetworkVariable<WorldItemTetherState> _tether = new();
+        public static readonly HashSet<WorldItem> ActiveItems = new();
         private static readonly RaycastHit[] PlacementHits = new RaycastHit[128];
         private NetworkObject _support;
         private PlatformNetworkTransform _supportMotion;
@@ -40,6 +43,7 @@ namespace WaveByWave.Items
 
         public override void OnNetworkSpawn()
         {
+            ActiveItems.Add(this);
             if (authoredVisual != null) authoredVisual.SetActive(false);
             if (IsServer && _itemId.Value.IsEmpty)
             {
@@ -57,6 +61,7 @@ namespace WaveByWave.Items
         }
         public override void OnNetworkDespawn()
         {
+            ActiveItems.Remove(this);
             _itemId.OnValueChanged -= OnItemChanged;
             _placement.OnValueChanged -= OnPlacementChanged;
             _support = null;
@@ -89,6 +94,15 @@ namespace WaveByWave.Items
 
         private void ApplyPresentationPose()
         {
+            if (TryResolveTether(out var hook))
+            {
+                if (hook.Hook.Phase != HookPhase.Stowed)
+                    SetPose(hook.RenderedHookPosition + _tether.Value.Offset, transform.rotation);
+                return;
+            }
+            // Updates for two NetworkObjects may arrive in different frames. Keep the
+            // last pose until the server's release placement arrives, never snap to zero.
+            if (_tether.Value.Active && !IsServer) return;
             var state = _placement.Value;
             if (!state.Initialized) return;
             var support = ResolveSupport();
@@ -116,12 +130,47 @@ namespace WaveByWave.Items
         // while rendering uses the ship's final interpolated pose each frame.
         public Vector3 GetServerPosition()
         {
+            if (TryResolveTether(out var hook)) return hook.ServerHookPosition + _tether.Value.Offset;
             var state = _placement.Value;
             if (!state.Initialized) return transform.position;
             var support = ResolveSupport();
             var position = state.Evaluate(NetworkManager.ServerTime.Time);
             return support != null ? support.transform.TransformPoint(position)
                 : state.HasSupport ? state.FallbackPosition : position;
+        }
+
+        private bool TryResolveTether(out PlayerEquipment equipment)
+        {
+            equipment = null;
+            return _tether.Value.Active && _tether.Value.Player.TryGet(out var player, NetworkManager) &&
+                player.TryGetComponent(out equipment) && equipment.IsSpawned;
+        }
+
+        public bool IsTetheredTo(PlayerEquipment hook) => _tether.Value.Active && hook != null &&
+            _tether.Value.Player.Equals(hook.TetherReference);
+
+        public void CaptureWithHookServer(PlayerEquipment hook, Vector3 offset)
+        {
+            if (!IsServer || hook == null || !hook.IsSpawned) return;
+            // Replacing this single owner transfers the item immediately, including between players.
+            _tether.Value = new WorldItemTetherState
+            { Active = true, Player = hook.TetherReference, Offset = offset };
+        }
+
+        public void ReleaseFromHookServer(PlayerEquipment hook, Vector3 position, NetworkObject support, bool onWater = false)
+        {
+            if (!IsServer || !IsTetheredTo(hook)) return;
+            _tether.Value = default;
+            RefreshModelBounds();
+            if (onWater)
+            {
+                var rotation = Definition != null ? Definition.RestingRotation : Quaternion.identity;
+                var end = position + Vector3.up * (GetSurfaceClearance(rotation, Vector3.up) + 0.005f);
+                _placement.Value = new WorldItemPlacement { Initialized = true, Start = end, End = end,
+                    Rotation = rotation, FallbackRotation = rotation, FallbackPosition = end, ArcUp = Vector3.up };
+                return;
+            }
+            PreparePlacement(position, Vector3.forward, support, false);
         }
 
         public bool PrepareDrop(Vector3 feet, Vector3 direction, NetworkObject preferredSupport)
@@ -323,6 +372,37 @@ namespace WaveByWave.Items
 
             _itemId.Value = itemId;
             _amount.Value = amount;
+        }
+
+        public void PlaceSettledServer(Vector3 worldPosition, Quaternion worldRotation, NetworkObject support)
+        {
+            if (IsSpawned && !IsServer)
+                return;
+
+            var state = new WorldItemPlacement
+            {
+                Initialized = true,
+                HasSupport = support != null,
+                Support = support != null ? new NetworkObjectReference(support) : default,
+                Start = worldPosition,
+                End = worldPosition,
+                ArcUp = Vector3.up,
+                Rotation = worldRotation,
+                FallbackPosition = worldPosition,
+                FallbackRotation = worldRotation,
+                Duration = 0f,
+                ArcHeight = 0f
+            };
+            if (support != null)
+            {
+                var inverse = GetPhysicsFrame(support).inverse;
+                state.Start = inverse.MultiplyPoint3x4(worldPosition);
+                state.End = state.Start;
+                state.ArcUp = inverse.MultiplyVector(Vector3.up);
+                state.Rotation = Quaternion.Inverse(GetPhysicsRotation(support)) * worldRotation;
+            }
+            _placement.Value = state;
+            transform.SetPositionAndRotation(worldPosition, worldRotation);
         }
 
         public string GetInteractionPrompt(NetworkPlayerController player) => $"Подобрать {Definition?.DisplayName ?? ItemId.ToString()} ×{Amount}";

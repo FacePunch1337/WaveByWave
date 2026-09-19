@@ -50,7 +50,7 @@ namespace WaveByWave.Player
             var anchor = _player != null ? _player.AnchorBeingReleased : null;
             var view = _player != null ? _player.OwnerView : null;
             var visible = _player != null && _player.IsOwner && _player.IsSpawned &&
-                          !SessionMenuPresenter.InputCaptured && view != null &&
+                          !PlayerEquipment.InputCaptured && view != null &&
                           anchor != null && anchor.Ship != null && anchor.Ship.IsSpawned &&
                           anchor.Ship.CanBeginAnchorDrop;
             _bar.SetActive(visible);

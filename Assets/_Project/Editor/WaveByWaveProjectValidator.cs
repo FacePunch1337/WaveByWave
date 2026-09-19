@@ -81,6 +81,12 @@ namespace WaveByWave.Editor
             if (ownerCamera.transform.parent != player.transform)
                 throw new InvalidOperationException("The owner camera must live in a direct child Camera Holder.");
             var inventory = Require(player.GetComponent<PlayerInventory>(), "Player inventory");
+            var equipment = Require(player.GetComponent<PlayerEquipment>(), "Player equipment");
+            var equipmentSerialized = new SerializedObject(equipment);
+            var equipmentMotions = Require(equipmentSerialized.FindProperty("motions").objectReferenceValue as EquipmentMotionSet,
+                "Editable equipment motions");
+            for (var action = (int)EquipmentAction.SwordSwing; action <= (int)EquipmentAction.ShovelDig; action++)
+                Require(equipmentMotions.Get((EquipmentAction)action), ((EquipmentAction)action) + " animation");
             var inventorySerialized = new SerializedObject(inventory);
             var startingItems = inventorySerialized.FindProperty("startingItemIds");
             if (startingItems == null || startingItems.arraySize != 8)

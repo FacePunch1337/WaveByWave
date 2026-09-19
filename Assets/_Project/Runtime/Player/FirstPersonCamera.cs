@@ -82,7 +82,7 @@ namespace WaveByWave.Player
 
         private void Update()
         {
-            if (eyeTarget == null || SessionMenuPresenter.InputCaptured)
+            if (eyeTarget == null || PlayerEquipment.InputCaptured)
                 return;
 
             var delta = Mouse.current != null ? Mouse.current.delta.ReadValue() * sensitivity : Vector2.zero;

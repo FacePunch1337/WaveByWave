@@ -40,11 +40,6 @@ namespace WaveByWave.Items
         [SerializeField] private ShipUpgradeStat upgradeStat;
         [SerializeField, Range(0f, 1f)] private float upgradeBonus = 0.1f;
         [SerializeField] private GameObject worldVisualPrefab;
-        [Header("Торговля")]
-        [SerializeField, Tooltip("Разрешить заказывать предмет через письменный стол.")]
-        private bool orderable;
-        [SerializeField, Min(0), Tooltip("Цена одной единицы. Ноль использует цену по умолчанию.")]
-        private int purchasePrice;
         [SerializeField, Tooltip("Поворот лежащей модели относительно поверхности, в градусах.")]
         private Vector3 restingEulerAngles;
         [Header("Предмет в руках")]
@@ -91,17 +86,6 @@ namespace WaveByWave.Items
         public ShipUpgradeStat UpgradeStat => upgradeStat;
         public float UpgradeBonus => upgradeBonus;
         public GameObject WorldVisualPrefab => worldVisualPrefab;
-        public bool CanBeOrdered => orderable || category == ItemCategory.Supply;
-        public int PurchasePrice => purchasePrice > 0 ? purchasePrice : category switch
-        {
-            ItemCategory.Weapon => 120,
-            ItemCategory.Tool => 65,
-            ItemCategory.ShipUpgrade => 250,
-            ItemCategory.Supply when supplyKind == SupplyKind.Cannonball => 8,
-            ItemCategory.Supply when supplyKind == SupplyKind.Plank => 15,
-            ItemCategory.Supply when supplyKind == SupplyKind.Food => 10,
-            _ => 25
-        };
         public Quaternion RestingRotation => Quaternion.Euler(restingEulerAngles);
         public Color RarityColor => rarity switch
         {

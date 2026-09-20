@@ -12,6 +12,7 @@ namespace WaveByWave.Customization
         Coat
     }
 
+    [Serializable]
     public struct PirateAppearanceState : INetworkSerializable, IEquatable<PirateAppearanceState>
     {
         public byte Pirate;

@@ -134,6 +134,7 @@ namespace WaveByWave.Player
             _inventory.TryGetDefinition(_inventory.EquippedIndex, out var definition);
             if (_definition != definition) SetItem(definition);
             var visible = definition != null && _equipment.Available && !_player.IsAtControlStation &&
+                !_player.IsCustomizing &&
                 (!_equipment.IsOwner || (_player.OwnerView.gameObject.activeInHierarchy && !PlayerEquipment.InputCaptured));
             _rig.gameObject.SetActive(visible);
             if (_equipment.IsOwner && _camera != null)

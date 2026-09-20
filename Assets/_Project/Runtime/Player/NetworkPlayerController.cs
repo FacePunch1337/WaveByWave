@@ -154,6 +154,8 @@ namespace WaveByWave.Player
             default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
         private readonly NetworkVariable<Quaternion> _replicatedPlatformLocalRotation = new(
             Quaternion.identity, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        private readonly NetworkVariable<bool> _isCustomizing = new(
+            false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
         public PlayerInventory Inventory => inventory;
         public bool IsAtHelm => _activeHelm != null;
@@ -163,6 +165,7 @@ namespace WaveByWave.Player
         public bool IsAtCannon => _activeCannon != null;
         public ShipCannon ActiveCannon => _activeCannon;
         public CustomizationStation ActiveCustomizationStation => _activeCustomizationStation;
+        public bool IsCustomizing => _activeCustomizationStation != null || _isCustomizing.Value;
         public bool IsAtControlStation => IsAtHelm || IsAtSailControl || IsAtMastControl || IsAtAnchor ||
             IsAtCannon || _activeCustomizationStation != null;
 
@@ -2285,6 +2288,7 @@ namespace WaveByWave.Player
             if (appearance == null)
                 return;
             _activeCustomizationStation = station;
+            _isCustomizing.Value = true;
             ClearMovementInput();
             BeginAnchorApproach(station.Station);
             SetOwnerPhysicsSimulation(false);
@@ -2299,6 +2303,8 @@ namespace WaveByWave.Player
             if (_activeCustomizationStation == null && _customizationMenu == null)
                 return;
             _activeCustomizationStation = null;
+            if (IsSpawned && IsOwner)
+                _isCustomizing.Value = false;
             _anchorApproachStation = null;
             if (_customizationMenu != null)
                 _customizationMenu.CloseSilently();

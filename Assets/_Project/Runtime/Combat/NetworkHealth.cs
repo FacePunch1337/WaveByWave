@@ -25,6 +25,8 @@ namespace WaveByWave.Combat
         [SerializeField, Min(0f)] private float knockbackSpeed = 7f;
         [SerializeField, Min(0f)] private float knockbackLift = 2.5f;
         [SerializeField, Min(0.01f)] private float flashDuration = 0.12f;
+        [Tooltip("Optional per-prefab override. If empty, Resources/DamageFlash is used.")]
+        [SerializeField] private Material damageFlashMaterial;
 
         [Header("Presentation")]
         [SerializeField] private Transform visualRoot;
@@ -32,7 +34,6 @@ namespace WaveByWave.Combat
 
         private readonly NetworkVariable<float> _health = new(100f);
         private readonly NetworkVariable<bool> _dead = new(false);
-        private readonly NetworkVariable<ushort> _damageSequence = new();
         private readonly List<RendererState> _renderers = new();
         private readonly List<Collider> _creatureColliders = new();
 
@@ -60,7 +61,7 @@ namespace WaveByWave.Combat
             public Material[] FlashRestoreMaterials;
         }
 
-        private static Material _whiteFlashMaterial;
+        private static Material _defaultFlashMaterial;
 
         private void Awake()
         {
@@ -74,7 +75,6 @@ namespace WaveByWave.Combat
         {
             _health.OnValueChanged += OnHealthChanged;
             _dead.OnValueChanged += OnDeadChanged;
-            _damageSequence.OnValueChanged += OnDamageSequenceChanged;
 
             if (IsServer)
             {
@@ -96,7 +96,6 @@ namespace WaveByWave.Combat
         {
             _health.OnValueChanged -= OnHealthChanged;
             _dead.OnValueChanged -= OnDeadChanged;
-            _damageSequence.OnValueChanged -= OnDamageSequenceChanged;
             if (_flashRoutine != null)
             {
                 StopCoroutine(_flashRoutine);
@@ -139,9 +138,6 @@ namespace WaveByWave.Combat
             if (_player == null && _body != null && !_body.isKinematic)
                 _body.AddForce(impulse, ForceMode.VelocityChange);
 
-            // A replicated sequence makes the hit presentation observer-safe: every peer
-            // currently observing this object receives the flash, including host mode.
-            _damageSequence.Value++;
             DamageFeedbackClientRpc(impulse);
             if (_health.Value <= 0f)
                 DieServer();
@@ -204,16 +200,10 @@ namespace WaveByWave.Combat
         [ClientRpc]
         private void DamageFeedbackClientRpc(Vector3 knockback)
         {
-            if (_player != null && IsOwner)
-                _player.ApplyDamageKnockback(knockback);
-        }
-
-        private void OnDamageSequenceChanged(ushort previous, ushort current)
-        {
-            if (previous == current || !IsClient)
-                return;
             PlayFlash();
             _healthBar?.Flash();
+            if (_player != null && IsOwner)
+                _player.ApplyDamageKnockback(knockback);
         }
 
         private void OnHealthChanged(float previous, float current)
@@ -330,22 +320,13 @@ namespace WaveByWave.Combat
             }
         }
 
-        private static Material GetWhiteFlashMaterial()
+        private Material GetWhiteFlashMaterial()
         {
-            if (_whiteFlashMaterial != null)
-                return _whiteFlashMaterial;
-            var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-            if (shader == null)
-                return null;
-            _whiteFlashMaterial = new Material(shader)
-            {
-                name = "Damage White Flash (Runtime)",
-                hideFlags = HideFlags.HideAndDontSave,
-                color = Color.white
-            };
-            _whiteFlashMaterial.SetColor("_BaseColor", Color.white);
-            _whiteFlashMaterial.SetColor("_Color", Color.white);
-            return _whiteFlashMaterial;
+            if (damageFlashMaterial != null)
+                return damageFlashMaterial;
+            if (_defaultFlashMaterial == null)
+                _defaultFlashMaterial = Resources.Load<Material>("DamageFlash");
+            return _defaultFlashMaterial;
         }
 
         private Vector3 GetEffectCenter()

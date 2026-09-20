@@ -18,6 +18,10 @@ namespace WaveByWave.Customization
         [Tooltip("The pirate body authored directly inside the Player prefab.")]
         [SerializeField] private Transform pirateRoot;
         [SerializeField] private Material[] pirateMaterials;
+        [Header("Default appearance")]
+        [Tooltip("Used when this client has no locally saved wardrobe selection.")]
+        [SerializeField] private PirateAppearanceState defaultAppearance;
+        [SerializeField] private bool loadSavedAppearance = true;
         [Header("Head")]
         [SerializeField] private GameObject[] hairPrefabs;
         [SerializeField] private GameObject[] bandanaPrefabs;
@@ -58,8 +62,10 @@ namespace WaveByWave.Customization
         public override void OnNetworkSpawn()
         {
             _state.OnValueChanged += OnStateChanged;
+            if (IsServer)
+                _state.Value = Validate(defaultAppearance);
             Apply(_state.Value);
-            if (IsOwner)
+            if (IsOwner && loadSavedAppearance)
                 SubmitSavedState();
         }
 

@@ -538,6 +538,13 @@ MonoBehaviour:
   - {fileID: 2100000, guid: 6b1976d7487e21745bd6f44572abc7b1, type: 2}
   - {fileID: 2100000, guid: ed7422018f110bf42a4b3d14cd439171, type: 2}
   - {fileID: 2100000, guid: 5ff2bb26ec897d84b8f799e38efb9d3f, type: 2}
+  defaultAppearance:
+    Pirate: 0
+    Hair: 0
+    Bandana: 0
+    Hat: 0
+    Coat: 0
+  loadSavedAppearance: 1
   hairPrefabs:
   - {fileID: 1493029877609452, guid: e647d12a901e2e745b2136f0d332d4ce, type: 3}
   - {fileID: 1425641579780232, guid: 87eb77e149f01084eb7e47ad20e484d9, type: 3}
@@ -581,6 +588,7 @@ MonoBehaviour:
   knockbackSpeed: 7
   knockbackLift: 2.5
   flashDuration: 0.12
+  damageFlashMaterial: {fileID: 2100000, guid: cd1f78ab51ad4de8b7bcf9eab052eff2, type: 2}
   visualRoot: {fileID: 5745219096532022790}
   worldBarHeight: 2.15
 --- !u!1 &5659961861333063538

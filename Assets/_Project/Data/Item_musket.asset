@@ -20,10 +20,10 @@ MonoBehaviour:
   category: 0
   rarity: 0
   icon: {fileID: 0}
-  worldVisualPrefab: {fileID: 1000, guid: 25c080f4bcf95075903917c036adbddb, type: 3}
+  worldVisualPrefab: {fileID: 3692177591442134904, guid: 5a9b19e1b3885246b5108481efbf1664, type: 3}
   restingEulerAngles: {x: 90, y: 0, z: 0}
   equipmentKind: 3
   overrideHeldPose: 1
   heldPosition: {x: 0.26, y: -0.28, z: 0.63}
-  heldEulerAngles: {x: 90, y: 0, z: 0}
-  heldScale: 0.65
+  heldEulerAngles: {x: 0, y: 0, z: 0}
+  heldScale: 1

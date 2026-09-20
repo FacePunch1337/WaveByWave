@@ -1,57 +1,140 @@
 fileFormatVersion: 2
 guid: d470defa37543c14996117d6650235e8
-timeCreated: 1522918500
-licenseType: Store
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Models/Characters/parrot_01.FBX
+  uploadId: 247603
 ModelImporter:
-  serializedVersion: 22
-  fileIDToRecycleName:
-    100000: Parrot_004
-    100002: //RootNode
-    100004: ParrotChest
-    100006: ParrotHead
-    100008: ParrotLArm1
-    100010: ParrotLArm2
-    100012: ParrotLLeg1
-    100014: ParrotLLeg2
-    100016: ParrotLLegAnkle
-    100018: ParrotNeck
-    100020: ParrotPelvis
-    100022: ParrotRArm1
-    100024: ParrotRArm2
-    100026: ParrotRLeg1
-    100028: ParrotRLeg2
-    100030: ParrotRLegAnkle
-    100032: ParrotSpine1
-    100034: ParrotSpine2
-    400000: Parrot_004
-    400002: //RootNode
-    400004: ParrotChest
-    400006: ParrotHead
-    400008: ParrotLArm1
-    400010: ParrotLArm2
-    400012: ParrotLLeg1
-    400014: ParrotLLeg2
-    400016: ParrotLLegAnkle
-    400018: ParrotNeck
-    400020: ParrotPelvis
-    400022: ParrotRArm1
-    400024: ParrotRArm2
-    400026: ParrotRLeg1
-    400028: ParrotRLeg2
-    400030: ParrotRLegAnkle
-    400032: ParrotSpine1
-    400034: ParrotSpine2
-    4300000: Parrot_004
-    9500000: //RootNode
-    13700000: Parrot_004
+  serializedVersion: 24200
+  internalIDToNameTable:
+  - first:
+      1: 100000
+    second: Parrot_004
+  - first:
+      1: 100002
+    second: //RootNode
+  - first:
+      1: 100004
+    second: ParrotChest
+  - first:
+      1: 100006
+    second: ParrotHead
+  - first:
+      1: 100008
+    second: ParrotLArm1
+  - first:
+      1: 100010
+    second: ParrotLArm2
+  - first:
+      1: 100012
+    second: ParrotLLeg1
+  - first:
+      1: 100014
+    second: ParrotLLeg2
+  - first:
+      1: 100016
+    second: ParrotLLegAnkle
+  - first:
+      1: 100018
+    second: ParrotNeck
+  - first:
+      1: 100020
+    second: ParrotPelvis
+  - first:
+      1: 100022
+    second: ParrotRArm1
+  - first:
+      1: 100024
+    second: ParrotRArm2
+  - first:
+      1: 100026
+    second: ParrotRLeg1
+  - first:
+      1: 100028
+    second: ParrotRLeg2
+  - first:
+      1: 100030
+    second: ParrotRLegAnkle
+  - first:
+      1: 100032
+    second: ParrotSpine1
+  - first:
+      1: 100034
+    second: ParrotSpine2
+  - first:
+      4: 400000
+    second: Parrot_004
+  - first:
+      4: 400002
+    second: //RootNode
+  - first:
+      4: 400004
+    second: ParrotChest
+  - first:
+      4: 400006
+    second: ParrotHead
+  - first:
+      4: 400008
+    second: ParrotLArm1
+  - first:
+      4: 400010
+    second: ParrotLArm2
+  - first:
+      4: 400012
+    second: ParrotLLeg1
+  - first:
+      4: 400014
+    second: ParrotLLeg2
+  - first:
+      4: 400016
+    second: ParrotLLegAnkle
+  - first:
+      4: 400018
+    second: ParrotNeck
+  - first:
+      4: 400020
+    second: ParrotPelvis
+  - first:
+      4: 400022
+    second: ParrotRArm1
+  - first:
+      4: 400024
+    second: ParrotRArm2
+  - first:
+      4: 400026
+    second: ParrotRLeg1
+  - first:
+      4: 400028
+    second: ParrotRLeg2
+  - first:
+      4: 400030
+    second: ParrotRLegAnkle
+  - first:
+      4: 400032
+    second: ParrotSpine1
+  - first:
+      4: 400034
+    second: ParrotSpine2
+  - first:
+      43: 4300000
+    second: Parrot_004
+  - first:
+      95: 9500000
+    second: //RootNode
+  - first:
+      137: 13700000
+    second: Parrot_004
   externalObjects:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: 'Material #70689'
+      name: Material #70689
     second: {fileID: 2100000, guid: 8093e4db4042b8f4da51f985133f19c4, type: 2}
   materials:
-    importMaterials: 0
+    materialImportMode: 0
     materialName: 0
     materialSearch: 1
     materialLocation: 0
@@ -60,14 +143,14 @@ ModelImporter:
     bakeSimulation: 0
     resampleCurves: 1
     optimizeGameObjects: 0
+    removeConstantScaleCurves: 0
     motionNodeName: 
-    rigImportErrors: 
-    rigImportWarnings: 
     animationImportErrors: 
     animationImportWarnings: 
     animationRetargetingWarnings: 
     animationDoRetargetingWarnings: 0
     importAnimatedCustomProperties: 0
+    importConstraints: 0
     animationCompression: 1
     animationRotationError: 0.5
     animationPositionError: 0.5
@@ -82,30 +165,52 @@ ModelImporter:
     globalScale: 1
     meshCompression: 0
     addColliders: 0
+    useSRGBMaterialColor: 1
+    sortHierarchyByName: 1
+    importPhysicalCameras: 0
     importVisibility: 1
     importBlendShapes: 1
     importCameras: 1
     importLights: 1
+    nodeNameCollisionStrategy: 0
+    fileIdsGeneration: 1
     swapUVChannels: 0
     generateSecondaryUV: 0
     useFileUnits: 1
-    optimizeMeshForGPU: 1
     keepQuads: 0
     weldVertices: 1
+    bakeAxisConversion: 0
+    preserveHierarchy: 0
+    skinWeightsMode: 0
+    maxBonesPerVertex: 4
+    minBoneWeight: 0.001
+    optimizeBones: 1
+    generateMeshLods: 0
+    meshLodGenerationFlags: 0
+    maximumMeshLod: -1
+    meshOptimizationFlags: -1
+    indexFormat: 0
     secondaryUVAngleDistortion: 8
     secondaryUVAreaDistortion: 15.000001
     secondaryUVHardAngle: 88
+    secondaryUVMarginMethod: 0
+    secondaryUVMinLightmapResolution: 40
+    secondaryUVMinObjectScale: 1
     secondaryUVPackMargin: 4
     useFileScale: 1
+    strictVertexDataChecks: 0
   tangentSpace:
     normalSmoothAngle: 60
     normalImportMode: 0
     tangentImportMode: 3
     normalCalculationMode: 4
+    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 1
+    blendShapeNormalImportMode: 1
+    normalSmoothingSource: 0
+  referencedClips: []
   importAnimation: 1
-  copyAvatar: 0
   humanDescription:
-    serializedVersion: 2
+    serializedVersion: 3
     human: []
     skeleton: []
     armTwist: 0.5
@@ -115,22 +220,20 @@ ModelImporter:
     armStretch: 0.05
     legStretch: 0.05
     feetSpacing: 0
+    globalScale: 0.01
     rootMotionBoneName: 
-    rootMotionBoneRotation: {x: 0, y: 0, z: 0, w: 1}
     hasTranslationDoF: 0
     hasExtraRoot: 0
     skeletonHasParents: 1
   lastHumanDescriptionAvatarSource: {instanceID: 0}
+  autoGenerateAvatarMappingIfUnspecified: 1
   animationType: 2
   humanoidOversampling: 1
+  avatarSetup: 1
+  addHumanoidExtraRootOnlyWhenUsingAvatar: 0
+  importBlendShapeDeformPercent: 0
+  remapMaterialsIfMaterialImportModeIsNone: 1
   additionalBone: 0
   userData: 
   assetBundleName: 
   assetBundleVariant: 
-AssetOrigin:
-  serializedVersion: 1
-  productId: 116307
-  packageName: Animated Lowpoly Pirates
-  packageVersion: 1.1
-  assetPath: Assets/Pirates/Models/Characters/parrot_01.FBX
-  uploadId: 247603

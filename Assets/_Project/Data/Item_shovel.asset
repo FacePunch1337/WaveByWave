@@ -25,10 +25,10 @@ MonoBehaviour:
   treasureExperience: 25
   upgradeStat: 0
   upgradeBonus: 0.1
-  worldVisualPrefab: {fileID: 1000, guid: 371dc58e6f9652939b57f53edabfd9e6, type: 3}
+  worldVisualPrefab: {fileID: 3692177591442134904, guid: b1aa177d21ad50528e945a3f9f76e12b, type: 3}
   restingEulerAngles: {x: 90, y: 0, z: 0}
   equipmentKind: 6
   overrideHeldPose: 1
   heldPosition: {x: 0.32, y: -0.5, z: 0.75}
-  heldEulerAngles: {x: -8.9, y: 0, z: -15}
-  heldScale: 0.65
+  heldEulerAngles: {x: 0, y: 0, z: 0}
+  heldScale: 1

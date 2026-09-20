@@ -13,8 +13,9 @@ namespace WaveByWave.Ships
     {
         [SerializeField] private ShipCannon[] cannons;
         [SerializeField] private GameObject waterSplashPrefab;
-        [SerializeField] private Material effectMaterial;
-        [SerializeField] private Material ballMaterial;
+        [SerializeField] private GameObject cannonProjectilePrefab;
+        [SerializeField] private GameObject cannonMuzzleEffectPrefab;
+        [SerializeField] private GameObject cannonImpactEffectPrefab;
         [SerializeField] private ShipTreasureChest treasureChest;
         [SerializeField] private LayerMask hitLayers = ~0;
         [SerializeField, Min(1f)] private float maximumHealth = 400f;
@@ -395,10 +396,11 @@ namespace WaveByWave.Ships
 
         [ClientRpc]
         private void ShotClientRpc(int index, int id, Vector3 origin, Vector3 velocity, Vector3 gravity, double started, float radius, float lifetime)
-            => CannonEffects.Shot(this, cannons[index], id, origin, velocity, gravity, started, radius, lifetime, ballMaterial, effectMaterial);
+            => CannonEffects.Shot(this, cannons[index], id, origin, velocity, gravity, started, lifetime,
+                cannonProjectilePrefab, cannonMuzzleEffectPrefab);
         [ClientRpc]
         private void ImpactClientRpc(int id, Vector3 point, Vector3 normal, bool water, bool show, double at)
-            => CannonEffects.Impact(this, id, point, normal, water, show, at, waterSplashPrefab, effectMaterial, ballMaterial);
+            => CannonEffects.Impact(this, id, point, normal, water, show, at, waterSplashPrefab, cannonImpactEffectPrefab);
 
         public void ApplyDamageServer(float amount)
         {

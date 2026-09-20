@@ -14,26 +14,26 @@ namespace WaveByWave.Ships
         private double _started, _impactAt;
         private float _lifetime;
         private bool _flashed, _impact, _water, _show;
-        private GameObject _splash;
-        private Material _effects, _debris;
+        private GameObject _muzzleEffect, _waterImpact, _groundImpact;
         private TrailRenderer _trail;
         private Renderer _renderer;
 
         public void Initialize(ShipCannonBattery battery, ShipCannon cannon, int id, Vector3 origin, Vector3 velocity, Vector3 gravity,
-            double started, float lifetime, Material effects)
+            double started, float lifetime, GameObject muzzleEffect)
         {
             _battery = battery; _cannon = cannon; _id = id; _origin = origin; _velocity = velocity; _gravity = gravity;
-            _started = started; _lifetime = lifetime; _effects = effects;
+            _started = started; _lifetime = lifetime; _muzzleEffect = muzzleEffect;
             _motion = battery.GetComponent<PlatformNetworkTransform>();
             _trail = GetComponent<TrailRenderer>();
             _renderer = GetComponent<Renderer>();
-            _renderer.enabled = false;
+            if (_renderer != null) _renderer.enabled = false;
+            if (_trail != null) _trail.emitting = false;
         }
         public void SetImpact(Vector3 point, Vector3 normal, bool water, bool show, double at,
-            GameObject splash, Material effects, Material debris)
+            GameObject waterImpact, GameObject groundImpact)
         {
             _impact = true; _hitPoint = point; _normal = normal; _water = water; _show = show;
-            _impactAt = at; _splash = splash; _effects = effects; _debris = debris;
+            _impactAt = at; _waterImpact = waterImpact; _groundImpact = groundImpact;
         }
         private void LateUpdate()
         {
@@ -47,14 +47,13 @@ namespace WaveByWave.Ships
                 _flashed = true;
                 var muzzle = _cannon != null ? _cannon.Muzzle : null;
                 CannonEffects.Muzzle(muzzle != null ? muzzle.position : _origin,
-                    muzzle != null ? muzzle.forward : _velocity.normalized, _effects);
-                _renderer.enabled = true;
-                _trail.Clear();
-                _trail.emitting = true;
+                    muzzle != null ? muzzle.forward : _velocity.normalized, _muzzleEffect);
+                if (_renderer != null) _renderer.enabled = true;
+                if (_trail != null) { _trail.Clear(); _trail.emitting = true; }
             }
             if (_impact && now >= _impactAt)
             {
-                if (_show) CannonEffects.Hit(_hitPoint, _normal, _water, _splash, _effects, _debris);
+                if (_show) CannonEffects.Hit(_hitPoint, _normal, _water, _waterImpact, _groundImpact);
                 Destroy(gameObject);
             }
             else if (age > _lifetime + 2f) Destroy(gameObject);

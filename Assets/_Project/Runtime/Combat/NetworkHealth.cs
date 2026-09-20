@@ -30,6 +30,8 @@ namespace WaveByWave.Combat
 
         [Header("Presentation")]
         [SerializeField] private Transform visualRoot;
+        [SerializeField, Tooltip("Prefab белой пыли смерти. Визуал и ParticleSystem настраиваются только в prefab.")]
+        private GameObject deathDustPrefab;
         [SerializeField, Min(0.25f)] private float worldBarHeight = 2.15f;
 
         private readonly NetworkVariable<float> _health = new(100f);
@@ -229,7 +231,15 @@ namespace WaveByWave.Combat
         private void ApplyDeadPresentation(bool dead, bool playEffect)
         {
             if (playEffect && IsClient)
-                DeathDustBurst.Create(GetEffectCenter(), GetEffectScale());
+            {
+                if (deathDustPrefab != null)
+                {
+                    var effect = Instantiate(deathDustPrefab, GetEffectCenter(), Quaternion.identity);
+                    if (effect.TryGetComponent<DeathDustBurst>(out var burst)) burst.Play(GetEffectScale());
+                    else Destroy(effect, 2f);
+                }
+                else Debug.LogError("NetworkHealth requires a death dust prefab.", this);
+            }
 
             foreach (var state in _renderers)
             {

@@ -1,40 +1,89 @@
 fileFormatVersion: 2
 guid: ea58ef5df5b57ee4ab89a10eb6e101a7
-timeCreated: 1523009267
-licenseType: Store
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Models/Hair/NPC_Hair_002.fbx
+  uploadId: 247603
 ModelImporter:
-  serializedVersion: 22
-  fileIDToRecycleName:
-    100000: CATHead
-    100002: CATNeck
-    100004: CATPelvis
-    100006: CATSpine1
-    100008: CATSpine2
-    100010: CATSpine3
-    100012: Head_slot
-    100014: //RootNode
-    100016: NPC_Hair_002
-    400000: CATHead
-    400002: CATNeck
-    400004: CATPelvis
-    400006: CATSpine1
-    400008: CATSpine2
-    400010: CATSpine3
-    400012: Head_slot
-    400014: //RootNode
-    400016: NPC_Hair_002
-    2300000: NPC_Hair_002
-    3300000: NPC_Hair_002
-    4300000: NPC_Hair_002
-    9500000: //RootNode
+  serializedVersion: 24200
+  internalIDToNameTable:
+  - first:
+      1: 100000
+    second: CATHead
+  - first:
+      1: 100002
+    second: CATNeck
+  - first:
+      1: 100004
+    second: CATPelvis
+  - first:
+      1: 100006
+    second: CATSpine1
+  - first:
+      1: 100008
+    second: CATSpine2
+  - first:
+      1: 100010
+    second: CATSpine3
+  - first:
+      1: 100012
+    second: Head_slot
+  - first:
+      1: 100014
+    second: //RootNode
+  - first:
+      1: 100016
+    second: NPC_Hair_002
+  - first:
+      4: 400000
+    second: CATHead
+  - first:
+      4: 400002
+    second: CATNeck
+  - first:
+      4: 400004
+    second: CATPelvis
+  - first:
+      4: 400006
+    second: CATSpine1
+  - first:
+      4: 400008
+    second: CATSpine2
+  - first:
+      4: 400010
+    second: CATSpine3
+  - first:
+      4: 400012
+    second: Head_slot
+  - first:
+      4: 400014
+    second: //RootNode
+  - first:
+      4: 400016
+    second: NPC_Hair_002
+  - first:
+      23: 2300000
+    second: NPC_Hair_002
+  - first:
+      33: 3300000
+    second: NPC_Hair_002
+  - first:
+      43: 4300000
+    second: NPC_Hair_002
+  - first:
+      95: 9500000
+    second: //RootNode
   externalObjects:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: 'Material #70706'
+      name: Material #70706
     second: {fileID: 2100000, guid: bff87c869ec3d2a4dae258d57bd77eaf, type: 2}
   materials:
-    importMaterials: 0
+    materialImportMode: 0
     materialName: 0
     materialSearch: 1
     materialLocation: 0
@@ -43,14 +92,14 @@ ModelImporter:
     bakeSimulation: 0
     resampleCurves: 1
     optimizeGameObjects: 0
+    removeConstantScaleCurves: 0
     motionNodeName: 
-    rigImportErrors: 
-    rigImportWarnings: 
     animationImportErrors: 
     animationImportWarnings: 
     animationRetargetingWarnings: 
     animationDoRetargetingWarnings: 0
     importAnimatedCustomProperties: 0
+    importConstraints: 0
     animationCompression: 1
     animationRotationError: 0.5
     animationPositionError: 0.5
@@ -65,30 +114,52 @@ ModelImporter:
     globalScale: 1
     meshCompression: 0
     addColliders: 0
+    useSRGBMaterialColor: 1
+    sortHierarchyByName: 1
+    importPhysicalCameras: 0
     importVisibility: 1
     importBlendShapes: 1
     importCameras: 1
     importLights: 1
+    nodeNameCollisionStrategy: 0
+    fileIdsGeneration: 1
     swapUVChannels: 0
     generateSecondaryUV: 0
     useFileUnits: 1
-    optimizeMeshForGPU: 1
     keepQuads: 0
     weldVertices: 1
+    bakeAxisConversion: 0
+    preserveHierarchy: 0
+    skinWeightsMode: 0
+    maxBonesPerVertex: 4
+    minBoneWeight: 0.001
+    optimizeBones: 1
+    generateMeshLods: 0
+    meshLodGenerationFlags: 0
+    maximumMeshLod: -1
+    meshOptimizationFlags: -1
+    indexFormat: 0
     secondaryUVAngleDistortion: 8
     secondaryUVAreaDistortion: 15.000001
     secondaryUVHardAngle: 88
+    secondaryUVMarginMethod: 0
+    secondaryUVMinLightmapResolution: 40
+    secondaryUVMinObjectScale: 1
     secondaryUVPackMargin: 4
     useFileScale: 1
+    strictVertexDataChecks: 0
   tangentSpace:
     normalSmoothAngle: 60
     normalImportMode: 0
     tangentImportMode: 3
     normalCalculationMode: 4
+    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 1
+    blendShapeNormalImportMode: 1
+    normalSmoothingSource: 0
+  referencedClips: []
   importAnimation: 0
-  copyAvatar: 1
   humanDescription:
-    serializedVersion: 2
+    serializedVersion: 3
     human:
     - boneName: CATPelvis
       humanName: Hips
@@ -338,265 +409,258 @@ ModelImporter:
       scale: {x: 1, y: 1, z: 1}
     - name: Bandana
       parentName: pirate_01(Clone)
-      position: {x: -0, y: 0.9031598, z: 0.0042749024}
+      position: {x: -0, y: 0.009031598, z: 0.00004274902}
       rotation: {x: 0.000000021855694, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Boot_Left
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.00000008146034, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Boot_Right
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.000000021855694, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Coat
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.000000021855694, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Earring_01
       parentName: pirate_01(Clone)
-      position: {x: -0.10773472, y: 0.8559453, z: 0.11402161}
+      position: {x: -0.0010773471, y: 0.008559453, z: 0.001140216}
       rotation: {x: -0.00000003774895, y: -0.000000029802322, z: -1.1250064e-15, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Earring_02
       parentName: pirate_01(Clone)
-      position: {x: -0.1611474, y: 0.8285169, z: -0.013952636}
+      position: {x: -0.0016114741, y: 0.0082851695, z: -0.00013952635}
       rotation: {x: -0.5540323, y: -0.1484525, z: 0.21201216, w: 0.7912401}
       scale: {x: 1, y: 1, z: 1}
     - name: Eye_patch
       parentName: pirate_01(Clone)
-      position: {x: -0.0023683787, y: 0.82820326, z: -0.0010936547}
+      position: {x: -0.000023683786, y: 0.008282033, z: -0.000010936547}
       rotation: {x: 0.000000021855694, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Glove_Left
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.000000021855694, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Glove_Right
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.00000008146034, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Hand_Left
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.000000021855694, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Hand_Right
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.00000008146034, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Hat
       parentName: pirate_01(Clone)
-      position: {x: -0.08713089, y: 0.9365384, z: 0.0120822}
+      position: {x: -0.0008713089, y: 0.009365384, z: 0.00012082199}
       rotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071068}
       scale: {x: 1, y: 1, z: 1}
     - name: Hat_02
       parentName: pirate_01(Clone)
-      position: {x: -0.000000009536743, y: 0.939893, z: -0.0012431049}
+      position: {x: -9.536742e-11, y: 0.00939893, z: -0.000012431049}
       rotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071068}
       scale: {x: 1, y: 1, z: 1}
     - name: Hook_Left
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.00000008146034, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Hook_Right
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.000000021855694, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Leg_Left
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.000000021855694, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Leg_Right
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.00000008146034, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: NPC_Man_Normal
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.000000021855694, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Sack
       parentName: pirate_01(Clone)
-      position: {x: 0.19881698, y: 0.3108784, z: -0.018085934}
+      position: {x: 0.0019881697, y: 0.0031087839, z: -0.00018085934}
       rotation: {x: 0.000000021337625, y: 0.000000004730438, z: 0.21643962, w: 0.976296}
       scale: {x: 1, y: 1, z: 1}
     - name: Wooden_Leg_Left
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.00000008146034, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Wooden_Leg_Right
       parentName: pirate_01(Clone)
-      position: {x: -0.000000003052692, y: 0.45537773, z: -0.021820744}
+      position: {x: -3.052692e-11, y: 0.0045537776, z: -0.00021820744}
       rotation: {x: 0.00000008146034, y: 0, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: CATPelvis
       parentName: pirate_01(Clone)
-      position: {x: 1.4253037e-14, y: 0.27647597, z: -0.00000005748322}
+      position: {x: 1.4253037e-16, y: 0.0027647598, z: -5.748322e-10}
       rotation: {x: 0.5, y: -0.5, z: -0.50000006, w: 0.50000006}
       scale: {x: 1, y: 1, z: 1}
     - name: CATSpine1
       parentName: CATPelvis
-      position: {x: -0.037385575, y: 0.0000000077250615, z: 7.455798e-16}
+      position: {x: -0.0003738558, y: 7.725061e-11, z: 7.4557974e-18}
       rotation: {x: -7.105422e-15, y: 2.5571742e-14, z: 7.1054274e-15, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: CATSpine2
       parentName: CATSpine1
-      position: {x: -0.14499623, y: 0, z: -2.0651796e-15}
+      position: {x: -0.0014499623, y: 0, z: -2.0651796e-17}
       rotation: {x: 7.1054274e-15, y: -7.121491e-15, z: -7.1054274e-15, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: CATSpine3
       parentName: CATSpine2
-      position: {x: -0.11852554, y: -4.5474734e-15, z: -1.688157e-15}
+      position: {x: -0.0011852554, y: -4.547473e-17, z: -1.688157e-17}
       rotation: {x: 0, y: -3.2693236e-14, z: -0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Backet_Bone
       parentName: CATSpine3
-      position: {x: 0.06838997, y: -0.25794137, z: -0.0006362323}
+      position: {x: 0.0006838996, y: -0.0025794136, z: -0.000006362323}
       rotation: {x: -8.981368e-21, y: -5.148539e-15, z: 0.00000006067547, w: 1}
       scale: {x: 1.0483751, y: 1.0483747, z: 1.0483749}
     - name: CATLClavicle
       parentName: CATSpine3
-      position: {x: -0, y: 0, z: 0.052176174}
+      position: {x: -0, y: 0, z: 0.0005217617}
       rotation: {x: 0.052169457, y: 0.7051797, z: 0.052169457, w: 0.70517963}
       scale: {x: 1, y: 1, z: 1}
     - name: CATLArm
       parentName: CATLClavicle
-      position: {x: -0.08832425, y: -0.0000000017881393, z: 0}
+      position: {x: -0.0008832425, y: -1.7881393e-11, z: 0}
       rotation: {x: -0.0011057897, y: -0.003902556, z: -0.07458795, w: 0.9972062}
       scale: {x: 0.99999994, y: 1, z: 1}
     - name: CATLForearm
       parentName: CATLArm
-      position: {x: -0.18256, y: -0.0000000011920929, z: 0}
+      position: {x: -0.0018255999, y: -1.1920928e-11, z: 0}
       rotation: {x: 0.0015235877, y: 0.00952856, z: 0.009854072, w: 0.99990493}
       scale: {x: 0.99999994, y: 1.0000001, z: 1}
     - name: CATLHand
       parentName: CATLForearm
-      position: {x: -0.15997232, y: 5.9604643e-10, z: 0}
+      position: {x: -0.0015997231, y: 5.960464e-12, z: 0}
       rotation: {x: 0.7071971, y: 0.0033390592, z: -0.018259693, w: 0.7067727}
       scale: {x: 0.99999994, y: 1, z: 1.0000001}
     - name: CATLFingers1
       parentName: CATLHand
-      position: {x: -0.070364, y: -0.0029349518, z: 0.0001963532}
-      rotation: {x: -0.00000006059418, y: 0.000000031039235, z: 0.00000001676381,
-        w: 1}
+      position: {x: -0.00070364, y: -0.00002934952, z: 0.000001963532}
+      rotation: {x: -0.00000006059418, y: 0.000000031039235, z: 0.00000001676381, w: 1}
       scale: {x: 0.99999994, y: 0.99999994, z: 1.0000001}
     - name: CATLFingers2
       parentName: CATLFingers1
-      position: {x: -0.061029546, y: 0, z: 0.0000000035762786}
-      rotation: {x: -0.00000006059418, y: 0.000000031039235, z: 0.00000001676381,
-        w: 1}
+      position: {x: -0.00061029545, y: 0, z: 3.5762785e-11}
+      rotation: {x: -0.00000006059418, y: 0.000000031039235, z: 0.00000001676381, w: 1}
       scale: {x: 0.99999994, y: 0.99999994, z: 1.0000001}
     - name: CATLThumb1
       parentName: CATLHand
-      position: {x: -0.047959592, y: 0.007909317, z: -0.065875545}
+      position: {x: -0.00047959594, y: 0.00007909316, z: -0.0006587554}
       rotation: {x: 0.054736063, y: -0.44377106, z: -0.006676881, w: 0.8944421}
       scale: {x: 1, y: 0.99999994, z: 0.9999999}
     - name: CATLThumb2
       parentName: CATLThumb1
-      position: {x: -0.03703453, y: -0.000000038146972, z: 0}
+      position: {x: -0.00037034528, y: -3.814697e-10, z: 0}
       rotation: {x: -0.015659856, y: 0.12939176, z: -0.0070437677, w: 0.9914449}
       scale: {x: 1, y: 1, z: 0.99999994}
     - name: CATRClavicle
       parentName: CATSpine3
-      position: {x: -0, y: 0, z: -0.052176174}
+      position: {x: -0, y: 0, z: -0.0005217617}
       rotation: {x: -0.052169457, y: -0.7051797, z: 0.052169457, w: 0.70517963}
       scale: {x: 1, y: 1, z: 1}
     - name: CATRArm
       parentName: CATRClavicle
-      position: {x: -0.08832425, y: 0, z: 0}
+      position: {x: -0.0008832425, y: 0, z: 0}
       rotation: {x: 0.0011057833, y: 0.0039024684, z: -0.074587956, w: 0.9972062}
       scale: {x: 1, y: 1, z: 1}
     - name: CATRForearm
       parentName: CATRArm
-      position: {x: -0.18255997, y: -0.0000000011920929, z: 0}
+      position: {x: -0.0018255997, y: -1.1920928e-11, z: 0}
       rotation: {x: -0.0015235877, y: -0.009528559, z: 0.009854072, w: 0.99990493}
       scale: {x: 0.99999994, y: 1.0000001, z: 1}
     - name: CATRHand
       parentName: CATRForearm
-      position: {x: -0.15997234, y: 0.0000000011920929, z: 0}
+      position: {x: -0.0015997234, y: 1.1920928e-11, z: 0}
       rotation: {x: -0.7071971, y: -0.0033390585, z: -0.018259693, w: 0.7067727}
       scale: {x: 0.99999994, y: 1, z: 1.0000001}
     - name: CATRThumb1
       parentName: CATRHand
-      position: {x: -0.047959633, y: 0.007909278, z: 0.065875545}
+      position: {x: -0.00047959635, y: 0.00007909279, z: 0.0006587554}
       rotation: {x: -0.054735772, y: 0.44377065, z: -0.0066761365, w: 0.8944423}
       scale: {x: 0.99999994, y: 0.99999994, z: 1}
     - name: CATRThumb2
       parentName: CATRThumb1
-      position: {x: -0.03703453, y: -0.000000038146972, z: 0}
+      position: {x: -0.00037034528, y: -3.814697e-10, z: 0}
       rotation: {x: 0.015659867, y: -0.12939179, z: -0.007043756, w: 0.9914449}
       scale: {x: 0.9999998, y: 0.99999994, z: 1.0000001}
     - name: CATRFingers1
       parentName: CATRHand
-      position: {x: -0.07036396, y: -0.0029349898, z: -0.00019635439}
+      position: {x: -0.00070363964, y: -0.000029349898, z: -0.0000019635438}
       rotation: {x: 0.0000000607106, y: -0.00000003103196, z: 0.00000001676381, w: 1}
       scale: {x: 0.99999994, y: 0.99999994, z: 1.0000001}
     - name: CATRFingers2
       parentName: CATRFingers1
-      position: {x: -0.061029546, y: 0, z: -0.0000000047683715}
+      position: {x: -0.00061029545, y: 0, z: -4.768371e-11}
       rotation: {x: 0.0000000607106, y: -0.00000003103196, z: 0.00000001676381, w: 1}
       scale: {x: 0.99999994, y: 0.99999994, z: 1.0000001}
     - name: CATNeck
       parentName: CATSpine3
-      position: {x: -0.036628302, y: 0.0000000075685875, z: 7.3047687e-16}
+      position: {x: -0.000366283, y: 7.5685874e-11, z: 7.304769e-18}
       rotation: {x: -7.105422e-15, y: 2.5571742e-14, z: 7.1054274e-15, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: CATHead
       parentName: CATNeck
-      position: {x: -0.19393471, y: 0, z: -2.7622087e-15}
+      position: {x: -0.0019393471, y: 0, z: -2.7622087e-17}
       rotation: {x: 7.1054274e-15, y: -3.2693236e-14, z: -7.1054274e-15, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: Head_slot
       parentName: CATHead
-      position: {x: -0, y: 0.007279564, z: -0.00063627237}
+      position: {x: -0, y: 0.00007279564, z: -0.0000063627235}
       rotation: {x: 6.8083316e-25, y: -1.7817527e-16, z: 0.000000003821143, w: 1}
       scale: {x: 1.048375, y: 1.0483748, z: 1.0483749}
     - name: NPC_Hair_001
       parentName: Head_slot
       position: {x: -0, y: 0, z: 0}
-      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139,
-        w: 1}
+      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: NPC_Hair_002
       parentName: Head_slot
       position: {x: -0, y: 0, z: 0}
-      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139,
-        w: 1}
+      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: NPC_Hair_003
       parentName: Head_slot
       position: {x: -0, y: 0, z: 0}
-      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139,
-        w: 1}
+      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: NPC_Hair_004
       parentName: Head_slot
       position: {x: -0, y: 0, z: 0}
-      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139,
-        w: 1}
+      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: NPC_Hair_005
       parentName: Head_slot
-      position: {x: -0.00013153076, y: 0, z: 0}
+      position: {x: -0.0000013153076, y: 0, z: 0}
       rotation: {x: 1.4210855e-14, y: 3.3881318e-21, z: -7.1054274e-15, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: NPC_Hair_006
       parentName: Head_slot
       position: {x: -0, y: 0, z: 0}
-      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139,
-        w: 1}
+      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: NPC_Hair_007
       parentName: Head_slot
@@ -606,57 +670,56 @@ ModelImporter:
     - name: NPC_Hair_008
       parentName: Head_slot
       position: {x: -0, y: 0, z: 0}
-      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139,
-        w: 1}
+      rotation: {x: 0.000000043711392, y: -0.000000043711395, z: -0.00000004371139, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: CATRThigh
       parentName: CATPelvis
-      position: {x: 0.05381567, y: -0.00000002987478, z: -0.1050124}
+      position: {x: 0.0005381567, y: -2.987478e-10, z: -0.0010501241}
       rotation: {x: -0.01801298, y: 0.99364877, z: -0.04472803, w: -0.101671755}
       scale: {x: 0.9999999, y: 0.99999994, z: 1}
     - name: CATRCalf
       parentName: CATRThigh
-      position: {x: -0.08648798, y: 0.0000000011920929, z: 0}
+      position: {x: -0.0008648798, y: 1.1920928e-11, z: 0}
       rotation: {x: -0.09397187, y: -0.018590445, z: 0.051728602, w: 0.9940563}
       scale: {x: 1.0000002, y: 1.0000002, z: 1.0000001}
     - name: CATRFoot
       parentName: CATRCalf
-      position: {x: -0.1224128, y: 0, z: 0}
+      position: {x: -0.001224128, y: 0, z: 0}
       rotation: {x: 0.08856787, y: -0.028195264, z: -0.7239811, w: 0.6835292}
       scale: {x: 0.9999999, y: 0.9999999, z: 0.9999999}
     - name: CATRToe1
       parentName: CATRFoot
-      position: {x: -0.050501626, y: 0.0000000023841857, z: -0.000000009536743}
+      position: {x: -0.00050501624, y: 2.3841856e-11, z: -9.536742e-11}
       rotation: {x: -0.0000024676913, y: 0.00017253812, z: -0.013695065, w: 0.99990624}
       scale: {x: 1, y: 1, z: 1}
     - name: CATRToe2
       parentName: CATRToe1
-      position: {x: -0.022499999, y: 0, z: -0.000000009536743}
+      position: {x: -0.00022499998, y: 0, z: -9.536742e-11}
       rotation: {x: 1.1553136e-29, y: 1.6259594e-15, z: -7.1054274e-15, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: CATLThigh
       parentName: CATPelvis
-      position: {x: 0.05381567, y: -0.000000017533422, z: 0.10501245}
+      position: {x: 0.0005381567, y: -1.753342e-10, z: 0.0010501245}
       rotation: {x: -0.01805445, y: 0.99363136, z: 0.0451116, w: 0.10166485}
       scale: {x: 0.99999994, y: 1, z: 1.0000001}
     - name: CATLCalf
       parentName: CATLThigh
-      position: {x: -0.08648804, y: 0, z: 0}
+      position: {x: -0.00086488045, y: 0, z: 0}
       rotation: {x: 0.09384367, y: 0.01862485, z: 0.051516965, w: 0.99407876}
       scale: {x: 1.0000007, y: 1.0000001, z: 0.9999993}
     - name: CATLFoot
       parentName: CATLCalf
-      position: {x: -0.12241269, y: 0, z: -0.000000009536743}
+      position: {x: -0.0012241269, y: 0, z: -9.536742e-11}
       rotation: {x: -0.08833279, y: 0.028353957, z: -0.7238821, w: 0.68365794}
       scale: {x: 0.9999999, y: 1.0000017, z: 0.9999982}
     - name: CATRigLLegDigit11
       parentName: CATLFoot
-      position: {x: -0.050501626, y: 0, z: 0}
+      position: {x: -0.00050501624, y: 0, z: 0}
       rotation: {x: -0.00000023501899, y: 0.000026374284, z: -0.013564073, w: 0.99990803}
       scale: {x: 1, y: 1, z: 1}
     - name: CATRigLLegDigit12
       parentName: CATRigLLegDigit11
-      position: {x: -0.022499999, y: 0, z: -0.000000009536743}
+      position: {x: -0.00022499998, y: 0, z: -9.536742e-11}
       rotation: {x: 1.1553136e-29, y: 1.6259594e-15, z: -7.1054274e-15, w: 1}
       scale: {x: 1, y: 1, z: 1}
     armTwist: 0.5
@@ -666,23 +729,20 @@ ModelImporter:
     armStretch: 0.05
     legStretch: 0.05
     feetSpacing: 0
+    globalScale: 0.01
     rootMotionBoneName: 
-    rootMotionBoneRotation: {x: 0, y: 0, z: 0, w: 1}
     hasTranslationDoF: 0
     hasExtraRoot: 1
     skeletonHasParents: 1
-  lastHumanDescriptionAvatarSource: {fileID: 9000000, guid: 512f899b28a3f7144959a1005f63dc8c,
-    type: 3}
+  lastHumanDescriptionAvatarSource: {fileID: 9000000, guid: 512f899b28a3f7144959a1005f63dc8c, type: 3}
+  autoGenerateAvatarMappingIfUnspecified: 1
   animationType: 3
   humanoidOversampling: 1
+  avatarSetup: 2
+  addHumanoidExtraRootOnlyWhenUsingAvatar: 0
+  importBlendShapeDeformPercent: 0
+  remapMaterialsIfMaterialImportModeIsNone: 1
   additionalBone: 0
   userData: 
   assetBundleName: 
   assetBundleVariant: 
-AssetOrigin:
-  serializedVersion: 1
-  productId: 116307
-  packageName: Animated Lowpoly Pirates
-  packageVersion: 1.1
-  assetPath: Assets/Pirates/Models/Hair/NPC_Hair_002.fbx
-  uploadId: 247603

@@ -12,7 +12,7 @@ namespace WaveByWave.Player
         private PlayerEquipment _equipment;
         private NetworkPlayerController _player;
         private PlayerInventory _inventory;
-        private Transform _rig, _motion, _item, _rightHand, _leftHand, _rightSleeve, _leftSleeve;
+        private Transform _rig, _motion, _itemPose, _item, _rightHand, _leftHand, _rightSleeve, _leftSleeve;
         private Transform _bodyVisual;
         private Animator _animator;
         private Transform _rightUpper, _rightLower, _rightBone, _leftUpper, _leftLower, _leftBone;
@@ -21,7 +21,6 @@ namespace WaveByWave.Player
         private ItemDefinition _definition;
         private Camera _camera;
         private float _fov, _aimBlend, _blockBlend, _blockHitUntil;
-        private Material _ropeMaterial;
         private bool _initialized;
         // Remote look direction arrives over the network at a throttled, non-interpolated rate;
         // smoothing it locally removes the visible stepping when the owner turns their camera.
@@ -85,44 +84,43 @@ namespace WaveByWave.Player
                     _leftBone = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
                 }
             }
-            var ropeObject = new GameObject("Hook rope", typeof(LineRenderer));
-            ropeObject.transform.SetParent(_rig, false);
-            _rope = ropeObject.GetComponent<LineRenderer>(); _rope.useWorldSpace = true; _rope.positionCount = 16;
-            _rope.startWidth = _rope.endWidth = 0.018f;
-            _rope.generateLightingData = true; _rope.shadowCastingMode = ShadowCastingMode.Off; _rope.receiveShadows = false;
-            _rope.startColor = _rope.endColor = new Color(0.62f, 0.45f, 0.25f);
-            var shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader == null) shader = Shader.Find("Sprites/Default");
-            _ropeMaterial = _equipment.MetalMaterial != null ? new Material(_equipment.MetalMaterial) : new Material(shader);
-            _ropeMaterial.SetColor("_BaseColor", new Color(0.62f, 0.45f, 0.25f));
-            if (_ropeMaterial.HasProperty("_Metallic")) _ropeMaterial.SetFloat("_Metallic", 0f);
-            if (_ropeMaterial.HasProperty("_Smoothness")) _ropeMaterial.SetFloat("_Smoothness", 0.2f);
-            _rope.sharedMaterial = _ropeMaterial; _rope.enabled = false;
+            if (_equipment.HookRopePrefab != null)
+            {
+                var ropeObject = Instantiate(_equipment.HookRopePrefab, _rig, false);
+                _rope = ropeObject.GetComponentInChildren<LineRenderer>(true);
+            }
+            if (_rope == null)
+                Debug.LogError("PlayerEquipment requires a hook rope prefab with LineRenderer.", _equipment);
+            else _rope.enabled = false;
             _initialized = true; return true;
         }
         private void SetItem(ItemDefinition definition)
         {
             _definition = definition;
-            if (_item != null) Destroy(_item.gameObject);
+            if (_itemPose != null) Destroy(_itemPose.gameObject);
             if (_hookVisual != null) Destroy(_hookVisual);
-            _item = null; _bucketWater = null; _hookVisual = null;
+            _itemPose = null; _item = null; _bucketWater = null; _hookVisual = null;
             if (definition == null || definition.WorldVisualPrefab == null) return;
-            _item = Instantiate(definition.WorldVisualPrefab, _motion).transform;
-            _item.name = "Held " + definition.Id;
-            ItemVisualUtility.SelectPreferredChild(_item.gameObject);
+            _itemPose = new GameObject("Held " + definition.Id).transform;
+            _itemPose.SetParent(_motion, false);
+            _item = ItemVisualUtility.InstantiatePresentation(definition.WorldVisualPrefab, _itemPose,
+                definition.DisplayName).transform;
             foreach (var collider in _item.GetComponentsInChildren<Collider>()) { collider.enabled = false; Destroy(collider); }
             foreach (var body in _item.GetComponentsInChildren<Rigidbody>()) Destroy(body);
             foreach (var renderer in _item.GetComponentsInChildren<Renderer>())
                 if (_equipment.IsOwner) renderer.shadowCastingMode = ShadowCastingMode.Off;
             if (definition.EquipmentKind == ItemEquipmentKind.Bucket)
             {
-                var water = GameObject.CreatePrimitive(PrimitiveType.Cylinder); water.name = "Bucket contents";
-                water.transform.SetParent(_item, false); water.transform.localPosition = new Vector3(0f, 0.15f, 0f);
-                water.transform.localScale = new Vector3(0.49f, 0.012f, 0.49f);
-                var collider = water.GetComponent<Collider>(); collider.enabled = false; Destroy(collider);
-                water.GetComponent<Renderer>().sharedMaterial = _equipment.EffectMaterial;
-                _bucketWater = water; water.SetActive(false);
+                var water = FindDescendant(_item, "Bucket contents");
+                _bucketWater = water != null ? water.gameObject : null;
+                if (_bucketWater != null) _bucketWater.SetActive(false);
             }
+        }
+        private static Transform FindDescendant(Transform root, string childName)
+        {
+            foreach (var child in root.GetComponentsInChildren<Transform>(true))
+                if (child.name == childName) return child;
+            return null;
         }
         public void BlockImpact() => _blockHitUntil = Time.unscaledTime + 0.2f;
         public Vector3 MuzzlePosition(Vector3 fallback) => _item != null && _definition != null &&
@@ -158,10 +156,10 @@ namespace WaveByWave.Player
                     Quaternion.LookRotation(_smoothedLook, source.up));
             }
             _aimBlend = Mathf.MoveTowards(_aimBlend, _equipment.IsAiming ? 1f : 0f, Time.unscaledDeltaTime * 7f);
-            _item.localPosition = definition.EquipmentKind == ItemEquipmentKind.Musket
+            _itemPose.localPosition = definition.EquipmentKind == ItemEquipmentKind.Musket
                 ? Vector3.Lerp(definition.HeldPosition, new Vector3(0f, -0.13f, 0.7f), _aimBlend) : definition.HeldPosition;
-            _item.localRotation = Quaternion.Euler(definition.HeldEulerAngles);
-            _item.localScale = Vector3.one * definition.HeldScale;
+            _itemPose.localRotation = Quaternion.Euler(definition.HeldEulerAngles);
+            _itemPose.localScale = Vector3.one * definition.HeldScale;
             _motion.localPosition = Vector3.zero; _motion.localRotation = Quaternion.identity; _motion.localScale = Vector3.one;
             _blockBlend = Mathf.MoveTowards(_blockBlend, _equipment.IsBlocking ? 1f : 0f, Time.unscaledDeltaTime * 7f);
             SampleMotion(definition);
@@ -273,12 +271,13 @@ namespace WaveByWave.Player
         {
             var active = definition.EquipmentKind == ItemEquipmentKind.Hook && _equipment.Hook.Phase != HookPhase.Stowed;
             _item.gameObject.SetActive(!active);
-            _rope.enabled = active;
+            if (_rope != null) _rope.enabled = active;
             if (!active) { if (_hookVisual != null) _hookVisual.SetActive(false); return; }
             if (_hookVisual == null)
             {
-                _hookVisual = Instantiate(definition.WorldVisualPrefab); _hookVisual.name = "Thrown hook";
-                _hookVisual.transform.localScale = Vector3.one * 0.35f;
+                _hookVisual = new GameObject("Thrown hook");
+                ItemVisualUtility.InstantiatePresentation(definition.WorldVisualPrefab, _hookVisual.transform,
+                    definition.DisplayName);
                 foreach (var collider in _hookVisual.GetComponentsInChildren<Collider>()) { collider.enabled = false; Destroy(collider); }
                 foreach (var body in _hookVisual.GetComponentsInChildren<Rigidbody>()) Destroy(body);
             }
@@ -291,6 +290,7 @@ namespace WaveByWave.Player
             _hookVisual.transform.rotation = velocity.sqrMagnitude > 0.001f
                 ? Quaternion.LookRotation(velocity) * Quaternion.Euler(90f, 0f, 0f) : Quaternion.Euler(90f, 0f, 0f);
             var distance = Vector3.Distance(hand, end);
+            if (_rope == null) return;
             for (var i = 0; i < _rope.positionCount; i++)
             {
                 var t = i / (float)(_rope.positionCount - 1);
@@ -303,7 +303,6 @@ namespace WaveByWave.Player
             if (_camera != null) _camera.fieldOfView = _fov;
             if (_rig != null) Destroy(_rig.gameObject);
             if (_hookVisual != null) Destroy(_hookVisual);
-            if (_ropeMaterial != null) Destroy(_ropeMaterial);
         }
     }
 }

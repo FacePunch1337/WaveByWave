@@ -11,6 +11,9 @@
         "Unity.Burst",
         "Unity.Physics",
         "Unity.Netcode.Runtime",
+        "Unity.NetCode",
+        "Unity.NetCode.Authoring.Hybrid",
+        "Unity.Entities.Graphics",
         "Unity.Networking.Transport",
         "UnityEngine.UI",
         "sc.stylizedwater3.runtime"

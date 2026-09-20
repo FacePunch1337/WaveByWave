@@ -39,7 +39,8 @@ namespace WaveByWave.Items
         [SerializeField, Min(0)] private int treasureExperience = 25;
         [SerializeField] private ShipUpgradeStat upgradeStat;
         [SerializeField, Range(0f, 1f)] private float upgradeBonus = 0.1f;
-        [SerializeField] private GameObject worldVisualPrefab;
+        [SerializeField, Tooltip("Полный prefab предмета. Его authoredVisual используется в мире, в руках и при броске.")]
+        private GameObject worldVisualPrefab;
         [SerializeField, Tooltip("Поворот лежащей модели относительно поверхности, в градусах.")]
         private Vector3 restingEulerAngles;
         [Header("Предмет в руках")]
@@ -63,15 +64,10 @@ namespace WaveByWave.Items
             ItemEquipmentKind.Sword => new Vector3(0.32f, -0.12f, 0.78f),
             _ => new Vector3(0.34f, -0.32f, 0.65f)
         };
-        public Vector3 HeldEulerAngles => overrideHeldPose ? heldEulerAngles : EquipmentKind switch
-        {
-            ItemEquipmentKind.Musket => new Vector3(90f, 0f, 0f),
-            ItemEquipmentKind.Sword => new Vector3(-10f, 0f, -20f),
-            ItemEquipmentKind.Shovel => new Vector3(20f, 0f, -15f),
-            _ => Vector3.zero
-        };
-        public float HeldScale => overrideHeldPose ? Mathf.Max(0.01f, heldScale) :
-            EquipmentKind == ItemEquipmentKind.Carry ? 0.4f : 0.65f;
+        // Rotation and scale come from the prefab. These optional values are only an
+        // additional hand-pose offset for exceptional items.
+        public Vector3 HeldEulerAngles => overrideHeldPose ? heldEulerAngles : Vector3.zero;
+        public float HeldScale => overrideHeldPose ? Mathf.Max(0.01f, heldScale) : 1f;
 
         public string Id => id;
         public string DisplayName => displayName;

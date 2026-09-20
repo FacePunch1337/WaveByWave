@@ -1780,6 +1780,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 44dd247a00edbfa44b77868d755af6ea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Facepunch Transport for Netcode for GameObjects::Netcode.Transports.Facepunch.FacepunchTransport
+  virtualPort: 0
   steamAppId: 480
   targetSteamId: 0
   userSteamId: 0
@@ -4305,15 +4306,15 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 847310000000000001}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -5, y: 0.75, z: 5}
+  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: 7.4, y: 0.75, z: 1.89}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 847310000000000008}
   - {fileID: 847310000000000010}
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!33 &847310000000000003
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -4401,7 +4402,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4c9e715ea22b4c189fc59cc4723a7a04, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Customization.CustomizationStation
   station: {fileID: 847310000000000008}
   viewCamera: {fileID: 847310000000000011}
@@ -4463,7 +4464,7 @@ Transform:
   m_GameObject: {fileID: 847310000000000009}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.7, z: -4}
+  m_LocalPosition: {x: 0, y: 0.03, z: -4.49}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4530,7 +4531,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2

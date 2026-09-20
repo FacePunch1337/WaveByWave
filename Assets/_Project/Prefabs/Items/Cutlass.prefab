@@ -126,7 +126,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3202549757
+  GlobalObjectIdHash: 3424085920
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -153,7 +153,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaveByWave.Items.WorldItem
   ShowTopMostFoldoutHeaderGroup: 1
   catalog: {fileID: 11400000, guid: 2b563eb9625a0ab42b49b9db3e7db374, type: 2}
-  glowMaterial: {fileID: 2100000, guid: 30d99fca3b2241cc9ae092e9b3560506, type: 2}
+  rarityEffectPrefab: {fileID: 1815062955493659562, guid: 046ecc3506c35a444a2e8eeda156d260, type: 3}
   authoredVisual: {fileID: 8000000000000000000}
   initialItemId: cutlass
   initialAmount: 1
@@ -191,8 +191,33 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.y
       value: 90
       objectReference: {fileID: 0}
+    - target: {fileID: 2000, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2100, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2200, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2300, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2400, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 2400, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
+    - {fileID: 2300, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
+    - {fileID: 2200, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
+    - {fileID: 2100, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
+    - {fileID: 2000, guid: f89e44f3529a56afbc037b50c52199da, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: f89e44f3529a56afbc037b50c52199da, type: 3}

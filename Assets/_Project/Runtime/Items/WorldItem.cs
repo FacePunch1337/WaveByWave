@@ -11,8 +11,9 @@ namespace WaveByWave.Items
     public sealed class WorldItem : NetworkBehaviour, IPlayerInteractable
     {
         [SerializeField] private ItemCatalog catalog;
-        [SerializeField] private Material glowMaterial;
-        [SerializeField, Tooltip("Модель для предпросмотра готового префаба в редакторе. При сетевом спавне заменяется моделью из каталога.")]
+        [SerializeField, Tooltip("Prefab эффекта редкости. Луч, частицы и материал настраиваются в нём.")]
+        private GameObject rarityEffectPrefab;
+        [SerializeField, Tooltip("Авторский визуал этого prefab. Код не изменяет его локальные transform'ы.")]
         private GameObject authoredVisual;
         [SerializeField] private string initialItemId = "cannonball";
         [SerializeField, Min(1)] private int initialAmount = 1;
@@ -30,13 +31,19 @@ namespace WaveByWave.Items
         private PlatformNetworkTransform _supportMotion;
         private Bounds _modelBounds;
         private GameObject _visual;
+        private GameObject _rarityEffect;
 
         public FixedString64Bytes ItemId => _itemId.Value;
         public ushort Amount => _amount.Value;
         public ItemDefinition Definition => catalog != null && catalog.TryGet(ItemId.ToString(), out var item) ? item : null;
+        public GameObject AuthoredVisual => authoredVisual;
 
         private void Awake()
         {
+            // Rotation/scale authored on the item prefab describe its presentation. The
+            // NetworkObject root stays unit-scaled so placement, colliders and networking
+            // are not distorted; ItemVisualUtility applies those values to the visual clone.
+            transform.localScale = Vector3.one;
             // The collider is only a pickup target; it never pushes a character or ship.
             GetComponent<Collider>().isTrigger = true;
         }
@@ -278,16 +285,16 @@ namespace WaveByWave.Items
             _modelBounds = new Bounds(Vector3.zero, size);
             if (definition != null && definition.WorldVisualPrefab != null)
             {
-                var prefabRoot = definition.WorldVisualPrefab.transform;
                 var boundsRoot = ItemVisualUtility.GetBoundsRoot(definition.WorldVisualPrefab);
-                var rootMatrix = Matrix4x4.TRS(Vector3.zero, prefabRoot.localRotation, prefabRoot.localScale) *
-                                 prefabRoot.worldToLocalMatrix;
+                if (boundsRoot == null) return;
                 var initialized = false;
                 foreach (var filter in boundsRoot.GetComponentsInChildren<MeshFilter>(true))
                 {
                     if (filter.sharedMesh == null) continue;
                     var bounds = filter.sharedMesh.bounds;
-                    var matrix = rootMatrix * filter.transform.localToWorldMatrix;
+                    // Prefab asset transforms already contain both the item root pose and
+                    // every authored child override. Use them exactly as the presentation does.
+                    var matrix = filter.transform.localToWorldMatrix;
                     for (var corner = 0; corner < 8; corner++)
                     {
                         var point = matrix.MultiplyPoint3x4(BoundsCorner(bounds, corner));
@@ -329,9 +336,8 @@ namespace WaveByWave.Items
             if (original != null) original.enabled = false;
             if (definition.WorldVisualPrefab != null)
             {
-                _visual = Instantiate(definition.WorldVisualPrefab, transform);
-                _visual.transform.localPosition = Vector3.zero;
-                ItemVisualUtility.SelectPreferredChild(_visual);
+                _visual = ItemVisualUtility.InstantiatePresentation(definition.WorldVisualPrefab, transform,
+                    definition.DisplayName);
                 foreach (var collider in _visual.GetComponentsInChildren<Collider>()) collider.enabled = false;
                 foreach (var body in _visual.GetComponentsInChildren<Rigidbody>())
                 {
@@ -342,30 +348,17 @@ namespace WaveByWave.Items
             }
             else
             {
-                var round = definition.SupplyKind == SupplyKind.Cannonball || definition.SupplyKind == SupplyKind.Food;
-                _visual = GameObject.CreatePrimitive(round ? PrimitiveType.Sphere : PrimitiveType.Cube);
-                _visual.name = definition.DisplayName;
-                _visual.GetComponent<Collider>().enabled = false;
-                Destroy(_visual.GetComponent<Collider>());
-                _visual.transform.SetParent(transform, false);
-                _visual.transform.localScale = GetFallbackModelSize(definition);
-                var renderer = _visual.GetComponent<Renderer>();
-                renderer.sharedMaterial = original != null ? original.sharedMaterial : null;
-                var color = definition.SupplyKind switch
-                {
-                    SupplyKind.Cannonball => new Color(0.12f, 0.13f, 0.15f),
-                    SupplyKind.Plank => new Color(0.45f, 0.25f, 0.1f),
-                    SupplyKind.Food => new Color(0.85f, 0.15f, 0.08f),
-                    _ => definition.Category == ItemCategory.Treasure ? new Color(1f, 0.7f, 0.2f) : new Color(0.55f, 0.6f, 0.65f)
-                };
-                var block = new MaterialPropertyBlock();
-                block.SetColor("_BaseColor", color);
-                block.SetColor("_EmissionColor", definition.RarityColor * 0.15f);
-                renderer.SetPropertyBlock(block);
+                Debug.LogError($"Item '{definition.Id}' has no prefab assigned. Runtime geometry is intentionally not generated.", definition);
+                return;
             }
-            var glow = GetComponent<LootRarityGlow>();
-            if (glow == null) glow = gameObject.AddComponent<LootRarityGlow>();
-            glow.Initialize(definition.RarityColor, glowMaterial);
+            if (_rarityEffect != null) Destroy(_rarityEffect);
+            if (rarityEffectPrefab != null)
+            {
+                _rarityEffect = Instantiate(rarityEffectPrefab, transform, false);
+                if (_rarityEffect.TryGetComponent<LootRarityGlow>(out var glow))
+                    glow.Initialize(definition.RarityColor);
+                else Debug.LogError("Rarity effect prefab requires LootRarityGlow.", rarityEffectPrefab);
+            }
         }
 
         public void SetState(FixedString64Bytes itemId, ushort amount)

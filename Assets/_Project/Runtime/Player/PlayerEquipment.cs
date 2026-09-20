@@ -30,6 +30,13 @@ namespace WaveByWave.Player
         [SerializeField] private WaveProfile waterWaveProfile;
         [SerializeField] private Material metalMaterial, effectMaterial, handMaterial, sleeveMaterial;
         [SerializeField] private GameObject waterSplashPrefab;
+        [Header("Эффекты — только prefab")]
+        [SerializeField] private GameObject musketProjectilePrefab;
+        [SerializeField] private GameObject muzzleEffectPrefab;
+        [SerializeField] private GameObject weaponImpactEffectPrefab;
+        [SerializeField] private GameObject shovelDigEffectPrefab;
+        [SerializeField] private GameObject bucketPourEffectPrefab;
+        [SerializeField] private GameObject hookRopePrefab;
         [Header("Сабля и стамина")]
         [SerializeField, Min(1f)] private float maximumStamina = 100f;
         [SerializeField, Min(0f)] private float staminaRecovery = 18f, blockDrainPerSecond = 7f, swingStamina = 12f;
@@ -100,6 +107,7 @@ namespace WaveByWave.Player
         private double Now => NetworkManager.ServerTime.Time;
         public EquipmentMotionSet Motions => motions;
         public GameObject FirstPersonHandsPrefab => firstPersonHandsPrefab;
+        public GameObject HookRopePrefab => hookRopePrefab;
         public Material MetalMaterial => metalMaterial;
         public Material EffectMaterial => effectMaterial;
         public Material HandMaterial => handMaterial;
@@ -338,7 +346,7 @@ namespace WaveByWave.Player
             BuildAim(out var origin, out var direction, out var support);
             if (action == EquipmentAction.MusketShot && _player.OwnerView != null)
                 CannonEffects.Muzzle(_view != null ? _view.MuzzlePosition(_player.OwnerView.position + _player.OwnerView.forward * 0.8f)
-                    : _player.OwnerView.position + _player.OwnerView.forward * 0.8f, _player.OwnerView.forward, effectMaterial);
+                    : _player.OwnerView.position + _player.OwnerView.forward * 0.8f, _player.OwnerView.forward, muzzleEffectPrefab);
             ActionServerRpc(action, _inventory.SelectedIndex, _inventory.SelectionRevision, origin, direction, support);
         }
         private void BuildAim(out Vector3 origin, out Vector3 direction, out NetworkObjectReference supportReference)
@@ -774,24 +782,24 @@ namespace WaveByWave.Player
         private void ShotClientRpc(int id, Vector3 origin, Vector3 velocity, double started)
         {
             var visual = EquipmentProjectileVisual.Create(this, origin, velocity, bulletGravity, started,
-                bulletLifetime, bulletRadius, metalMaterial, effectMaterial);
-            _bulletVisuals[id] = visual;
+                bulletLifetime, musketProjectilePrefab);
+            if (visual != null) _bulletVisuals[id] = visual;
             if (!IsOwner)
-                CannonEffects.Muzzle(_view != null ? _view.MuzzlePosition(origin) : origin, velocity.normalized, effectMaterial);
+                CannonEffects.Muzzle(_view != null ? _view.MuzzlePosition(origin) : origin, velocity.normalized, muzzleEffectPrefab);
         }
         [ClientRpc]
         private void BulletImpactClientRpc(int id, Vector3 point, Vector3 normal, bool water, bool show, double at)
         {
             if (!_bulletVisuals.TryGetValue(id, out var visual)) return;
-            if (visual != null) visual.SetImpact(point, normal, water, show, at, waterSplashPrefab, effectMaterial, metalMaterial);
+            if (visual != null) visual.SetImpact(point, normal, water, show, at, waterSplashPrefab, weaponImpactEffectPrefab);
             _bulletVisuals.Remove(id);
         }
         [ClientRpc]
         private void ToolEffectClientRpc(Vector3 position, bool water)
-        { CannonEffects.Hit(position, Vector3.up, water, water ? waterSplashPrefab : null, effectMaterial, metalMaterial); }
+        { CannonEffects.Hit(position, Vector3.up, water, waterSplashPrefab, shovelDigEffectPrefab); }
         [ClientRpc]
         private void PourClientRpc(Vector3 origin, Vector3 direction)
-        { EquipmentProjectileVisual.CreateWaterPour(origin, direction, effectMaterial); }
+        { EquipmentProjectileVisual.CreateWaterPour(origin, direction, bucketPourEffectPrefab); }
         [ClientRpc]
         private void BlockClientRpc()
         { if (_view != null) _view.BlockImpact(); }

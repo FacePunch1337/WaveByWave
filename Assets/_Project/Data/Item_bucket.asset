@@ -19,10 +19,10 @@ MonoBehaviour:
   category: 1
   rarity: 0
   icon: {fileID: 0}
-  worldVisualPrefab: {fileID: 1000, guid: faf44d7f03c756cca7d20d40d6c03bae, type: 3}
+  worldVisualPrefab: {fileID: 3692177591442134904, guid: 1a5852af43565255897de645436cff7c, type: 3}
   restingEulerAngles: {x: 0, y: 0, z: 0}
   equipmentKind: 5
   overrideHeldPose: 1
   heldPosition: {x: 0.32, y: -0.43, z: 0.7}
   heldEulerAngles: {x: 0, y: 0, z: 0}
-  heldScale: 0.65
+  heldScale: 1

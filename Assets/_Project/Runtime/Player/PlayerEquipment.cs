@@ -596,7 +596,12 @@ namespace WaveByWave.Player
                 var hitPlayer = hit.collider.GetComponentInParent<NetworkPlayerController>();
                 if (hitPlayer == _player || !includeCombat && hitPlayer != null ||
                     hit.collider.GetComponentInParent<WorldItem>() != null || hit.collider.GetComponentInParent<WaterObject>() != null) continue;
-                if (ignoredShip != null && hit.collider.GetComponentInParent<NetworkObject>() == ignoredShip) continue;
+                // A ship can contain nested networked modules (cannons, capstan, controls).
+                // Component-in-parent would stop at such a child NetworkObject and fail to
+                // recognize the collider as part of the ship we intentionally ignore.
+                if (ignoredShip != null &&
+                    (hit.collider.transform == ignoredShip.transform ||
+                     hit.collider.transform.IsChildOf(ignoredShip.transform))) continue;
                 if (hit.distance >= best) continue;
                 best = hit.distance; result = hit;
             }
@@ -654,7 +659,7 @@ namespace WaveByWave.Player
         {
             var state = _hook.Value;
             if (state.Phase == HookPhase.Stowed) return;
-            var feet = FeetServer(out _);
+            var feet = FeetServer(out var playerSupport);
             var hand = feet + Vector3.up * 1.1f;
             if (state.Phase == HookPhase.Flying)
             {
@@ -723,7 +728,10 @@ namespace WaveByWave.Player
                 Vector3.Dot(hand - previous, hand - nextPosition) <= 0f)
                 nextPosition = hand;
             // Stop at intervening solid geometry, rather than pull loot through rocks or walls.
-            if (SegmentHit(previous + Vector3.up * 0.12f, nextPosition + Vector3.up * 0.12f, 0.05f, null, out var obstacle, out _))
+            // While reeling, the hook must cross the player's own hull/railings instead of being
+            // pushed back by them. Surface probes still see the deck and lift the cargo aboard.
+            if (SegmentHit(previous + Vector3.up * 0.12f, nextPosition + Vector3.up * 0.12f,
+                    0.05f, playerSupport, out var obstacle, out _))
             {
                 nextPosition = obstacle.point + obstacle.normal * 0.07f;
                 _hookReelVelocity = Vector3.zero;

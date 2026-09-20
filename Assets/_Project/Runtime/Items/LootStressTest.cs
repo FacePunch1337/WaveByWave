@@ -238,15 +238,28 @@ namespace WaveByWave.Items
         {
             if (hook == null || captured == null) return;
             var segment = to - from;
+            var radiusSquared = radius * radius;
             foreach (var pair in ServerItems)
             {
                 var item = pair.Value;
                 if (item.Hook != null) continue;
+
+                // Thousands of floating items must not each run a four-sample Gerstner query for
+                // every 1/60 s hook substep. X/Z cannot be changed by buoyancy, so reject almost
+                // the entire collection before refreshing the exact water height. Supported items
+                // use their current platform position; flying items still need their live arc pose.
+                if (item.Support != null)
+                    UpdateSupportedPose(item);
+                if (item.FlightDuration > 0f)
+                    UpdateItemPose(item);
+                var broadphasePosition = item.Support != null ? item.RestPosition : item.Position;
+                if (HorizontalSegmentDistanceSquared(broadphasePosition, from, to) > radiusSquared)
+                    continue;
+
                 UpdateItemPose(item);
                 var t = segment.sqrMagnitude > 0.00001f
                     ? Mathf.Clamp01(Vector3.Dot(item.Position - from, segment) / segment.sqrMagnitude) : 0f;
-                var distance = Vector3.Distance(item.Position, from + segment * t);
-                if (distance > radius) continue;
+                if ((item.Position - (from + segment * t)).sqrMagnitude > radiusSquared) continue;
                 item.Hook = hook;
                 item.FlightDuration = 0f;
                 item.RestPosition = item.Position;
@@ -257,6 +270,18 @@ namespace WaveByWave.Items
                 Broadcast(new LootStressDeltaCommand { Id = pair.Key, Kind = Tether,
                     HookOwner = hook.OwnerClientId, HookOffset = item.HookOffset });
             }
+        }
+
+        private static float HorizontalSegmentDistanceSquared(Vector3 point, Vector3 from, Vector3 to)
+        {
+            var segment = new Vector2(to.x - from.x, to.z - from.z);
+            var relative = new Vector2(point.x - from.x, point.z - from.z);
+            var lengthSquared = segment.sqrMagnitude;
+            var t = lengthSquared > 0.00001f
+                ? Mathf.Clamp01(Vector2.Dot(relative, segment) / lengthSquared)
+                : 0f;
+            var nearest = new Vector2(from.x, from.z) + segment * t;
+            return (new Vector2(point.x, point.z) - nearest).sqrMagnitude;
         }
 
         public static void ReleaseFromHookServer(int id, PlayerEquipment hook, Vector3 position, Quaternion rotation)

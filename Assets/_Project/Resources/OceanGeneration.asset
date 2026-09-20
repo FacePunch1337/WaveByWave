@@ -1,0 +1,120 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ecf6b62d59ca4d640adf47809d05292d, type: 3}
+  m_Name: OceanGeneration
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.OceanGenerationSettings
+  GenerateOceanLoot: 1
+  GenerateIslands: 1
+  WorldSeed: 481516
+  LootRadius: {x: 18, y: 65}
+  FloatingLootPerShip: 100
+  LootInterval: 0.5
+  LootPerInterval: 2
+  LootDespawnRadius: 100
+  LootFadeDuration: 1.2
+  FloatingLoot:
+  - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
+    Weight: 4
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 9a00d65fcb6b4c378994904efb11a804, type: 2}
+    Weight: 4
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
+    Weight: 4
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
+    Weight: 4
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 298a8c701dfa4681944fba4ebb0bc3b3, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: ab844d8473b14fbaa6827e333ad5bb11, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 1
+  IslandRadius: {x: 45, y: 130}
+  IslandsPerShip: 5
+  IslandDespawnRadius: 190
+  IslandSpacing: 20
+  SmallDiameter: 20
+  MediumDiameter: 40
+  LargeDiameter: 70
+  VoxelSize: 0.2
+  ChunkCells: 10
+  SandHeight: 1.8
+  SandDepth: 2.4
+  NoiseScale: 2.8
+  ShoreIrregularity: 0.22
+  GroundMaterial: {fileID: 2100000, guid: 8b3a34dd68c7dc244ba45307acec5e8c, type: 2}
+  IslandPrefab: {fileID: 29148112575775440, guid: fb82a6ce75c74264da2ed76ef944c0c7, type: 3}
+  ChunkPrefab: {fileID: 1578756271373071397, guid: 8f68b3ae05ee8e84e863ac787fd8deaf, type: 3}
+  Decorations:
+  - Prefab: {fileID: 718803082561174767, guid: 087d70cb3890af747b53f636742a587c, type: 3}
+    InstancesPerSquareMetre: 0.005
+    ScaleRange: {x: 0.55, y: 0.85}
+    MaximumSlope: 30
+    MinimumHeightAboveWater: 0.25
+    Spacing: 1.4
+    AlignToSurface: 0
+  - Prefab: {fileID: 1538027470874685010, guid: bdd2a5c95ae34574f9e6a41cc59cbf91, type: 3}
+    InstancesPerSquareMetre: 0.001
+    ScaleRange: {x: 0.25, y: 0.6}
+    MaximumSlope: 30
+    MinimumHeightAboveWater: 0.25
+    Spacing: 1.4
+    AlignToSurface: 0
+  DigRadius: 0.65
+  DigPenetration: 0.22
+  DigSmoothing: 0.45
+  MeshUploadsPerFrame: 2
+  BurialDepth: {x: 0.6, y: 1.6}
+  ChestCountSmall: {x: 1, y: 1}
+  ChestCountMedium: {x: 1, y: 2}
+  ChestCountLarge: {x: 1, y: 3}
+  BuriedChests:
+  - Item: {fileID: 11400000, guid: c393e52b7f7ac3a419c24f19a3f22cf2, type: 2}
+    Weight: 45
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 1ceb7f1ad0d9abd449fc89fb0af37ca0, type: 2}
+    Weight: 28
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: db92208a227c9a748b78786d60214446, type: 2}
+    Weight: 16
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: db6ac57e40c662f46998734d1df7f2db, type: 2}
+    Weight: 8
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: dcd90c158330b4d4aa9a2e4c36fac9a4, type: 2}
+    Weight: 3
+    MinimumAmount: 1
+    MaximumAmount: 1
+  BuriedMarkerPrefab: {fileID: 1754251648626121848, guid: d8da2295886fcae4ea7a979c4f72de7c, type: 3}
+  Catalog: {fileID: 11400000, guid: 2b563eb9625a0ab42b49b9db3e7db374, type: 2}
+  WaterProfile: {fileID: 11400000, guid: 343e9ebae18bc0f48811edac300d64d0, type: 2}
+  RarityEffectPrefab: {fileID: 1815062955493659562, guid: 046ecc3506c35a444a2e8eeda156d260, type: 3}

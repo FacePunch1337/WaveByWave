@@ -8,7 +8,8 @@ namespace WaveByWave.Items
         Tool,
         Treasure,
         ShipUpgrade,
-        Supply
+        Supply,
+        Chest
     }
 
     public enum ItemRarity : byte
@@ -58,6 +59,8 @@ namespace WaveByWave.Items
         private GameObject worldVisualPrefab;
         [SerializeField, Tooltip("Индивидуальный поворот выброшенной или заспавненной модели относительно поверхности, в градусах.")]
         private Vector3 restingEulerAngles;
+        [Header("Сундук")]
+        [SerializeField] private ChestLootTable chestLoot;
         [Header("Предмет в руках")]
         [SerializeField] private ItemEquipmentKind equipmentKind;
         [SerializeField] private bool overrideHeldPose;
@@ -109,6 +112,8 @@ namespace WaveByWave.Items
         public string DisplayName => displayName;
         public string Description => description;
         public ItemCategory Category => category;
+        public bool IsChest => category == ItemCategory.Chest && chestLoot != null;
+        public ChestLootTable ChestLoot => chestLoot;
         public ItemRarity Rarity => rarity;
         public Sprite Icon => icon;
         public int MaximumStack => Mathf.Clamp(maximumStack, 1, ushort.MaxValue);

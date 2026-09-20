@@ -41,6 +41,9 @@ namespace WaveByWave.Items
         public ulong SupportId;
         public float3 HookOffset;
         public bool OnWater;
+        public int IslandId;
+        public float FadeDuration;
+        public double OpeningAt;
     }
 
     // Client-side readiness and the server-side item lifetime are independent. A newly connected
@@ -58,7 +61,7 @@ namespace WaveByWave.Items
         public FixedString64Bytes SceneName;
     }
 
-    public static class LootStressTest
+    public static partial class LootStressTest
     {
         public const int MaximumCount = 3000;
         internal const byte Remove = 0, Place = 1, Tether = 2, Add = 3;
@@ -85,6 +88,9 @@ namespace WaveByWave.Items
             public NetworkObject Support;
             public Vector3 LocalPosition;
             public Quaternion LocalRotation;
+            public int IslandId;
+            public float FadeDuration;
+            public double OpeningAt;
         }
 
         private static readonly Dictionary<int, ServerItem> ServerItems = new(MaximumCount);
@@ -218,6 +224,7 @@ namespace WaveByWave.Items
             definition = null;
             position = default;
             if (_catalog == null || !ServerItems.TryGetValue(id, out var item) || item.Hook != null ||
+                item.OpeningAt > 0d || !IsExposed(item.IslandId, item.Position) ||
                 item.CatalogIndex < 0 || item.CatalogIndex >= _catalog.Items.Count) return false;
             definition = _catalog.Items[item.CatalogIndex];
             UpdateItemPose(item);
@@ -230,6 +237,7 @@ namespace WaveByWave.Items
             if (!ServerItems.Remove(id) || ClientServerBootstrap.ServerWorld is not { IsCreated: true } world)
                 return false;
             Send(world.EntityManager, new LootStressDeltaCommand { Id = id, Kind = Remove }, Entity.Null);
+            ServerItemRemoved?.Invoke(id);
             return true;
         }
 
@@ -242,7 +250,7 @@ namespace WaveByWave.Items
             foreach (var pair in ServerItems)
             {
                 var item = pair.Value;
-                if (item.Hook != null) continue;
+                if (item.Hook != null || item.OpeningAt > 0d) continue;
 
                 // Thousands of floating items must not each run a four-sample Gerstner query for
                 // every 1/60 s hook substep. X/Z cannot be changed by buoyancy, so reject almost
@@ -255,12 +263,17 @@ namespace WaveByWave.Items
                 var broadphasePosition = item.Support != null ? item.RestPosition : item.Position;
                 if (HorizontalSegmentDistanceSquared(broadphasePosition, from, to) > radiusSquared)
                     continue;
+                if (!IsExposed(item.IslandId, item.Position)) continue;
 
                 UpdateItemPose(item);
                 var t = segment.sqrMagnitude > 0.00001f
                     ? Mathf.Clamp01(Vector3.Dot(item.Position - from, segment) / segment.sqrMagnitude) : 0f;
                 if ((item.Position - (from + segment * t)).sqrMagnitude > radiusSquared) continue;
                 item.Hook = hook;
+                item.IslandId = 0;
+                // Claimed procedural loot leaves the generation budget immediately,
+                // even if the hook is released before the next pruning tick.
+                ServerItemRemoved?.Invoke(pair.Key);
                 item.FlightDuration = 0f;
                 item.RestPosition = item.Position;
                 item.Support = null;
@@ -327,6 +340,7 @@ namespace WaveByWave.Items
             _hasState = false;
             _sceneName = null;
             _nextDynamicId = -1;
+            OpeningChests.Clear();
         }
 
         internal static bool TryGetLatest(out LootStressCommand command)
@@ -414,7 +428,8 @@ namespace WaveByWave.Items
                 StartPosition = start, Position = item.RestPosition, Rotation = item.Rotation,
                 BaseRotation = item.BaseRotation, ArcUp = item.ArcUp, Duration = duration,
                 ArcHeight = duration > 0f ? item.ArcHeight : 0f, OnWater = item.OnWater,
-                SupportId = SupportWireId(item.Support)
+                SupportId = SupportWireId(item.Support),
+                IslandId = item.IslandId, FadeDuration = item.FadeDuration, OpeningAt = item.OpeningAt
             };
         }
 
@@ -742,7 +757,7 @@ namespace WaveByWave.Items
         private void OnDestroy() => LootStressPresentation.DriverDestroyed(this);
     }
 
-    internal static class LootStressPresentation
+    internal static partial class LootStressPresentation
     {
         private sealed class Variant
         {
@@ -784,6 +799,9 @@ namespace WaveByWave.Items
             public Vector3 HookOffset;
             public GameObject Effect;
             public DotsWorldItemPresentation DynamicPresentation;
+            public int IslandId;
+            public float FadeDuration;
+            public double OpeningAt;
         }
 
         private sealed class StressInteractable : IPlayerInteractable
@@ -973,7 +991,8 @@ namespace WaveByWave.Items
                     FallStarted = Time.timeAsDouble, Falling = delta.Duration > 0.001f,
                     OnWater = delta.OnWater, SupportId = delta.SupportId,
                     WaterTargetPosition = delta.Position, WaterTargetRotation = delta.Rotation,
-                    DynamicPresentation = presentation
+                    DynamicPresentation = presentation, IslandId = delta.IslandId,
+                    FadeDuration = delta.FadeDuration, OpeningAt = delta.OpeningAt
                 };
                 item.Support = ResolveSupport(delta.SupportId);
                 if (item.Support != null) SetSupport(item, item.Support);
@@ -982,6 +1001,9 @@ namespace WaveByWave.Items
                 SetPose(item);
                 return;
             }
+            if (delta.Kind == LootStressTest.ChestOpening) { item.OpeningAt = delta.OpeningAt; return; }
+            if (delta.Kind == LootStressTest.ChestBurst)
+            { PlayChestBurst(item); Destroy(item); Items.Remove(delta.Id); return; }
             if (delta.Kind == LootStressTest.Remove) { Destroy(item); Items.Remove(delta.Id); return; }
             if (delta.Kind == LootStressTest.Add)
             {
@@ -990,6 +1012,7 @@ namespace WaveByWave.Items
             }
             if (delta.Kind == LootStressTest.Tether)
             {
+                item.IslandId = 0;
                 item.HookOwner = delta.HookOwner;
                 item.HookOffset = delta.HookOffset;
                 item.Support = null;
@@ -1106,6 +1129,7 @@ namespace WaveByWave.Items
                     }
                 }
                 if (item.Effect != null) item.Effect.transform.position = item.Position;
+                if (item.OpeningAt > 0d || item.FadeDuration > 0f) UpdateChestAndFade(item);
             }
             UpdateWaterItems();
             UpdateFocusedPrompt();
@@ -1124,7 +1148,9 @@ namespace WaveByWave.Items
             target = null; rayDistance = float.PositiveInfinity; point = default;
             foreach (var item in Items.Values)
             {
-                if (item.HookOwner != ulong.MaxValue || (item.Position - playerPosition).sqrMagnitude > reach * reach) continue;
+                if (item.HookOwner != ulong.MaxValue || item.OpeningAt > 0d ||
+                    (item.Position - playerPosition).sqrMagnitude > reach * reach ||
+                    !LootStressTest.IsExposed(item.IslandId, item.Position)) continue;
                 var center = item.Position + item.Rotation * item.Variant.Offset;
                 var projection = Vector3.Dot(center - ray.origin, ray.direction);
                 if (projection < 0f || projection >= rayDistance) continue;
@@ -1257,8 +1283,10 @@ namespace WaveByWave.Items
             var camera = Camera.main;
             _prompt.transform.SetPositionAndRotation(item.Position + Vector3.up *
                 Mathf.Max(0.45f, item.Variant.Radius + 0.22f), camera.transform.rotation);
-            _promptName.text = item.Definition.DisplayName;
+            _promptName.text = item.Definition.DisplayName +
+                (item.Definition.IsChest ? "\n<size=12>E — взять · удерживай E — открыть</size>" : "");
             _promptName.color = item.Definition.RarityColor;
+            UpdateChestProgress(_focusedId);
         }
 
         internal static void DriverDestroyed(LootStressPresentationDriver driver)

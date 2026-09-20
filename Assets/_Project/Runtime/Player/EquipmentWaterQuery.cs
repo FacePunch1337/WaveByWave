@@ -12,6 +12,12 @@ namespace WaveByWave.Player
         private readonly HeightQuerySystem.Sampler _samples = new();
         public EquipmentWaterQuery(WaveProfile profile)
         { _water.waveProfile = profile; _samples.SetSampleCount(4, true); }
+        public bool TryWaterLevel(Vector3 point, out float level)
+        {
+            level = 0f;
+            if (_water.GetWaterObject(point) == null || _water.waterObject.material == null) return false;
+            level = _water.GetWaterLevel(); return true;
+        }
         public bool TryHeight(Vector3 point, out float height)
         {
             height = 0f;

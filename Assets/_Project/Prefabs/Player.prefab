@@ -514,6 +514,7 @@ MonoBehaviour:
   hookLiftHorizontalDistance: 0.9
   hookSurfaceHeightSpeed: 5
   hookReelAcceleration: 24
+  shovelDigDistance: 3.5
   bucketLitres: 10
   onWaterScooped:
     m_PersistentCalls:

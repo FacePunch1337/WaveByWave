@@ -29,6 +29,10 @@ namespace WaveByWave.Player
         private uint _selectionRevision;
         private uint _serverSelectionRevision;
         private NetworkHealth _health;
+        private int _localChest = int.MaxValue, _serverChest = int.MaxValue;
+        private float _localChestStarted, _nextChestHeartbeat;
+        private double _serverChestStarted, _serverChestHeartbeat;
+        private readonly RaycastHit[] _chestLineHits = new RaycastHit[32];
 
         public event Action Changed;
         public int Capacity => capacity;
@@ -78,6 +82,8 @@ namespace WaveByWave.Player
 
         private void Update()
         {
+            if (IsSpawned && IsServer) UpdateChestOpeningServer();
+            if (IsOwner && PlayerEquipment.InputCaptured) CancelLocalChestHold();
             if (!IsSpawned || !IsOwner || Keyboard.current == null || PlayerEquipment.InputCaptured)
                 return;
 
@@ -237,13 +243,85 @@ namespace WaveByWave.Player
             if (IsOwner) PickupStressItemServerRpc(id);
         }
 
+        public bool UpdateChestInteraction(IPlayerInteractable target, bool pressed, bool held, bool released)
+        {
+            var isChest = LootStressTest.TryClientTarget(target, out var id, out var definition) && definition.IsChest;
+            if (_localChest != int.MaxValue && (!isChest || _localChest != id || (!held && !released))) CancelLocalChestHold();
+            if (!isChest) return false;
+            if (pressed)
+            {
+                _localChest = id; _localChestStarted = Time.unscaledTime;
+                _nextChestHeartbeat = Time.unscaledTime + 0.15f;
+                ChestHoldServerRpc(id, true);
+            }
+            if (_localChest == id && held)
+            {
+                LootStressTest.SetChestHoldProgress(id, (Time.unscaledTime - _localChestStarted) /
+                    Mathf.Max(0.3f, definition.ChestLoot.HoldDuration));
+                if (Time.unscaledTime >= _nextChestHeartbeat)
+                { _nextChestHeartbeat = Time.unscaledTime + 0.15f; ChestHoldServerRpc(id, true); }
+            }
+            if (_localChest == id && released)
+            {
+                var tap = Time.unscaledTime - _localChestStarted < 0.25f;
+                CancelLocalChestHold();
+                if (tap) PickupStressItem(id);
+            }
+            return true;
+        }
+
+        private void CancelLocalChestHold()
+        {
+            if (_localChest == int.MaxValue) return;
+            if (IsSpawned) ChestHoldServerRpc(_localChest, false);
+            _localChest = int.MaxValue;
+            LootStressTest.SetChestHoldProgress(int.MaxValue, 0f);
+        }
+
+        [ServerRpc]
+        private void ChestHoldServerRpc(int id, bool holding)
+        {
+            if (!holding) { if (_serverChest == id) _serverChest = int.MaxValue; return; }
+            if (!LootStressTest.TryGetServerItem(id, out var definition, out var position) || !definition.IsChest ||
+                !CanReachChest(position) || (_health != null && _health.IsDead)) { _serverChest = int.MaxValue; return; }
+            var now = NetworkManager.ServerTime.Time;
+            if (_serverChest != id || now - _serverChestHeartbeat > 0.5d)
+            { _serverChest = id; _serverChestStarted = now; }
+            _serverChestHeartbeat = now;
+        }
+
+        private void UpdateChestOpeningServer()
+        {
+            if (_serverChest == int.MaxValue) return;
+            var now = NetworkManager.ServerTime.Time;
+            if (now - _serverChestHeartbeat > 0.5d || (_health != null && _health.IsDead) ||
+                !LootStressTest.TryGetServerItem(_serverChest, out var definition, out var position) ||
+                !definition.IsChest || !CanReachChest(position)) { _serverChest = int.MaxValue; return; }
+            if (now - _serverChestStarted < Mathf.Max(0.3f, definition.ChestLoot.HoldDuration)) return;
+            LootStressTest.TryBeginChestOpening(_serverChest); _serverChest = int.MaxValue;
+        }
+
+        private bool CanReachChest(Vector3 position)
+        {
+            if ((position - transform.position).sqrMagnitude > 16f) return false;
+            var from = transform.position + Vector3.up * 1.3f;
+            var delta = position + Vector3.up * 0.2f - from;
+            var hits = UnityEngine.Physics.RaycastNonAlloc(from, delta.normalized, _chestLineHits,
+                Mathf.Max(0f, delta.magnitude - 0.3f), ~0, QueryTriggerInteraction.Ignore);
+            for (var i = 0; i < hits; i++)
+                if (_chestLineHits[i].collider.GetComponentInParent<NetworkPlayerController>() == null &&
+                    _chestLineHits[i].collider.GetComponentInParent<StylizedWater3.WaterObject>() == null) return false;
+            return true;
+        }
+
         [ServerRpc]
         private void PickupStressItemServerRpc(int id, ServerRpcParams rpcParams = default)
         {
             if (!NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var client) ||
                 client.PlayerObject == null || client.PlayerObject != NetworkObject ||
                 !LootStressTest.TryGetServerItem(id, out var definition, out var position) ||
-                Vector3.Distance(transform.position, position) > 4f || !TryStoreSingleServer(definition)) return;
+                Vector3.Distance(transform.position, position) > 4f ||
+                (definition.IsChest && !CanReachChest(position)) || !TryStoreSingleServer(definition)) return;
             LootStressTest.RemoveServerItem(id);
         }
 

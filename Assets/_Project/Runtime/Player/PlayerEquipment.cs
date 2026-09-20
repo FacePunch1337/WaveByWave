@@ -59,6 +59,9 @@ namespace WaveByWave.Player
         private float hookLiftHorizontalDistance = 0.9f;
         [SerializeField, Min(0.1f)] private float hookSurfaceHeightSpeed = 5f;
         [SerializeField, Min(0.1f)] private float hookReelAcceleration = 24f;
+        [Header("Лопата")]
+        [SerializeField, Min(0.25f), Tooltip("Максимальная дистанция копания от камеры точно по центру прицела.")]
+        private float shovelDigDistance = 3.5f;
         [Header("Инструменты — события для дальнейшей игровой логики")]
         [SerializeField, Min(0.1f)] private float bucketLitres = 10f;
         [SerializeField] private BucketWaterEvent onWaterScooped = new(), onWaterPoured = new();
@@ -359,8 +362,17 @@ namespace WaveByWave.Player
         {
             _player.GetItemDropPose(out var feet, out direction, out var support);
             var view = _player.OwnerView;
-            origin = view != null ? view.position : feet + Vector3.up * 1.35f;
-            direction = view != null ? view.forward : direction;
+            if (view != null && view.TryGetComponent<Camera>(out var camera))
+            {
+                var ray = camera.ViewportPointToRay(CannonReloadProgress.AimViewportPoint);
+                origin = ray.origin;
+                direction = ray.direction;
+            }
+            else
+            {
+                origin = view != null ? view.position : feet + Vector3.up * 1.35f;
+                direction = view != null ? view.forward : direction;
+            }
             supportReference = new NetworkObjectReference(support);
             if (support != null)
             {
@@ -508,9 +520,15 @@ namespace WaveByWave.Player
                     PourClientRpc(origin + direction * 0.4f, direction);
                     break;
                 case EquipmentAction.ShovelDig when item.EquipmentKind == ItemEquipmentKind.Shovel:
-                    var end = origin + (direction + Vector3.down * 0.6f).normalized * 2.5f;
-                    if (SegmentHit(origin, end, 0.03f, null, out var digHit, out _))
-                    { onDig.Invoke(digHit.point); ToolEffectClientRpc(digHit.point, false); }
+                    // Unlike item throwing, digging must follow the reticle exactly. The old
+                    // forced downward bias made the shovel excavate below the aimed point.
+                    var end = origin + direction * shovelDigDistance;
+                    if (SegmentHit(origin, end, 0.02f, null, out var digHit, out _))
+                    {
+                        if (digHit.collider.GetComponentInParent<WaveByWave.Generation.ProceduralIsland>() is { } island)
+                            WaveByWave.Generation.OceanWorldDirector.Instance?.DigServer(island, digHit.point, digHit.normal);
+                        onDig.Invoke(digHit.point); ToolEffectClientRpc(digHit.point, false);
+                    }
                     PlayServer(action, 0.8f);
                     break;
             }

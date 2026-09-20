@@ -1,0 +1,239 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f2d99fb2e57ef2f439a81a988500bb77, type: 3}
+  m_Name: ChestLoot
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Items.ChestLootTable
+  HoldDuration: 1.5
+  ShakeDuration: 0.8
+  EjectionSpeed: 2.4
+  OpenEffectPrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
+  Tiers:
+  - Tier: 0
+    MinimumRolls: 2
+    MaximumRolls: 4
+    Items:
+    - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+  - Tier: 1
+    MinimumRolls: 3
+    MaximumRolls: 5
+    Items:
+    - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 9a00d65fcb6b4c378994904efb11a804, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: cdebffec146b46ebae61f1ae484b5e59, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+  - Tier: 2
+    MinimumRolls: 4
+    MaximumRolls: 6
+    Items:
+    - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 9a00d65fcb6b4c378994904efb11a804, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: 298a8c701dfa4681944fba4ebb0bc3b3, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: cdebffec146b46ebae61f1ae484b5e59, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: c65ad41c94214d8388862b9bb6b48b6e, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+  - Tier: 3
+    MinimumRolls: 5
+    MaximumRolls: 7
+    Items:
+    - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 9a00d65fcb6b4c378994904efb11a804, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: 298a8c701dfa4681944fba4ebb0bc3b3, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: ab844d8473b14fbaa6827e333ad5bb11, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: cdebffec146b46ebae61f1ae484b5e59, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: c65ad41c94214d8388862b9bb6b48b6e, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+  - Tier: 4
+    MinimumRolls: 6
+    MaximumRolls: 8
+    Items:
+    - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 9a00d65fcb6b4c378994904efb11a804, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 3
+    - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: 298a8c701dfa4681944fba4ebb0bc3b3, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: ab844d8473b14fbaa6827e333ad5bb11, type: 2}
+      Weight: 3
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: cdebffec146b46ebae61f1ae484b5e59, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1
+    - Item: {fileID: 11400000, guid: c65ad41c94214d8388862b9bb6b48b6e, type: 2}
+      Weight: 1
+      MinimumAmount: 1
+      MaximumAmount: 1

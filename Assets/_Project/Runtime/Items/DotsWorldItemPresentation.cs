@@ -68,7 +68,7 @@ namespace WaveByWave.Items
             return new DotsWorldItemPresentation(world, template);
         }
 
-        public void SetPose(Vector3 rootPosition, Quaternion rootRotation)
+        public void SetPose(Vector3 rootPosition, Quaternion rootRotation, float size = 1f)
         {
             if (_world == null || !_world.IsCreated) return;
             var position = rootPosition + rootRotation * _template.Offset;
@@ -76,9 +76,9 @@ namespace WaveByWave.Items
             var local = LocalTransform.FromPositionRotationScale(position, rotation, 1f);
             var localToWorld = new LocalToWorld
             {
-                Value = float4x4.TRS(position, rotation, _template.Scale)
+                Value = float4x4.TRS(position, rotation, _template.Scale * size)
             };
-            var post = new PostTransformMatrix { Value = float4x4.Scale(_template.Scale) };
+            var post = new PostTransformMatrix { Value = float4x4.Scale(_template.Scale * size) };
             foreach (var entity in _entities)
             {
                 if (!_world.EntityManager.Exists(entity)) continue;

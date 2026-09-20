@@ -1674,6 +1674,8 @@ namespace WaveByWave.Player
         {
             var target = FindInteractionTarget(_loweringAnchor == null, out var aimedDirectly);
             LootStressTest.SetFocusedClientItem(target);
+            if (Inventory != null && Inventory.UpdateChestInteraction(target, Keyboard.current.eKey.wasPressedThisFrame,
+                    Keyboard.current.eKey.isPressed, Keyboard.current.eKey.wasReleasedThisFrame)) return;
             _lookedAtAnchor = aimedDirectly ? target as ShipAnchor : null;
 
             if (_loweringAnchor != null)

@@ -1336,7 +1336,7 @@ namespace WaveByWave.Player
         {
             var source = _presentationRoot != null ? _presentationRoot : transform;
             position = source.position;
-            forward = source.forward;
+            forward = IsOwner && _camera != null ? _camera.transform.forward : source.forward;
             platformObject = _platform != null && (_isGrounded || _airborneFromPlatform || IsAtControlStation)
                 ? _platform.GetComponentInParent<NetworkObject>() : null;
             if (platformObject != null && !platformObject.IsSpawned) platformObject = null;
@@ -1842,6 +1842,8 @@ namespace WaveByWave.Player
             if (!IsOwner || helm == null || IsAtControlStation || _pendingAnchor != null || _pendingCannon != null)
                 return;
 
+            var initialLookRotation = _camera != null ? _camera.transform.rotation : helm.Station.rotation;
+            BeginAnchorApproach(helm.Station);
             _activeHelm = helm;
             ClearMovementInput();
             _airbornePlatformMomentum = Vector3.zero;
@@ -1852,6 +1854,8 @@ namespace WaveByWave.Player
                 _camera?.SetReferenceFrame(helm.Ship.transform);
             SetOwnerPhysicsSimulation(false);
             SnapToActiveControlStation();
+            _camera?.SetLookRotation(initialLookRotation);
+            _camera?.BlendLookRotation(helm.Station.rotation, anchorHandleApproachDuration);
             helm.Ship.RequestHelmServerRpc();
         }
 
@@ -1860,6 +1864,8 @@ namespace WaveByWave.Player
             if (!IsOwner || sailControl == null || IsAtControlStation || _pendingAnchor != null || _pendingCannon != null)
                 return;
 
+            var initialLookRotation = _camera != null ? _camera.transform.rotation : sailControl.Station.rotation;
+            BeginAnchorApproach(sailControl.Station);
             _activeSailControl = sailControl;
             ClearMovementInput();
             _airbornePlatformMomentum = Vector3.zero;
@@ -1871,6 +1877,8 @@ namespace WaveByWave.Player
 
             SetOwnerPhysicsSimulation(false);
             SnapToActiveControlStation();
+            _camera?.SetLookRotation(initialLookRotation);
+            _camera?.BlendLookRotation(sailControl.Station.rotation, anchorHandleApproachDuration);
             sailControl.Ship.RequestSailControlServerRpc();
         }
 
@@ -1879,6 +1887,8 @@ namespace WaveByWave.Player
             if (!IsOwner || mastControl == null || IsAtControlStation || _pendingAnchor != null || _pendingCannon != null)
                 return;
 
+            var initialLookRotation = _camera != null ? _camera.transform.rotation : mastControl.Station.rotation;
+            BeginAnchorApproach(mastControl.Station);
             _activeMastControl = mastControl;
             ClearMovementInput();
             _airbornePlatformMomentum = Vector3.zero;
@@ -1890,6 +1900,8 @@ namespace WaveByWave.Player
 
             SetOwnerPhysicsSimulation(false);
             SnapToActiveControlStation();
+            _camera?.SetLookRotation(initialLookRotation);
+            _camera?.BlendLookRotation(mastControl.Station.rotation, anchorHandleApproachDuration);
             mastControl.Ship.RequestMastControlServerRpc();
         }
 
@@ -2158,6 +2170,7 @@ namespace WaveByWave.Player
                 var helm = _activeHelm;
                 helm.Ship.ReleaseHelmServerRpc();
                 _activeHelm = null;
+                _anchorApproachStation = null;
                 var platform = helm.Ship.GetComponent<MovingPlatform>();
                 if (platform != null)
                     AttachToPlatform(platform);
@@ -2187,6 +2200,7 @@ namespace WaveByWave.Player
                 var sailControl = _activeSailControl;
                 sailControl.Ship.ReleaseSailControlServerRpc();
                 _activeSailControl = null;
+                _anchorApproachStation = null;
                 var platform = sailControl.Ship.GetComponent<MovingPlatform>();
                 if (platform != null)
                     AttachToPlatform(platform);
@@ -2217,6 +2231,7 @@ namespace WaveByWave.Player
                 var mastControl = _activeMastControl;
                 mastControl.Ship.ReleaseMastControlServerRpc();
                 _activeMastControl = null;
+                _anchorApproachStation = null;
                 var platform = mastControl.Ship.GetComponent<MovingPlatform>();
                 if (platform != null)
                     AttachToPlatform(platform);
@@ -2261,8 +2276,7 @@ namespace WaveByWave.Player
 
             var position = station.position;
             var rotation = station.rotation;
-            if (_activeAnchor != null || _activeCannon != null || _activeCustomizationStation != null)
-                GetAnchorApproachPose(station, out position, out rotation);
+            GetAnchorApproachPose(station, out position, out rotation);
             SetBodyPose(position, rotation);
             _desiredBodyRotation = rotation;
             UpdatePlatformAnchorFromCurrentPose();

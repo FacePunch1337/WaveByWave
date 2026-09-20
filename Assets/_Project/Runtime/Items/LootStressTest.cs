@@ -55,6 +55,7 @@ namespace WaveByWave.Items
             public bool Moved;
             public bool OnWater;
             public float WaterOffset;
+            public Vector2 WaterSize;
             public Quaternion BaseRotation;
             public NetworkObject Support;
             public Vector3 LocalPosition;
@@ -188,10 +189,13 @@ namespace WaveByWave.Items
                 out var onWater, out var support))
             {
                 item.OnWater = onWater;
-                item.WaterOffset = 0.15f;
                 item.BaseRotation = rotation;
+                item.Rotation = Quaternion.FromToRotation(Vector3.up, normal) * rotation;
+                var definition = item.CatalogIndex >= 0 && item.CatalogIndex < _catalog.Items.Count
+                    ? _catalog.Items[item.CatalogIndex] : null;
+                item.WaterSize = GetSurfaceSize(definition);
+                item.WaterOffset = GetSurfaceClearance(definition, item.Rotation, normal);
                 item.Position = point + (onWater ? Vector3.up : normal) * item.WaterOffset;
-                item.Rotation = onWater ? rotation : Quaternion.FromToRotation(Vector3.up, normal) * rotation;
                 SetSupport(item, support);
             }
             else { item.OnWater = false; item.Support = null; item.Position = position; item.Rotation = rotation; }
@@ -282,12 +286,16 @@ namespace WaveByWave.Items
                 NetworkObject support = null;
                 if (TryResolveSurface(spawn, out var point, out var normal, out onWater, out support))
                 {
-                    position = point + (onWater ? Vector3.up : normal) * 0.15f;
-                    rotation = onWater ? baseRotation : Quaternion.FromToRotation(Vector3.up, normal) * baseRotation;
+                    rotation = Quaternion.FromToRotation(Vector3.up, normal) * baseRotation;
+                    position = point + (onWater ? Vector3.up : normal) *
+                        GetSurfaceClearance(definition, rotation, normal);
                 }
+                var waterOffset = GetSurfaceClearance(definition, rotation, Vector3.up);
+                if (onWater) waterOffset = GetSurfaceClearance(definition, rotation, normal);
                 var item = new ServerItem
                     { CatalogIndex = catalogIndex, Position = position, Rotation = rotation,
-                        BaseRotation = baseRotation, OnWater = onWater, WaterOffset = 0.15f };
+                        BaseRotation = baseRotation, OnWater = onWater,
+                        WaterOffset = waterOffset, WaterSize = GetSurfaceSize(definition) };
                 SetSupport(item, support);
                 ServerItems[id] = item;
             }
@@ -364,9 +372,38 @@ namespace WaveByWave.Items
         private static void UpdateWaterPose(ServerItem item)
         {
             if (!item.OnWater || _water == null ||
-                !_water.TrySurface(item.Position, Vector2.one * 0.45f, out var height, out var normal)) return;
-            item.Position = new Vector3(item.Position.x, height + item.WaterOffset, item.Position.z);
+                !_water.TrySurface(item.Position, item.WaterSize, out var height, out var normal)) return;
             item.Rotation = Quaternion.FromToRotation(Vector3.up, normal) * item.BaseRotation;
+            var definition = item.CatalogIndex >= 0 && item.CatalogIndex < _catalog.Items.Count
+                ? _catalog.Items[item.CatalogIndex] : null;
+            item.WaterOffset = GetSurfaceClearance(definition, item.Rotation, normal);
+            item.Position = new Vector3(item.Position.x, height + item.WaterOffset, item.Position.z);
+        }
+
+        internal static float GetSurfaceClearance(ItemDefinition definition, Quaternion rotation, Vector3 normal)
+        {
+            if (!TryGetVisual(definition, out var filter, out _)) return 0.15f;
+            var bounds = filter.sharedMesh.bounds;
+            var matrix = filter.transform.localToWorldMatrix;
+            var minimum = float.PositiveInfinity;
+            for (var corner = 0; corner < 8; corner++)
+            {
+                var point = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
+                    (corner & 1) == 0 ? -1f : 1f,
+                    (corner & 2) == 0 ? -1f : 1f,
+                    (corner & 4) == 0 ? -1f : 1f));
+                minimum = Mathf.Min(minimum, Vector3.Dot(rotation * matrix.MultiplyPoint3x4(point), normal));
+            }
+            return Mathf.Max(0.005f, -minimum + 0.005f);
+        }
+
+        private static Vector2 GetSurfaceSize(ItemDefinition definition)
+        {
+            if (!TryGetVisual(definition, out var filter, out _)) return Vector2.one * 0.45f;
+            var bounds = filter.sharedMesh.bounds;
+            var scale = filter.transform.localToWorldMatrix.lossyScale;
+            return new Vector2(Mathf.Clamp(bounds.size.x * Mathf.Abs(scale.x), 0.15f, 1.5f),
+                Mathf.Clamp(bounds.size.z * Mathf.Abs(scale.z), 0.15f, 1.5f));
         }
 
         private static void EnsureSceneEvents()
@@ -458,8 +495,14 @@ namespace WaveByWave.Items
             if (hasInitial) LootStressPresentation.Apply(state.World, initial);
             for (var i = 0; i < deltas.Length; i++) LootStressPresentation.ApplyDelta(deltas[i]);
             deltas.Dispose();
-            LootStressPresentation.UpdateDynamicItems();
         }
+    }
+
+    [DefaultExecutionOrder(9800)]
+    internal sealed class LootStressPresentationDriver : MonoBehaviour
+    {
+        private void LateUpdate() => LootStressPresentation.UpdateDynamicItems();
+        private void OnDestroy() => LootStressPresentation.DriverDestroyed(this);
     }
 
     internal static class LootStressPresentation
@@ -471,6 +514,8 @@ namespace WaveByWave.Items
             public Vector3 Offset, Scale;
             public Quaternion Rotation;
             public float Radius;
+            public Vector3[] Corners;
+            public Vector2 SurfaceSize;
         }
 
         private sealed class ClientItem
@@ -520,12 +565,14 @@ namespace WaveByWave.Items
         private static float _nextEffectRefresh;
         private static int _waterCursor;
         private static string _activeScene;
+        private static LootStressPresentationDriver _driver;
 
         internal static void SetAssets(ItemCatalog catalog, GameObject effectPrefab, WaveProfile waterProfile)
         {
             _catalog = catalog;
             if (effectPrefab != null) _effectPrefab = effectPrefab;
             if (waterProfile != null && _water == null) _water = new EquipmentWaterQuery(waterProfile);
+            EnsureDriver();
             if (_pending.HasValue && ClientServerBootstrap.ClientWorld is { IsCreated: true } world)
             { var command = _pending.Value; _pending = null; Apply(world, command); }
         }
@@ -578,9 +625,9 @@ namespace WaveByWave.Items
                 if (LootStressTest.TryResolveSurface(spawnPosition, out var point, out var normal,
                     out onWater, out support))
                 {
-                    restPosition = point + (onWater ? Vector3.up : normal) * 0.15f;
-                    restRotation = onWater ? baseRotation :
-                        Quaternion.FromToRotation(Vector3.up, normal) * baseRotation;
+                    restRotation = Quaternion.FromToRotation(Vector3.up, normal) * baseRotation;
+                    restPosition = point + (onWater ? Vector3.up : normal) *
+                        SurfaceClearance(variant, restRotation, normal);
                 }
                 var item = new ClientItem { Id = id, Definition = _catalog.Items[catalogIndices[variantIndex]],
                     Variant = variant, Position = spawnPosition, Rotation = baseRotation,
@@ -748,6 +795,19 @@ namespace WaveByWave.Items
             if (!string.IsNullOrEmpty(_activeScene) && _activeScene == sceneName) Clear();
         }
 
+        private static void EnsureDriver()
+        {
+            if (_driver != null) return;
+            var host = new GameObject("DOTS Loot Presentation") { hideFlags = HideFlags.HideInHierarchy };
+            UnityEngine.Object.DontDestroyOnLoad(host);
+            _driver = host.AddComponent<LootStressPresentationDriver>();
+        }
+
+        internal static void DriverDestroyed(LootStressPresentationDriver driver)
+        {
+            if (_driver == driver) _driver = null;
+        }
+
         private static List<Variant> BuildVariants(IReadOnlyList<int> indices)
         {
             var result = new List<Variant>(indices.Count);
@@ -759,9 +819,17 @@ namespace WaveByWave.Items
                 var extents = Vector3.Scale(filter.sharedMesh.bounds.extents,
                     new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
                 var materials = renderer.sharedMaterials;
+                var bounds = filter.sharedMesh.bounds;
+                var corners = new Vector3[8];
+                for (var corner = 0; corner < corners.Length; corner++)
+                    corners[corner] = matrix.MultiplyPoint3x4(bounds.center + Vector3.Scale(bounds.extents,
+                        new Vector3((corner & 1) == 0 ? -1f : 1f, (corner & 2) == 0 ? -1f : 1f,
+                            (corner & 4) == 0 ? -1f : 1f)));
                 result.Add(new Variant { Mesh = filter.sharedMesh, Materials = materials,
                     Offset = matrix.GetColumn(3), Rotation = matrix.rotation, Scale = scale,
-                    Radius = Mathf.Clamp(extents.magnitude, 0.22f, 1.2f) });
+                    Radius = Mathf.Clamp(extents.magnitude, 0.22f, 1.2f), Corners = corners,
+                    SurfaceSize = new Vector2(Mathf.Clamp(filter.sharedMesh.bounds.size.x * Mathf.Abs(scale.x), 0.15f, 1.5f),
+                        Mathf.Clamp(filter.sharedMesh.bounds.size.z * Mathf.Abs(scale.z), 0.15f, 1.5f)) });
             }
             return result;
         }
@@ -798,10 +866,20 @@ namespace WaveByWave.Items
                 if (_waterCursor >= WaterItems.Count) _waterCursor = 0;
                 var item = WaterItems[_waterCursor++];
                 if (item.Falling || item.HookOwner != ulong.MaxValue) continue;
-                if (!_water.TrySurface(item.Position, Vector2.one * 0.45f, out var height, out var normal)) continue;
-                item.WaterTargetPosition = new Vector3(item.Position.x, height + 0.15f, item.Position.z);
+                if (!_water.TrySurface(item.Position, item.Variant.SurfaceSize, out var height, out var normal)) continue;
                 item.WaterTargetRotation = Quaternion.FromToRotation(Vector3.up, normal) * item.BaseRotation;
+                var clearance = SurfaceClearance(item.Variant, item.WaterTargetRotation, normal);
+                item.WaterTargetPosition = new Vector3(item.Position.x, height + clearance, item.Position.z);
             }
+        }
+
+        private static float SurfaceClearance(Variant variant, Quaternion rotation, Vector3 normal)
+        {
+            if (variant?.Corners == null || variant.Corners.Length == 0) return 0.15f;
+            var minimum = float.PositiveInfinity;
+            for (var i = 0; i < variant.Corners.Length; i++)
+                minimum = Mathf.Min(minimum, Vector3.Dot(rotation * variant.Corners[i], normal));
+            return Mathf.Max(0.005f, -minimum + 0.005f);
         }
 
         private static NetworkObject ResolveSupport(ulong id)

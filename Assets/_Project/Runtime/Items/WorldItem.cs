@@ -227,18 +227,24 @@ namespace WaveByWave.Items
         {
             var frame = GetPhysicsFrame(preferredSupport);
             var up = preferredSupport != null ? frame.MultiplyVector(Vector3.up).normalized : Vector3.up;
-            var forward = Vector3.ProjectOnPlane(direction, up).normalized;
+            var aim = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.forward;
+            var planarAim = Vector3.ProjectOnPlane(aim, up);
+            var planarAmount = Mathf.Clamp01(planarAim.magnitude);
+            var forward = planarAim.normalized;
             if (forward.sqrMagnitude < 0.01f) forward = Vector3.ProjectOnPlane(Vector3.forward, up).normalized;
-            var start = thrown ? feet + up * 0.9f + forward * 0.25f : feet;
-            var target = feet + forward * (thrown ? dropDistance : 0f);
+            var verticalVelocity = thrown ? Vector3.Dot(aim, up) * throwForwardSpeed : 0f;
+            var horizontalSpeed = thrown ? throwForwardSpeed * planarAmount : 0f;
+            var start = thrown ? feet + up * 0.9f + aim * 0.25f : feet;
+            var target = feet + forward * (thrown ? dropDistance * Mathf.Max(0.15f, planarAmount) : 0f);
             var found = TryFindSurface(target, up, out var hit);
             var onWater = TryWaterSurface(target, out var waterHeight, out var waterNormal) &&
                 waterHeight <= target.y + 1.5f && (!found || waterHeight > hit.point.y + 0.01f);
             if (thrown && (found || onWater))
             {
                 var firstHeight = onWater ? waterHeight : hit.point.y;
-                var fallTime = Mathf.Sqrt(2f * Mathf.Max(0f, start.y - firstHeight) / 9.81f);
-                var distance = dropDistance + throwForwardSpeed * fallTime;
+                var fallTime = BallisticFlightTime(Vector3.Dot(start - new Vector3(target.x, firstHeight, target.z), up),
+                    verticalVelocity);
+                var distance = dropDistance * Mathf.Max(0.15f, planarAmount) + horizontalSpeed * fallTime;
                 target = feet + forward * distance;
                 found = TryFindSurface(target, up, out hit);
                 onWater = TryWaterSurface(target, out waterHeight, out waterNormal) &&
@@ -246,8 +252,10 @@ namespace WaveByWave.Items
                 if (found || onWater)
                 {
                     var resolvedHeight = onWater ? waterHeight : hit.point.y;
-                    var resolvedFallTime = Mathf.Sqrt(2f * Mathf.Max(0f, start.y - resolvedHeight) / 9.81f);
-                    var resolvedDistance = dropDistance + throwForwardSpeed * resolvedFallTime;
+                    var resolvedFallTime = BallisticFlightTime(
+                        Vector3.Dot(start - new Vector3(target.x, resolvedHeight, target.z), up), verticalVelocity);
+                    var resolvedDistance = dropDistance * Mathf.Max(0.15f, planarAmount) +
+                        horizontalSpeed * resolvedFallTime;
                     if (resolvedDistance > distance + 0.1f)
                     {
                         target = feet + forward * resolvedDistance;
@@ -277,8 +285,11 @@ namespace WaveByWave.Items
             var clearance = GetSurfaceClearance(surfaceRotation, normal);
             var end = point + (onWater ? Vector3.up : normal) * (clearance + 0.005f);
             if (!thrown) start = end;
-            var fallDuration = Mathf.Sqrt(2f * Mathf.Max(0f, start.y - end.y) / 9.81f);
-            var gravityArc = Mathf.Max(0f, Vector3.Dot(start - end, up)) * 0.25f;
+            var fallHeight = Vector3.Dot(start - end, up);
+            var fallDuration = BallisticFlightTime(fallHeight, verticalVelocity);
+            var flightDuration = thrown ? Mathf.Clamp(fallDuration > 0.01f ? fallDuration : throwDuration, 0.12f, 3f) : 0f;
+            var gravityArc = Mathf.Max(0f, verticalVelocity * flightDuration + fallHeight) * 0.25f;
+            var decorativeArc = throwArcHeight * Mathf.Clamp01(1f - Mathf.Abs(Vector3.Dot(aim, up)) * 2f);
             var state = new WorldItemPlacement
             {
                 Initialized = true, HasSupport = support != null, OnWater = onWater,
@@ -286,8 +297,8 @@ namespace WaveByWave.Items
                 Start = start, End = end, ArcUp = up, Rotation = rotation,
                 FallbackPosition = end, FallbackRotation = rotation,
                 Started = Unity.Netcode.NetworkManager.Singleton.ServerTime.Time,
-                Duration = thrown ? Mathf.Clamp(Mathf.Max(throwDuration, fallDuration), throwDuration, 3f) : 0f,
-                ArcHeight = thrown ? throwArcHeight + gravityArc : 0f
+                Duration = flightDuration,
+                ArcHeight = thrown ? decorativeArc + gravityArc : 0f
             };
             if (support != null)
             {
@@ -301,6 +312,14 @@ namespace WaveByWave.Items
             _placement.Value = state;
             transform.SetPositionAndRotation(start, rotation);
             return true;
+        }
+
+        private static float BallisticFlightTime(float fallHeight, float verticalVelocity)
+        {
+            const float gravity = 9.81f;
+            var discriminant = verticalVelocity * verticalVelocity + 2f * gravity * fallHeight;
+            if (discriminant <= 0f) return 0f;
+            return Mathf.Max(0f, (verticalVelocity + Mathf.Sqrt(discriminant)) / gravity);
         }
 
         public static Matrix4x4 GetPhysicsFrame(NetworkObject support)

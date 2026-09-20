@@ -48,6 +48,7 @@ namespace WaveByWave.Player
 
         public override void OnNetworkSpawn()
         {
+            LootStressTest.RegisterCatalog(catalog);
             _slots.OnListChanged += OnListChanged;
 
             if (IsServer && _slots.Count == 0)
@@ -218,6 +219,14 @@ namespace WaveByWave.Player
             }
             SpawnAdminItemServerRpc(new FixedString64Bytes(itemId), position, direction,
                 new NetworkObjectReference(support));
+        }
+
+        public bool SetAdminStressItems(int count, float radius)
+        {
+            if (!IsOwner || !IsHost)
+                return false;
+            LootStressTest.RegisterCatalog(catalog);
+            return LootStressTest.SetTarget(count, transform.position, radius);
         }
 
         [ServerRpc]

@@ -14,6 +14,7 @@
         "Unity.NetCode",
         "Unity.NetCode.Authoring.Hybrid",
         "Unity.Entities.Graphics",
+        "Unity.Transforms",
         "Unity.Networking.Transport",
         "UnityEngine.UI",
         "sc.stylizedwater3.runtime"

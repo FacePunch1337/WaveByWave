@@ -11,6 +11,10 @@ namespace WaveByWave.Player
         public static bool InputCaptured { get; private set; }
         private PlayerInventory _inventory;
         private GameObject _canvas, _panel;
+        private Slider _stressCountSlider, _stressRadiusSlider;
+        private Text _stressCountLabel, _stressRadiusLabel;
+        private int _requestedStressCount, _appliedStressCount = -1;
+        private float _requestedStressRadius = 15f, _appliedStressRadius = -1f, _stressApplyAt;
         public void Initialize(PlayerInventory inventory) => _inventory = inventory;
         private void Update()
         {
@@ -22,6 +26,18 @@ namespace WaveByWave.Player
             {
                 if (_canvas == null) Build();
                 SetOpen(!InputCaptured);
+            }
+            if (InputCaptured && Time.unscaledTime >= _stressApplyAt &&
+                (_requestedStressCount != _appliedStressCount ||
+                 !Mathf.Approximately(_requestedStressRadius, _appliedStressRadius)))
+            {
+                var applied = _inventory.SetAdminStressItems(_requestedStressCount, _requestedStressRadius);
+                if (applied)
+                {
+                    _appliedStressCount = _requestedStressCount;
+                    _appliedStressRadius = _requestedStressRadius;
+                }
+                _stressApplyAt = applied ? float.PositiveInfinity : Time.unscaledTime + 1f;
             }
         }
         private void Build()
@@ -36,12 +52,37 @@ namespace WaveByWave.Player
             _panel = new GameObject("Items", typeof(RectTransform), typeof(Image));
             _panel.transform.SetParent(_canvas.transform, false);
             var rect = _panel.GetComponent<RectTransform>(); rect.anchorMin = rect.anchorMax = Vector2.one * 0.5f;
-            rect.sizeDelta = new Vector2(620f, 720f); _panel.GetComponent<Image>().color = new Color(0.035f, 0.055f, 0.075f, 0.98f);
-            Label(_panel.transform, "Предметы — спавн перед игроком • F2", new Vector2(0, 320), new Vector2(570, 40), Color.white);
+            rect.sizeDelta = new Vector2(660f, 840f); _panel.GetComponent<Image>().color = new Color(0.035f, 0.055f, 0.075f, 0.98f);
+            Label(_panel.transform, "Админ-панель предметов • F2", new Vector2(0, 390), new Vector2(610, 40), Color.white);
+
+            Label(_panel.transform, "DOTS / Steam нагрузочный тест", new Vector2(0, 345), new Vector2(600, 32),
+                new Color(0.4f, 0.85f, 1f));
+            _stressCountLabel = Label(_panel.transform, "Предметы: 0 / 3000", new Vector2(0, 310),
+                new Vector2(570, 28), Color.white);
+            _stressCountLabel.fontSize = 17;
+            _stressCountSlider = CreateSlider(_panel.transform, new Vector2(0, 278), 0f, 3000f, 0f, true);
+            _stressCountSlider.onValueChanged.AddListener(value =>
+            {
+                _requestedStressCount = Mathf.RoundToInt(value);
+                _stressCountLabel.text = $"Предметы: {_requestedStressCount} / 3000";
+                ScheduleStressApply();
+            });
+
+            _stressRadiusLabel = Label(_panel.transform, "Радиус: 15 м", new Vector2(0, 240),
+                new Vector2(570, 28), Color.white);
+            _stressRadiusLabel.fontSize = 17;
+            _stressRadiusSlider = CreateSlider(_panel.transform, new Vector2(0, 208), 10f, 20f, 15f, false);
+            _stressRadiusSlider.onValueChanged.AddListener(value =>
+            {
+                _requestedStressRadius = value;
+                _stressRadiusLabel.text = $"Радиус: {value:0.0} м";
+                ScheduleStressApply();
+            });
+
             var scrollObject = new GameObject("Catalog", typeof(RectTransform), typeof(Image), typeof(Mask), typeof(ScrollRect));
             scrollObject.transform.SetParent(_panel.transform, false);
-            var scrollRect = scrollObject.GetComponent<RectTransform>(); scrollRect.sizeDelta = new Vector2(570f, 590f);
-            scrollRect.anchoredPosition = new Vector2(0f, -10f);
+            var scrollRect = scrollObject.GetComponent<RectTransform>(); scrollRect.sizeDelta = new Vector2(590f, 430f);
+            scrollRect.anchoredPosition = new Vector2(0f, -45f);
             scrollObject.GetComponent<Image>().color = new Color(0, 0, 0, 0.1f);
             scrollObject.GetComponent<Mask>().showMaskGraphic = false;
             var contentObject = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
@@ -70,11 +111,54 @@ namespace WaveByWave.Player
                 }
             var close = new GameObject("Close", typeof(RectTransform), typeof(Image), typeof(Button));
             close.transform.SetParent(_panel.transform, false); close.GetComponent<RectTransform>().sizeDelta = new Vector2(170, 35);
-            close.GetComponent<RectTransform>().anchoredPosition = new Vector2(0, -330);
+            close.GetComponent<RectTransform>().anchoredPosition = new Vector2(105, -392);
             close.GetComponent<Image>().color = new Color(0.25f, 0.32f, 0.37f);
             close.GetComponent<Button>().targetGraphic = close.GetComponent<Image>();
             close.GetComponent<Button>().onClick.AddListener(() => SetOpen(false));
             Label(close.transform, "Закрыть", Vector2.zero, new Vector2(160, 30), Color.white);
+
+            var clear = new GameObject("Clear stress items", typeof(RectTransform), typeof(Image), typeof(Button));
+            clear.transform.SetParent(_panel.transform, false); clear.GetComponent<RectTransform>().sizeDelta = new Vector2(190, 35);
+            clear.GetComponent<RectTransform>().anchoredPosition = new Vector2(-105, -392);
+            clear.GetComponent<Image>().color = new Color(0.45f, 0.17f, 0.15f);
+            clear.GetComponent<Button>().targetGraphic = clear.GetComponent<Image>();
+            clear.GetComponent<Button>().onClick.AddListener(() => _stressCountSlider.value = 0f);
+            Label(clear.transform, "Очистить тест", Vector2.zero, new Vector2(180, 30), Color.white);
+        }
+
+        private void ScheduleStressApply() => _stressApplyAt = Time.unscaledTime + 0.12f;
+
+        private static Slider CreateSlider(Transform parent, Vector2 position, float minimum, float maximum,
+            float value, bool wholeNumbers)
+        {
+            var root = new GameObject("Slider", typeof(RectTransform), typeof(Slider));
+            root.transform.SetParent(parent, false);
+            var rect = root.GetComponent<RectTransform>(); rect.sizeDelta = new Vector2(540f, 28f); rect.anchoredPosition = position;
+
+            var background = new GameObject("Background", typeof(RectTransform), typeof(Image));
+            background.transform.SetParent(root.transform, false);
+            var backgroundRect = background.GetComponent<RectTransform>(); backgroundRect.anchorMin = Vector2.zero;
+            backgroundRect.anchorMax = Vector2.one; backgroundRect.offsetMin = new Vector2(0, 8); backgroundRect.offsetMax = new Vector2(0, -8);
+            background.GetComponent<Image>().color = new Color(0.08f, 0.11f, 0.14f, 1f);
+
+            var fillArea = new GameObject("Fill Area", typeof(RectTransform)); fillArea.transform.SetParent(root.transform, false);
+            var fillAreaRect = fillArea.GetComponent<RectTransform>(); fillAreaRect.anchorMin = Vector2.zero;
+            fillAreaRect.anchorMax = Vector2.one; fillAreaRect.offsetMin = new Vector2(5, 8); fillAreaRect.offsetMax = new Vector2(-5, -8);
+            var fill = new GameObject("Fill", typeof(RectTransform), typeof(Image)); fill.transform.SetParent(fillArea.transform, false);
+            var fillRect = fill.GetComponent<RectTransform>(); fillRect.anchorMin = Vector2.zero; fillRect.anchorMax = Vector2.one;
+            fillRect.offsetMin = fillRect.offsetMax = Vector2.zero; fill.GetComponent<Image>().color = new Color(0.16f, 0.67f, 0.9f);
+
+            var handleArea = new GameObject("Handle Slide Area", typeof(RectTransform)); handleArea.transform.SetParent(root.transform, false);
+            var handleAreaRect = handleArea.GetComponent<RectTransform>(); handleAreaRect.anchorMin = Vector2.zero;
+            handleAreaRect.anchorMax = Vector2.one; handleAreaRect.offsetMin = new Vector2(8, 0); handleAreaRect.offsetMax = new Vector2(-8, 0);
+            var handle = new GameObject("Handle", typeof(RectTransform), typeof(Image)); handle.transform.SetParent(handleArea.transform, false);
+            var handleRect = handle.GetComponent<RectTransform>(); handleRect.sizeDelta = new Vector2(20f, 28f);
+            handle.GetComponent<Image>().color = Color.white;
+
+            var slider = root.GetComponent<Slider>(); slider.minValue = minimum; slider.maxValue = maximum;
+            slider.wholeNumbers = wholeNumbers; slider.fillRect = fillRect; slider.handleRect = handleRect;
+            slider.targetGraphic = handle.GetComponent<Image>(); slider.direction = Slider.Direction.LeftToRight; slider.value = value;
+            return slider;
         }
         private static Text Label(Transform parent, string value, Vector2 position, Vector2 size, Color color)
         {

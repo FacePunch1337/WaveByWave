@@ -9,6 +9,7 @@ using Unity.Jobs;
 using Unity.NetCode;
 using Unity.Networking.Transport;
 using UnityEngine;
+using WaveByWave.Items;
 
 namespace WaveByWave.Networking
 {
@@ -133,6 +134,7 @@ namespace WaveByWave.Networking
 
         public static void Shutdown()
         {
+            LootStressTest.ClearLocal();
             DisconnectWorld(ClientServerBootstrap.ClientWorld);
             foreach (var bridge in Bridges)
                 bridge.Close();

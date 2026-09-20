@@ -48,7 +48,8 @@ namespace WaveByWave.Player
 
         public override void OnNetworkSpawn()
         {
-            LootStressTest.RegisterCatalog(catalog, worldItemPrefab != null ? worldItemPrefab.RarityEffectPrefab : null);
+            LootStressTest.RegisterCatalog(catalog, worldItemPrefab != null ? worldItemPrefab.RarityEffectPrefab : null,
+                GetComponent<PlayerEquipment>()?.WaterWaveProfile);
             _slots.OnListChanged += OnListChanged;
 
             if (IsServer && _slots.Count == 0)
@@ -225,7 +226,8 @@ namespace WaveByWave.Player
         {
             if (!IsOwner || !IsHost)
                 return false;
-            LootStressTest.RegisterCatalog(catalog, worldItemPrefab != null ? worldItemPrefab.RarityEffectPrefab : null);
+            LootStressTest.RegisterCatalog(catalog, worldItemPrefab != null ? worldItemPrefab.RarityEffectPrefab : null,
+                GetComponent<PlayerEquipment>()?.WaterWaveProfile);
             return LootStressTest.SetTarget(count, transform.position, radius);
         }
 

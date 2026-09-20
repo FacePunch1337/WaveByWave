@@ -5,13 +5,13 @@ using UnityEngine;
 namespace WaveByWave.Player
 {
     // Reuses CPU wave samples. No Rigidbody, GPU readbacks or per-query native allocations.
-    internal sealed class EquipmentWaterQuery : IDisposable
+    public sealed class EquipmentWaterQuery : IDisposable
     {
         private readonly HeightQuerySystem.Interface _water = new()
         { method = HeightQuerySystem.Interface.Method.CPU, autoFind = true };
         private readonly HeightQuerySystem.Sampler _samples = new();
         public EquipmentWaterQuery(WaveProfile profile)
-        { _water.waveProfile = profile; _samples.SetSampleCount(2, true); }
+        { _water.waveProfile = profile; _samples.SetSampleCount(4, true); }
         public bool TryHeight(Vector3 point, out float height)
         {
             height = 0f;
@@ -21,6 +21,27 @@ namespace WaveByWave.Player
             _samples.heightValues[0] = _samples.heightValues[1] = height;
             if (_water.waveProfile != null) Gerstner.ComputeHeight(_samples, _water);
             height = _samples.heightValues[0];
+            return true;
+        }
+
+        public bool TrySurface(Vector3 point, Vector2 size, out float height, out Vector3 normal)
+        {
+            height = 0f;
+            normal = Vector3.up;
+            if (_water.GetWaterObject(point) == null || _water.waterObject.material == null) return false;
+            var halfX = Mathf.Max(0.05f, size.x * 0.5f);
+            var halfZ = Mathf.Max(0.05f, size.y * 0.5f);
+            _samples.positions[0] = point + Vector3.left * halfX;
+            _samples.positions[1] = point + Vector3.right * halfX;
+            _samples.positions[2] = point + Vector3.back * halfZ;
+            _samples.positions[3] = point + Vector3.forward * halfZ;
+            var level = _water.GetWaterLevel();
+            for (var i = 0; i < 4; i++) _samples.heightValues[i] = level;
+            if (_water.waveProfile != null) Gerstner.ComputeHeight(_samples, _water);
+            height = (_samples.heightValues[0] + _samples.heightValues[1] +
+                _samples.heightValues[2] + _samples.heightValues[3]) * 0.25f;
+            normal = HeightQuerySystem.DeriveNormal(_samples.heightValues[0], _samples.heightValues[1],
+                _samples.heightValues[2], _samples.heightValues[3], 0.35f);
             return true;
         }
         public bool Crossing(Vector3 from, Vector3 to, out Vector3 point, out float fraction)

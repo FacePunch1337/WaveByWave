@@ -27,7 +27,7 @@ MonoBehaviour:
   upgradeStat: 0
   upgradeBonus: 0.1
   worldVisualPrefab: {fileID: 3692177591442134904, guid: 442e27e1b50558c4be6eeb1844674a21, type: 3}
-  restingEulerAngles: {x: 90, y: 0, z: 0}
+  restingEulerAngles: {x: 0, y: 0, z: 0}
   equipmentKind: 2
   overrideHeldPose: 1
   heldPosition: {x: 0.32, y: -0.12, z: 0.78}

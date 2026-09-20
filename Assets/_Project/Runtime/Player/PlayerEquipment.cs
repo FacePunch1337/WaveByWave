@@ -109,6 +109,7 @@ namespace WaveByWave.Player
         public EquipmentMotionSet Motions => motions;
         public GameObject FirstPersonHandsPrefab => firstPersonHandsPrefab;
         public GameObject HookRopePrefab => hookRopePrefab;
+        public WaveProfile WaterWaveProfile => waterWaveProfile;
         public Material MetalMaterial => metalMaterial;
         public Material EffectMaterial => effectMaterial;
         public Material HandMaterial => handMaterial;

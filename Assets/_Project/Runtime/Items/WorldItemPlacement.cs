@@ -9,6 +9,7 @@ namespace WaveByWave.Items
     {
         public bool Initialized;
         public bool HasSupport;
+        public bool OnWater;
         public NetworkObjectReference Support;
         public Vector3 Start;
         public Vector3 End;
@@ -30,6 +31,7 @@ namespace WaveByWave.Items
         {
             serializer.SerializeValue(ref Initialized);
             serializer.SerializeValue(ref HasSupport);
+            serializer.SerializeValue(ref OnWater);
             serializer.SerializeValue(ref Support);
             serializer.SerializeValue(ref Start);
             serializer.SerializeValue(ref End);
@@ -43,7 +45,7 @@ namespace WaveByWave.Items
         }
 
         public bool Equals(WorldItemPlacement other) => Initialized == other.Initialized &&
-            HasSupport == other.HasSupport && Support.Equals(other.Support) && Start.Equals(other.Start) &&
+            HasSupport == other.HasSupport && OnWater == other.OnWater && Support.Equals(other.Support) && Start.Equals(other.Start) &&
             End.Equals(other.End) && ArcUp.Equals(other.ArcUp) && Rotation.Equals(other.Rotation) &&
             FallbackPosition.Equals(other.FallbackPosition) && FallbackRotation.Equals(other.FallbackRotation) &&
             Started.Equals(other.Started) && Duration.Equals(other.Duration) && ArcHeight.Equals(other.ArcHeight);

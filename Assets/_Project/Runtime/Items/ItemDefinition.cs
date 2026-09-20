@@ -41,7 +41,7 @@ namespace WaveByWave.Items
         [SerializeField, Range(0f, 1f)] private float upgradeBonus = 0.1f;
         [SerializeField, Tooltip("Полный prefab предмета с одним MeshFilter. Его меш и материалы используются в мире, в руках и DOTS-спавне.")]
         private GameObject worldVisualPrefab;
-        [SerializeField, Tooltip("Поворот лежащей модели относительно поверхности, в градусах.")]
+        [SerializeField, Tooltip("Индивидуальный поворот выброшенной или заспавненной модели относительно поверхности, в градусах.")]
         private Vector3 restingEulerAngles;
         [Header("Предмет в руках")]
         [SerializeField] private ItemEquipmentKind equipmentKind;

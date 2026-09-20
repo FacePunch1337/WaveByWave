@@ -18,6 +18,8 @@ namespace WaveByWave.Items
         [SerializeField, Min(0.05f)] private float throwDuration = 0.45f;
         [SerializeField, Min(0f)] private float throwArcHeight = 0.25f;
         [SerializeField, Min(0f)] private float dropDistance = 0.9f;
+        [SerializeField, Min(0.1f), Tooltip("Горизонтальная скорость броска. Чем выше точка, тем дальше предмет пролетит до поверхности.")]
+        private float throwForwardSpeed = 4.5f;
         [SerializeField] private LayerMask placementLayers = ~0;
         private readonly NetworkVariable<FixedString64Bytes> _itemId = new();
         private readonly NetworkVariable<ushort> _amount = new(1);
@@ -30,6 +32,8 @@ namespace WaveByWave.Items
         private Bounds _modelBounds;
         private GameObject _visual;
         private GameObject _rarityEffect;
+        private EquipmentWaterQuery _water;
+        private bool _waterPoseInitialized;
 
         public FixedString64Bytes ItemId => _itemId.Value;
         public ushort Amount => _amount.Value;
@@ -70,6 +74,14 @@ namespace WaveByWave.Items
             _placement.OnValueChanged -= OnPlacementChanged;
             _support = null;
             _supportMotion = null;
+            _water?.Dispose();
+            _water = null;
+        }
+        public override void OnDestroy()
+        {
+            _water?.Dispose();
+            _water = null;
+            base.OnDestroy();
         }
         private void OnItemChanged(FixedString64Bytes previous, FixedString64Bytes current)
         {
@@ -80,6 +92,7 @@ namespace WaveByWave.Items
         {
             _support = null;
             _supportMotion = null;
+            _waterPoseInitialized = false;
             ApplyPresentationPose();
         }
         private void LateUpdate()
@@ -117,8 +130,26 @@ namespace WaveByWave.Items
                     support.transform.rotation * state.Rotation);
             else if (state.HasSupport)
                 SetPose(state.FallbackPosition, state.FallbackRotation);
+            else if (state.OnWater && now >= state.Started + state.Duration &&
+                TryWaterSurface(state.End, out var waterHeight, out var waterNormal))
+            {
+                var rotation = Quaternion.FromToRotation(Vector3.up, waterNormal) * state.Rotation;
+                var position = state.End;
+                position.y = waterHeight + GetSurfaceClearance(rotation, waterNormal) + 0.005f;
+                var blend = 1f - Mathf.Exp(-14f * Time.unscaledDeltaTime);
+                if (_waterPoseInitialized)
+                {
+                    position = Vector3.Lerp(transform.position, position, blend);
+                    rotation = Quaternion.Slerp(transform.rotation, rotation, blend);
+                }
+                _waterPoseInitialized = true;
+                SetPose(position, rotation);
+            }
             else
+            {
+                _waterPoseInitialized = false;
                 SetPose(state.Evaluate(now), state.Rotation);
+            }
         }
 
         private void SetPose(Vector3 position, Quaternion rotation)
@@ -139,6 +170,13 @@ namespace WaveByWave.Items
             if (!state.Initialized) return transform.position;
             var support = ResolveSupport();
             var position = state.Evaluate(NetworkManager.ServerTime.Time);
+            if (state.OnWater && NetworkManager.ServerTime.Time >= state.Started + state.Duration &&
+                TryWaterSurface(state.End, out var waterHeight, out var waterNormal))
+            {
+                var rotation = Quaternion.FromToRotation(Vector3.up, waterNormal) * state.Rotation;
+                position = state.End;
+                position.y = waterHeight + GetSurfaceClearance(rotation, waterNormal) + 0.005f;
+            }
             return support != null ? support.transform.TransformPoint(position)
                 : state.HasSupport ? state.FallbackPosition : position;
         }
@@ -170,7 +208,7 @@ namespace WaveByWave.Items
             {
                 var rotation = Definition != null ? Definition.RestingRotation : Quaternion.identity;
                 var end = position + Vector3.up * (GetSurfaceClearance(rotation, Vector3.up) + 0.005f);
-                _placement.Value = new WorldItemPlacement { Initialized = true, Start = end, End = end,
+                _placement.Value = new WorldItemPlacement { Initialized = true, OnWater = true, Start = end, End = end,
                     Rotation = rotation, FallbackRotation = rotation, FallbackPosition = end, ArcUp = Vector3.up };
                 return;
             }
@@ -191,38 +229,65 @@ namespace WaveByWave.Items
             var up = preferredSupport != null ? frame.MultiplyVector(Vector3.up).normalized : Vector3.up;
             var forward = Vector3.ProjectOnPlane(direction, up).normalized;
             if (forward.sqrMagnitude < 0.01f) forward = Vector3.ProjectOnPlane(Vector3.forward, up).normalized;
+            var start = thrown ? feet + up * 0.9f + forward * 0.25f : feet;
             var target = feet + forward * (thrown ? dropDistance : 0f);
             var found = TryFindSurface(target, up, out var hit);
-            // At a railing, prefer placing the drop back onto the supporting deck.
-            if (preferredSupport != null && (!found || hit.distance > 3f))
+            var onWater = TryWaterSurface(target, out var waterHeight, out var waterNormal) &&
+                waterHeight <= target.y + 1.5f && (!found || waterHeight > hit.point.y + 0.01f);
+            if (thrown && (found || onWater))
             {
-                if (TryFindSurface(feet, up, out var deckHit)) { hit = deckHit; found = true; }
+                var firstHeight = onWater ? waterHeight : hit.point.y;
+                var fallTime = Mathf.Sqrt(2f * Mathf.Max(0f, start.y - firstHeight) / 9.81f);
+                var distance = dropDistance + throwForwardSpeed * fallTime;
+                target = feet + forward * distance;
+                found = TryFindSurface(target, up, out hit);
+                onWater = TryWaterSurface(target, out waterHeight, out waterNormal) &&
+                    waterHeight <= target.y + 1.5f && (!found || waterHeight > hit.point.y + 0.01f);
+                if (found || onWater)
+                {
+                    var resolvedHeight = onWater ? waterHeight : hit.point.y;
+                    var resolvedFallTime = Mathf.Sqrt(2f * Mathf.Max(0f, start.y - resolvedHeight) / 9.81f);
+                    var resolvedDistance = dropDistance + throwForwardSpeed * resolvedFallTime;
+                    if (resolvedDistance > distance + 0.1f)
+                    {
+                        target = feet + forward * resolvedDistance;
+                        found = TryFindSurface(target, up, out hit);
+                        onWater = TryWaterSurface(target, out waterHeight, out waterNormal) &&
+                            waterHeight <= target.y + 1.5f && (!found || waterHeight > hit.point.y + 0.01f);
+                    }
+                }
             }
             // Without a surface keep the inventory intact instead of stranding loot in midair.
-            if (thrown && !found) return false;
-            var point = found ? hit.point : target;
-            var normal = found ? hit.normal : up;
-            var support = found ? hit.collider.GetComponentInParent<NetworkObject>() : preferredSupport;
+            if (thrown && !found && !onWater) return false;
+            var point = onWater ? new Vector3(target.x, waterHeight, target.z) : found ? hit.point : target;
+            var normal = onWater ? waterNormal : found ? hit.normal : up;
+            var support = !onWater && found ? hit.collider.GetComponentInParent<NetworkObject>() : preferredSupport;
+            if (onWater) support = null;
             if (support != null && !support.IsSpawned) support = null;
-            var facing = Vector3.ProjectOnPlane(forward, normal).normalized;
-            if (facing.sqrMagnitude < 0.01f) facing = Vector3.Cross(normal, Vector3.right).normalized;
+            var rotationUp = onWater ? Vector3.up : normal;
+            var facing = Vector3.ProjectOnPlane(forward, rotationUp).normalized;
+            if (facing.sqrMagnitude < 0.01f) facing = Vector3.Cross(rotationUp, Vector3.right).normalized;
             var definition = Definition;
             var modelRotation = definition != null ? definition.RestingRotation : Quaternion.identity;
             if (definition != null && definition.WorldVisualPrefab == null &&
                 (definition.Category == ItemCategory.Weapon || definition.Category == ItemCategory.Tool))
                 modelRotation *= Quaternion.Euler(90f, 0f, 0f);
-            var rotation = Quaternion.LookRotation(facing, normal) * modelRotation;
-            var clearance = GetSurfaceClearance(rotation, normal);
-            var end = point + normal * (clearance + 0.005f);
-            var start = thrown ? feet + up * 0.9f + forward * 0.25f : end;
+            var rotation = Quaternion.LookRotation(facing, rotationUp) * modelRotation;
+            var surfaceRotation = onWater ? Quaternion.FromToRotation(Vector3.up, normal) * rotation : rotation;
+            var clearance = GetSurfaceClearance(surfaceRotation, normal);
+            var end = point + (onWater ? Vector3.up : normal) * (clearance + 0.005f);
+            if (!thrown) start = end;
+            var fallDuration = Mathf.Sqrt(2f * Mathf.Max(0f, start.y - end.y) / 9.81f);
+            var gravityArc = Mathf.Max(0f, Vector3.Dot(start - end, up)) * 0.25f;
             var state = new WorldItemPlacement
             {
-                Initialized = true, HasSupport = support != null,
+                Initialized = true, HasSupport = support != null, OnWater = onWater,
                 Support = support != null ? new NetworkObjectReference(support) : default,
                 Start = start, End = end, ArcUp = up, Rotation = rotation,
                 FallbackPosition = end, FallbackRotation = rotation,
                 Started = Unity.Netcode.NetworkManager.Singleton.ServerTime.Time,
-                Duration = thrown ? throwDuration : 0f, ArcHeight = thrown ? throwArcHeight : 0f
+                Duration = thrown ? Mathf.Clamp(Mathf.Max(throwDuration, fallDuration), throwDuration, 3f) : 0f,
+                ArcHeight = thrown ? throwArcHeight + gravityArc : 0f
             };
             if (support != null)
             {
@@ -253,11 +318,11 @@ namespace WaveByWave.Items
         {
             result = default;
             var count = UnityEngine.Physics.RaycastNonAlloc(target + up * 0.7f, -up, PlacementHits,
-                64f, placementLayers, QueryTriggerInteraction.Ignore);
+                256f, placementLayers, QueryTriggerInteraction.Ignore);
             var hits = PlacementHits;
             if (count == PlacementHits.Length)
             {
-                hits = UnityEngine.Physics.RaycastAll(target + up * 0.7f, -up, 64f,
+                hits = UnityEngine.Physics.RaycastAll(target + up * 0.7f, -up, 256f,
                     placementLayers, QueryTriggerInteraction.Ignore);
                 count = hits.Length;
             }
@@ -273,6 +338,18 @@ namespace WaveByWave.Items
                 result = hit;
             }
             return distance < float.PositiveInfinity;
+        }
+
+        private bool TryWaterSurface(Vector3 point, out float height, out Vector3 normal)
+        {
+            if (_water == null && LootStressTest.WaterProfile != null)
+                _water = new EquipmentWaterQuery(LootStressTest.WaterProfile);
+            var size = new Vector2(Mathf.Clamp(_modelBounds.size.x, 0.15f, 1.5f),
+                Mathf.Clamp(_modelBounds.size.z, 0.15f, 1.5f));
+            if (_water != null) return _water.TrySurface(point, size, out height, out normal);
+            height = 0f;
+            normal = Vector3.up;
+            return false;
         }
 
         private void RefreshModelBounds()

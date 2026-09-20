@@ -38,7 +38,10 @@ namespace WaveByWave.Items
     }
 
     public struct LootStressEntity : IComponentData { }
-    internal struct LootStressConnectionInitialized : IComponentData { }
+    internal struct LootStressConnectionState : IComponentData
+    {
+        public uint DeliveredRevision;
+    }
 
     public static class LootStressTest
     {
@@ -68,12 +71,14 @@ namespace WaveByWave.Items
         private static WaveProfile _waterProfile;
         private static EquipmentWaterQuery _water;
         private static LootStressCommand _latest;
+        private static uint _stateRevision;
         private static bool _hasState;
         private static string _sceneName;
         private static bool _sceneEventsBound;
         private static readonly RaycastHit[] SurfaceHits = new RaycastHit[256];
 
         internal static WaveProfile WaterProfile => _waterProfile;
+        internal static uint StateRevision => _stateRevision;
 
         public static void RegisterCatalog(ItemCatalog catalog, GameObject rarityEffectPrefab = null,
             WaveProfile waterProfile = null)
@@ -99,6 +104,8 @@ namespace WaveByWave.Items
                 Debug.LogWarning("[Loot stress] NFE server world or item catalog is unavailable.");
                 return false;
             }
+            _stateRevision++;
+            if (_stateRevision == 0) _stateRevision = 1;
             _latest = new LootStressCommand
             {
                 Count = Mathf.Clamp(count, 0, MaximumCount), Center = center,
@@ -109,23 +116,11 @@ namespace WaveByWave.Items
             _sceneName = _latest.SceneName.ToString();
             _hasState = true;
             RebuildServerState();
-            Send(world.EntityManager, _latest, Entity.Null);
-            foreach (var pair in ServerItems)
-            {
-                var item = pair.Value;
-                if (item.Support == null) continue;
-                Send(world.EntityManager, new LootStressDeltaCommand
-                {
-                    Id = pair.Key, Kind = Place, Position = item.Position, Rotation = item.Rotation,
-                    BaseRotation = item.BaseRotation, SupportId = SupportWireId(item.Support)
-                }, Entity.Null);
-            }
-            using var connections = world.EntityManager.CreateEntityQuery(
-                ComponentType.ReadOnly<NetworkId>(), ComponentType.ReadOnly<NetworkStreamInGame>())
-                .ToEntityArray(Allocator.Temp);
-            foreach (var connection in connections)
-                if (!world.EntityManager.HasComponent<LootStressConnectionInitialized>(connection))
-                    world.EntityManager.AddComponent<LootStressConnectionInitialized>(connection);
+            // A host owns both worlds in this process. Present locally immediately rather than
+            // depending on the local Steam/NFE handshake winning a race with the admin slider.
+            // The delivery system below sends this revision explicitly to every remote client.
+            if (ClientServerBootstrap.ClientWorld is { IsCreated: true } clientWorld)
+                LootStressPresentation.Apply(clientWorld, _latest);
             return true;
         }
 
@@ -451,13 +446,20 @@ namespace WaveByWave.Items
     {
         public void OnUpdate(ref SystemState state)
         {
-            if (!LootStressTest.TryGetLatest(out _)) return;
+            if (!LootStressTest.TryGetLatest(out _) || LootStressTest.StateRevision == 0) return;
+            var revision = LootStressTest.StateRevision;
             var ecb = new EntityCommandBuffer(Allocator.Temp);
             foreach (var (_, connection) in SystemAPI.Query<RefRO<NetworkId>>().WithAll<NetworkStreamInGame>()
-                         .WithNone<LootStressConnectionInitialized>().WithEntityAccess())
+                         .WithEntityAccess())
             {
-                ecb.AddComponent<LootStressConnectionInitialized>(connection);
+                var hasState = state.EntityManager.HasComponent<LootStressConnectionState>(connection);
+                if (hasState && state.EntityManager.GetComponentData<LootStressConnectionState>(connection)
+                        .DeliveredRevision == revision)
+                    continue;
                 LootStressTest.WriteLateJoinState(ecb, connection);
+                var delivered = new LootStressConnectionState { DeliveredRevision = revision };
+                if (hasState) ecb.SetComponent(connection, delivered);
+                else ecb.AddComponent(connection, delivered);
             }
             ecb.Playback(state.EntityManager);
             ecb.Dispose();
@@ -565,6 +567,10 @@ namespace WaveByWave.Items
         private static float _nextEffectRefresh;
         private static int _waterCursor;
         private static string _activeScene;
+        private static uint _appliedSeed;
+        private static int _appliedCount;
+        private static string _appliedScene;
+        private static World _appliedWorld;
         private static LootStressPresentationDriver _driver;
 
         internal static void SetAssets(ItemCatalog catalog, GameObject effectPrefab, WaveProfile waterProfile)
@@ -580,10 +586,17 @@ namespace WaveByWave.Items
         internal static void Apply(World world, LootStressCommand command)
         {
             if (_catalog == null) { _pending = command; return; }
-            Clear();
+            var sceneName = command.SceneName.ToString();
+            if (command.Seed != 0 && command.Seed == _appliedSeed && command.Count == _appliedCount &&
+                sceneName == _appliedScene && ReferenceEquals(world, _appliedWorld)) return;
+            ClearContent(false);
+            _appliedSeed = command.Seed;
+            _appliedCount = command.Count;
+            _appliedScene = sceneName;
+            _appliedWorld = world;
             if (command.Count <= 0 || world == null || !world.IsCreated ||
-                command.SceneName.ToString() != SceneManager.GetActiveScene().name) return;
-            _activeScene = command.SceneName.ToString();
+                sceneName != SceneManager.GetActiveScene().name) return;
+            _activeScene = sceneName;
             var catalogIndices = LootStressTest.RenderableCatalogIndices();
             var variants = BuildVariants(catalogIndices);
             if (variants.Count == 0) return;
@@ -777,7 +790,9 @@ namespace WaveByWave.Items
             return target != null;
         }
 
-        internal static void Clear()
+        internal static void Clear() => ClearContent(true);
+
+        private static void ClearContent(bool resetAppliedCommand)
         {
             foreach (var item in Items.Values) Destroy(item);
             Items.Clear();
@@ -788,6 +803,11 @@ namespace WaveByWave.Items
             RuntimeMaterials.Clear();
             _world = null;
             _activeScene = null;
+            if (!resetAppliedCommand) return;
+            _appliedSeed = 0;
+            _appliedCount = 0;
+            _appliedScene = null;
+            _appliedWorld = null;
         }
 
         internal static void ClearScene(string sceneName)

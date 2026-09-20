@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using UdpSocket = System.Net.Sockets.Socket;
 using Steamworks;
 using Steamworks.Data;
 using Unity.Collections;
@@ -74,26 +77,49 @@ namespace WaveByWave.Networking
     /// <summary>Session-level control used by the NGO lobby coordinator.</summary>
     public static class SteamNetcodeSession
     {
+        private enum SessionTransport
+        {
+            None,
+            Steam,
+            LocalUdp
+        }
+
         private static readonly List<SteamDatagramBridge> Bridges = new();
         private static int _virtualPort;
         private static ulong _hostSteamId;
+        private static string _localAddress = "127.0.0.1";
+        private static SessionTransport _transport;
         private static readonly NetworkEndpoint LocalHostClientEndpoint =
             NetworkEndpoint.Parse("fdff::1", 1, NetworkFamily.Ipv6);
 
         internal static void Register(SteamDatagramBridge bridge)
         {
             Bridges.Add(bridge);
-            bridge.Configure(_virtualPort, _hostSteamId);
+            if (_transport == SessionTransport.LocalUdp)
+                bridge.ConfigureLocal(_virtualPort, _localAddress);
+            else
+                bridge.ConfigureSteam(_virtualPort, _hostSteamId);
         }
 
         internal static void Unregister(SteamDatagramBridge bridge) => Bridges.Remove(bridge);
 
         public static void Configure(int virtualPort, ulong hostSteamId)
         {
+            _transport = SessionTransport.Steam;
             _virtualPort = virtualPort;
             _hostSteamId = hostSteamId;
             foreach (var bridge in Bridges)
-                bridge.Configure(virtualPort, hostSteamId);
+                bridge.ConfigureSteam(virtualPort, hostSteamId);
+        }
+
+        public static void ConfigureLocal(int port, string address)
+        {
+            _transport = SessionTransport.LocalUdp;
+            _virtualPort = port;
+            _hostSteamId = 0;
+            _localAddress = string.IsNullOrWhiteSpace(address) ? "127.0.0.1" : address;
+            foreach (var bridge in Bridges)
+                bridge.ConfigureLocal(port, _localAddress);
         }
 
         public static void StartHostAndLocalClient()
@@ -106,6 +132,13 @@ namespace WaveByWave.Networking
         }
 
         public static bool TryPrepareHost(out string error)
+        {
+            return TryPrepareServer(out error);
+        }
+
+        public static bool TryPrepareLocalHost(out string error) => TryPrepareServer(out error);
+
+        private static bool TryPrepareServer(out string error)
         {
             var foundServer = false;
             foreach (var bridge in Bridges)
@@ -132,6 +165,23 @@ namespace WaveByWave.Networking
             ConfigureWorld(ClientServerBootstrap.ClientWorld, false);
         }
 
+        public static void StartLocalHostAndClient()
+        {
+            if (_transport != SessionTransport.LocalUdp)
+                throw new InvalidOperationException("Local Netcode for Entities transport is not configured.");
+
+            ConfigureWorld(ClientServerBootstrap.ServerWorld, true);
+            ConfigureWorld(ClientServerBootstrap.ClientWorld, false);
+        }
+
+        public static void StartLocalClient()
+        {
+            if (_transport != SessionTransport.LocalUdp)
+                throw new InvalidOperationException("Local Netcode for Entities transport is not configured.");
+
+            ConfigureWorld(ClientServerBootstrap.ClientWorld, false);
+        }
+
         public static void Shutdown()
         {
             LootStressTest.ClearLocal();
@@ -140,6 +190,7 @@ namespace WaveByWave.Networking
                 bridge.Close();
             _virtualPort = 0;
             _hostSteamId = 0;
+            _transport = SessionTransport.None;
         }
 
         private static void ConfigureWorld(World world, bool listen)
@@ -164,9 +215,24 @@ namespace WaveByWave.Networking
                 var request = manager.CreateEntity();
                 manager.AddComponentData(request, new NetworkStreamRequestConnect
                 {
-                    Endpoint = NetworkEndpoint.LoopbackIpv4.WithPort(ToPort(_virtualPort))
+                    Endpoint = _transport == SessionTransport.LocalUdp
+                        ? ResolveEndpoint(_localAddress, ToPort(_virtualPort))
+                        : NetworkEndpoint.LoopbackIpv4.WithPort(ToPort(_virtualPort))
                 });
             }
+        }
+
+        private static NetworkEndpoint ResolveEndpoint(string address, ushort port)
+        {
+            if (NetworkEndpoint.TryParse(address, port, out var endpoint))
+                return endpoint;
+
+            foreach (var candidate in Dns.GetHostAddresses(address))
+                if (candidate.AddressFamily == AddressFamily.InterNetwork &&
+                    NetworkEndpoint.TryParse(candidate.ToString(), port, out endpoint))
+                    return endpoint;
+
+            throw new InvalidOperationException($"Не удалось определить локальный адрес NFE: {address}");
         }
 
         private static void DisconnectWorld(World world)
@@ -185,6 +251,8 @@ namespace WaveByWave.Networking
         private static ushort ToPort(int value) => (ushort)Math.Clamp(value, 1, ushort.MaxValue);
 
         internal static bool IsLocalHost => SteamClient.IsValid && _hostSteamId == SteamClient.SteamId;
+
+        internal static bool IsLocalUdp => _transport == SessionTransport.LocalUdp;
 
         internal static bool RouteLocalClientToServer(byte[] payload)
         {
@@ -272,11 +340,15 @@ namespace WaveByWave.Networking
         private readonly bool _server;
         private readonly Queue<ReceivedPacket> _received = new();
         private readonly Dictionary<NetworkEndpoint, Connection> _serverConnections = new();
+        private readonly byte[] _udpReceiveBuffer = new byte[ushort.MaxValue];
         private ConnectionManager _client;
         private SocketManager _listener;
+        private UdpSocket _udpSocket;
+        private IPEndPoint _udpServerEndpoint;
         private NetworkEndpoint _serverEndpoint;
         private int _virtualPort;
         private ulong _hostSteamId;
+        private bool _localUdp;
         private bool _disposed;
 
         internal bool IsServer => _server;
@@ -288,15 +360,26 @@ namespace WaveByWave.Networking
             SteamNetcodeSession.Register(this);
         }
 
-        internal void Configure(int virtualPort, ulong hostSteamId)
+        internal void ConfigureSteam(int virtualPort, ulong hostSteamId)
         {
-            if (_virtualPort == virtualPort && _hostSteamId == hostSteamId)
+            if (!_localUdp && _virtualPort == virtualPort && _hostSteamId == hostSteamId)
                 return;
 
             Close();
+            _localUdp = false;
             _virtualPort = virtualPort;
             _hostSteamId = hostSteamId;
             _serverEndpoint = NetworkEndpoint.LoopbackIpv4.WithPort((ushort)Math.Clamp(virtualPort, 1, ushort.MaxValue));
+        }
+
+        internal void ConfigureLocal(int port, string address)
+        {
+            Close();
+            _localUdp = true;
+            _virtualPort = port;
+            _hostSteamId = 0;
+            _udpServerEndpoint = new IPEndPoint(ResolveIpv4(address), Math.Clamp(port, 1, ushort.MaxValue));
+            _serverEndpoint = ToNetworkEndpoint(_udpServerEndpoint);
         }
 
         internal bool StartServer()
@@ -304,13 +387,27 @@ namespace WaveByWave.Networking
             LastError = null;
             if (!_server)
                 return true;
-            if (_listener != null)
+            if (_listener != null || _udpSocket != null)
                 return true;
-            if (!SteamClient.IsValid || _virtualPort <= 0)
+            if (_virtualPort <= 0)
                 return false;
 
             try
             {
+                if (SteamNetcodeSession.IsLocalUdp)
+                {
+                    _udpSocket = new UdpSocket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
+                    {
+                        Blocking = false,
+                        ExclusiveAddressUse = true
+                    };
+                    _udpSocket.Bind(new IPEndPoint(IPAddress.Any, _virtualPort));
+                    Debug.Log($"[Local NFE] Listening on UDP port {_virtualPort}.");
+                    return true;
+                }
+
+                if (!SteamClient.IsValid)
+                    return false;
                 SteamNetworkingUtils.InitRelayNetworkAccess();
                 _listener = SteamNetworkingSockets.CreateRelaySocket<SocketManager>(_virtualPort);
                 _listener.Interface = this;
@@ -327,13 +424,25 @@ namespace WaveByWave.Networking
 
         private bool EnsureClient()
         {
-            if (_server || _client != null)
+            if (_server || _client != null || _udpSocket != null)
                 return true;
-            if (!SteamClient.IsValid || _hostSteamId == 0 || _virtualPort <= 0)
+            if (_virtualPort <= 0)
                 return false;
 
             try
             {
+                if (SteamNetcodeSession.IsLocalUdp)
+                {
+                    _udpSocket = new UdpSocket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
+                    {
+                        Blocking = false
+                    };
+                    _udpSocket.Bind(new IPEndPoint(IPAddress.Any, 0));
+                    return true;
+                }
+
+                if (!SteamClient.IsValid || _hostSteamId == 0)
+                    return false;
                 SteamNetworkingUtils.InitRelayNetworkAccess();
                 _client = SteamNetworkingSockets.ConnectRelay<ConnectionManager>(_hostSteamId, _virtualPort);
                 _client.Interface = this;
@@ -348,7 +457,14 @@ namespace WaveByWave.Networking
 
         internal void Pump()
         {
-            if (_disposed || !SteamClient.IsValid)
+            if (_disposed)
+                return;
+            if (SteamNetcodeSession.IsLocalUdp)
+            {
+                PumpUdp();
+                return;
+            }
+            if (!SteamClient.IsValid)
                 return;
             _client?.Receive();
             _listener?.Receive();
@@ -379,6 +495,12 @@ namespace WaveByWave.Networking
 
         internal unsafe void Flush(ref SendJobArguments arguments)
         {
+            if (SteamNetcodeSession.IsLocalUdp)
+            {
+                FlushUdp(ref arguments);
+                return;
+            }
+
             if (!_server && !SteamNetcodeSession.IsLocalHost && !EnsureClient())
                 return;
 
@@ -403,7 +525,17 @@ namespace WaveByWave.Networking
                 else
                 {
                     if (!SteamNetcodeSession.RouteLocalClientToServer(payload))
+                    {
+                        // The local-host bridge can disappear while worlds are reconnecting or
+                        // shutting down. Never dereference a missing remote client as a fallback;
+                        // recreate it when possible and otherwise drop this unreliable packet.
+                        if (!EnsureClient() || _client == null)
+                        {
+                            packet.Drop();
+                            continue;
+                        }
                         _client.Connection.SendMessage(payload, SendType.Unreliable);
+                    }
                 }
 
                 packet.Drop();
@@ -418,8 +550,86 @@ namespace WaveByWave.Networking
             catch (Exception exception) { Debug.LogWarning($"[Steam NFE] Listener close: {exception.Message}"); }
             _client = null;
             _listener = null;
+            try { _udpSocket?.Close(); }
+            catch (Exception exception) { Debug.LogWarning($"[Local NFE] UDP close: {exception.Message}"); }
+            _udpSocket = null;
             _serverConnections.Clear();
             _received.Clear();
+        }
+
+        private void PumpUdp()
+        {
+            if (_udpSocket == null)
+                return;
+
+            while (_udpSocket.Poll(0, SelectMode.SelectRead))
+            {
+                EndPoint source = new IPEndPoint(IPAddress.Any, 0);
+                try
+                {
+                    var length = _udpSocket.ReceiveFrom(_udpReceiveBuffer, 0, _udpReceiveBuffer.Length,
+                        SocketFlags.None, ref source);
+                    if (length <= 0 || source is not IPEndPoint ipSource)
+                        continue;
+                    var payload = new byte[length];
+                    Buffer.BlockCopy(_udpReceiveBuffer, 0, payload, 0, length);
+                    _received.Enqueue(new ReceivedPacket(payload, ToNetworkEndpoint(ipSource)));
+                }
+                catch (SocketException exception) when (exception.SocketErrorCode == SocketError.WouldBlock)
+                {
+                    break;
+                }
+            }
+        }
+
+        private unsafe void FlushUdp(ref SendJobArguments arguments)
+        {
+            if (!EnsureClient() || _udpSocket == null)
+                return;
+
+            var count = arguments.SendQueue.Count;
+            for (var index = 0; index < count; index++)
+            {
+                var packet = arguments.SendQueue[index];
+                if (packet.Length <= 0)
+                    continue;
+
+                var payload = new byte[packet.Length];
+                fixed (byte* destination = payload)
+                    UnsafeUtility.MemCpy(destination, (byte*)packet.GetUnsafePayloadPtr() + packet.Offset, packet.Length);
+
+                try
+                {
+                    var destination = _server ? ToIpEndpoint(packet.EndpointRef) : _udpServerEndpoint;
+                    if (destination != null)
+                        _udpSocket.SendTo(payload, destination);
+                }
+                catch (SocketException exception) when (exception.SocketErrorCode == SocketError.WouldBlock ||
+                    exception.SocketErrorCode == SocketError.NoBufferSpaceAvailable)
+                {
+                    // This is an unreliable datagram transport; a saturated packet may be dropped.
+                }
+                packet.Drop();
+            }
+        }
+
+        private static IPAddress ResolveIpv4(string address)
+        {
+            if (IPAddress.TryParse(address, out var parsed) && parsed.AddressFamily == AddressFamily.InterNetwork)
+                return parsed;
+            foreach (var candidate in Dns.GetHostAddresses(address))
+                if (candidate.AddressFamily == AddressFamily.InterNetwork)
+                    return candidate;
+            throw new InvalidOperationException($"Не удалось определить IPv4-адрес: {address}");
+        }
+
+        private static NetworkEndpoint ToNetworkEndpoint(IPEndPoint endpoint) =>
+            NetworkEndpoint.Parse(endpoint.Address.ToString(), (ushort)endpoint.Port);
+
+        private static IPEndPoint ToIpEndpoint(NetworkEndpoint endpoint)
+        {
+            using var bytes = endpoint.GetRawAddressBytes();
+            return new IPEndPoint(new IPAddress(bytes.ToArray()), endpoint.Port);
         }
 
         internal void Enqueue(byte[] payload, NetworkEndpoint source) =>

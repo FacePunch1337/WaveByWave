@@ -264,12 +264,22 @@ namespace WaveByWave.Networking
                 if (_disposed) return;
                 UseLocalTransport();
                 var started = networkManager.StartClient();
-                if (started) BindNetworkSceneCallbacks();
                 var targetPort = GetLocalConnectionPort();
+                if (started)
+                {
+                    BindNetworkSceneCallbacks();
+                    SteamNetcodeSession.ConfigureLocal(GetLocalEntitiesPort(targetPort), localAddress);
+                    SteamNetcodeSession.StartLocalClient();
+                }
                 SetStatus(started ? $"Подключение к {localAddress}:{targetPort}…" : "Локальный client не запустился.");
                 if (started) await WaitForLocalConnectionAsync(targetPort);
             }
-            catch (Exception exception) { SetStatus($"Ошибка локального подключения: {exception.Message}"); }
+            catch (Exception exception)
+            {
+                try { await LeaveLobbyAndShutdownAsync(); }
+                catch (Exception cleanupException) { Debug.LogWarning($"Остановка локальной сессии: {cleanupException.Message}"); }
+                SetStatus($"Ошибка локального подключения: {exception.Message}");
+            }
             finally { _starting = false; }
         }
 
@@ -280,7 +290,12 @@ namespace WaveByWave.Networking
 
             _starting = true;
             try { await StartLocalHostCoreAsync(); }
-            catch (Exception exception) { SetStatus($"Локальный host не запустился: {exception.Message}"); }
+            catch (Exception exception)
+            {
+                try { await LeaveLobbyAndShutdownAsync(); }
+                catch (Exception cleanupException) { Debug.LogWarning($"Остановка локального host: {cleanupException.Message}"); }
+                SetStatus($"Локальный host не запустился: {exception.Message}");
+            }
             finally { _starting = false; }
         }
 
@@ -290,14 +305,28 @@ namespace WaveByWave.Networking
             if (_disposed) return;
             var hostPort = ValidateLocalHostPort();
             UseLocalTransport(hostPort);
+            var entitiesPort = GetLocalEntitiesPort(hostPort);
+            SteamNetcodeSession.ConfigureLocal(entitiesPort, localAddress);
+            if (!SteamNetcodeSession.TryPrepareLocalHost(out var entitiesError))
+                throw new InvalidOperationException($"Локальный DOTS transport недоступен на UDP-порту {entitiesPort}: {entitiesError}");
             var started = networkManager != null && networkManager.StartHost();
             if (started)
+            {
                 BindNetworkSceneCallbacks();
+                SteamNetcodeSession.StartLocalHostAndClient();
+            }
+            else
+            {
+                SteamNetcodeSession.Shutdown();
+            }
             SetStatus(started ? $"Локальный host • {localAddress}:{hostPort}" : "Локальный host не запустился.");
         }
 
         private ushort GetLocalConnectionPort() => GetLocalPortOverride() ??
             (localPort != 0 ? localPort : (ushort)7777);
+
+        private static ushort GetLocalEntitiesPort(ushort ngoPort) =>
+            ngoPort < ushort.MaxValue ? (ushort)(ngoPort + 1) : (ushort)(ngoPort - 1);
 
         private ushort ValidateLocalHostPort()
         {
@@ -338,6 +367,7 @@ namespace WaveByWave.Networking
                 return;
             }
             var reason = networkManager.DisconnectReason;
+            SteamNetcodeSession.Shutdown();
             await ShutdownNetworkAsync();
             if (!_disposed)
                 SetStatus(string.IsNullOrWhiteSpace(reason)

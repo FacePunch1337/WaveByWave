@@ -19,6 +19,8 @@ namespace WaveByWave.Player
         private GameObject _hookVisual, _bucketWater;
         private LineRenderer _rope;
         private ItemDefinition _definition;
+        private GripPose _rightGrip, _leftGrip;
+        private bool _hasAuthoredGrips;
         private Camera _camera;
         private float _fov, _aimBlend, _blockBlend, _blockHitUntil;
         private bool _initialized;
@@ -32,6 +34,18 @@ namespace WaveByWave.Player
         private bool _stateSeen;
         private float _localActionStart = float.NegativeInfinity;
         private readonly HashSet<EquipmentAction> _warnedMissing = new();
+
+        private readonly struct GripPose
+        {
+            public readonly bool IsSet;
+            public readonly Matrix4x4 RootLocalMatrix;
+
+            public GripPose(Matrix4x4 rootLocalMatrix)
+            {
+                IsSet = true;
+                RootLocalMatrix = rootLocalMatrix;
+            }
+        }
 
         public void Initialize(PlayerEquipment equipment, NetworkPlayerController player, PlayerInventory inventory)
         { _equipment = equipment; _player = player; _inventory = inventory; }
@@ -73,16 +87,19 @@ namespace WaveByWave.Player
                 // may silently do nothing without one. Add the same disabled Animator here.
                 if (_motion.GetComponent<Animator>() == null)
                     _motion.gameObject.AddComponent<Animator>().enabled = false;
-                _animator = _bodyVisual != null ? _bodyVisual.GetComponentInChildren<Animator>() : null;
-                if (_animator != null && _animator.isHuman)
-                {
-                    _rightUpper = _animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
-                    _rightLower = _animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
-                    _rightBone = _animator.GetBoneTransform(HumanBodyBones.RightHand);
-                    _leftUpper = _animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-                    _leftLower = _animator.GetBoneTransform(HumanBodyBones.LeftLowerArm);
-                    _leftBone = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
-                }
+            }
+            // The owner's body is hidden only from its gameplay camera, not removed. Resolve its
+            // humanoid bones too so authored grips can be previewed locally and remain correct in
+            // mirrors, customization cameras and any other camera that renders LocalPlayerBody.
+            _animator = _bodyVisual != null ? _bodyVisual.GetComponentInChildren<Animator>() : null;
+            if (_animator != null && _animator.isHuman)
+            {
+                _rightUpper = _animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                _rightLower = _animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
+                _rightBone = _animator.GetBoneTransform(HumanBodyBones.RightHand);
+                _leftUpper = _animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+                _leftLower = _animator.GetBoneTransform(HumanBodyBones.LeftLowerArm);
+                _leftBone = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
             }
             if (_equipment.HookRopePrefab != null)
             {
@@ -100,7 +117,9 @@ namespace WaveByWave.Player
             if (_itemPose != null) Destroy(_itemPose.gameObject);
             if (_hookVisual != null) Destroy(_hookVisual);
             _itemPose = null; _item = null; _bucketWater = null; _hookVisual = null;
+            _rightGrip = default; _leftGrip = default; _hasAuthoredGrips = false;
             if (definition == null || definition.WorldVisualPrefab == null) return;
+            ReadGripPoints(definition.WorldVisualPrefab);
             _itemPose = new GameObject("Held " + definition.Id).transform;
             _itemPose.SetParent(_motion, false);
             _item = ItemVisualUtility.InstantiatePresentation(definition.WorldVisualPrefab, _itemPose,
@@ -115,6 +134,70 @@ namespace WaveByWave.Player
                 _bucketWater = water != null ? water.gameObject : null;
                 if (_bucketWater != null) _bucketWater.SetActive(false);
             }
+        }
+        private void ReadGripPoints(GameObject prefab)
+        {
+            var root = prefab.transform;
+            // _itemPose represents the prefab's parent, not its root. Keep the complete
+            // authored root transform in the grip matrix (notably root scale on muskets).
+            var prefabParentInverse = root.parent != null ? root.parent.worldToLocalMatrix : Matrix4x4.identity;
+            foreach (var point in prefab.GetComponentsInChildren<ItemHandGripPoint>(true))
+            {
+                var pose = new GripPose(prefabParentInverse * point.transform.localToWorldMatrix);
+                if (point.Hand == ItemGripHand.Right)
+                {
+                    if (_rightGrip.IsSet)
+                    {
+                        WarnDuplicateGrip(prefab, point.Hand);
+                        continue;
+                    }
+                    _rightGrip = pose;
+                }
+                else
+                {
+                    if (_leftGrip.IsSet)
+                    {
+                        WarnDuplicateGrip(prefab, point.Hand);
+                        continue;
+                    }
+                    _leftGrip = pose;
+                }
+                _hasAuthoredGrips = true;
+            }
+        }
+        private static void WarnDuplicateGrip(GameObject prefab, ItemGripHand hand) =>
+            Debug.LogWarning($"Item prefab '{prefab.name}' has more than one {hand} grip. " +
+                             "Only the first point is used.", prefab);
+        private bool TryGetGripPose(ItemGripHand hand, out Pose pose)
+        {
+            if (_definition != null && _definition.OverridesHandGripPoints)
+            {
+                if (_item == null || !_definition.TryGetHandGrip(hand, out var definitionGrip))
+                {
+                    pose = default;
+                    return false;
+                }
+
+                // Read the ScriptableObject on every frame. This intentionally makes Play Mode
+                // Inspector edits visible immediately without re-equipping or rebuilding the item.
+                var prefabRoot = _definition.WorldVisualPrefab.transform;
+                var prefabRootMatrix = Matrix4x4.TRS(prefabRoot.localPosition, prefabRoot.localRotation,
+                    prefabRoot.localScale);
+                var definitionMatrix = _itemPose.localToWorldMatrix * prefabRootMatrix * Matrix4x4.TRS(
+                    definitionGrip.LocalPosition, definitionGrip.LocalRotation, Vector3.one);
+                pose = new Pose(definitionMatrix.GetColumn(3), definitionMatrix.rotation);
+                return true;
+            }
+
+            var grip = hand == ItemGripHand.Right ? _rightGrip : _leftGrip;
+            if (!grip.IsSet || _itemPose == null)
+            {
+                pose = default;
+                return false;
+            }
+            var matrix = _itemPose.localToWorldMatrix * grip.RootLocalMatrix;
+            pose = new Pose(matrix.GetColumn(3), matrix.rotation);
+            return true;
         }
         private static Transform FindDescendant(Transform root, string childName)
         {
@@ -165,35 +248,42 @@ namespace WaveByWave.Player
             SampleMotion(definition);
             if (_blockHitUntil > Time.unscaledTime)
                 _motion.localPosition += Vector3.back * (0.08f * Mathf.Sin((_blockHitUntil - Time.unscaledTime) / 0.2f * Mathf.PI));
-            var right = _item.TransformPoint(Grip(definition.EquipmentKind));
-            var left = definition.EquipmentKind == ItemEquipmentKind.Musket
-                ? _item.TransformPoint(new Vector3(0f, 0.2f, 0.02f)) :
-                definition.EquipmentKind == ItemEquipmentKind.Shovel ? _item.TransformPoint(new Vector3(0f, -0.15f, 0f)) :
-                _item.TransformPoint(new Vector3(-0.25f, 0f, 0f));
             var twoHanded = definition.EquipmentKind == ItemEquipmentKind.Musket ||
                 definition.EquipmentKind == ItemEquipmentKind.Shovel || definition.EquipmentKind == ItemEquipmentKind.Carry;
-            if (_equipment.Reloading && definition.EquipmentKind == ItemEquipmentKind.Musket)
-                left += _rig.up * (Mathf.Sin(_equipment.ReloadProgress * Mathf.PI * 4f) * 0.12f);
+            var hasRight = TryGetGripPose(ItemGripHand.Right, out var rightPose);
+            var hasLeft = TryGetGripPose(ItemGripHand.Left, out var leftPose);
+            // Keep old content usable until an authored point is added. As soon as a prefab has
+            // one grip point, only explicitly authored hands participate in IK.
+            if (!definition.OverridesHandGripPoints && !_hasAuthoredGrips)
+            {
+                hasRight = true;
+                rightPose = new Pose(_item.TransformPoint(LegacyGrip(definition.EquipmentKind)),
+                    _item.rotation * Quaternion.Euler(0f, 0f, 10f));
+                hasLeft = twoHanded;
+                leftPose = new Pose(definition.EquipmentKind == ItemEquipmentKind.Musket
+                        ? _item.TransformPoint(new Vector3(0f, 0.2f, 0.02f))
+                        : definition.EquipmentKind == ItemEquipmentKind.Shovel
+                            ? _item.TransformPoint(new Vector3(0f, -0.15f, 0f))
+                            : _item.TransformPoint(new Vector3(-0.25f, 0f, 0f)), _item.rotation);
+                if (_equipment.Reloading && definition.EquipmentKind == ItemEquipmentKind.Musket)
+                    leftPose.position += _rig.up *
+                        (Mathf.Sin(_equipment.ReloadProgress * Mathf.PI * 4f) * 0.12f);
+            }
             if (_equipment.IsOwner)
             {
-                // Hands/sleeves are optional now: only driven if the prefab actually provided them.
-                if (_rightHand != null)
-                { _rightHand.position = right; _rightHand.rotation = _item.rotation * Quaternion.Euler(0f, 0f, 10f); }
-                if (_leftHand != null) _leftHand.gameObject.SetActive(twoHanded);
-                if (_leftSleeve != null) _leftSleeve.gameObject.SetActive(twoHanded);
-                if (_leftHand != null) { _leftHand.position = left; _leftHand.rotation = _item.rotation; }
-                if (_rightSleeve != null) Sleeve(_rightSleeve, _motion.TransformPoint(new Vector3(0.42f, -0.65f, 0.1f)), right);
-                if (twoHanded && _leftSleeve != null) Sleeve(_leftSleeve, _motion.TransformPoint(new Vector3(-0.4f, -0.65f, 0.1f)), left);
+                SetFirstPersonHand(_rightHand, _rightSleeve, hasRight, rightPose,
+                    _motion.TransformPoint(new Vector3(0.42f, -0.65f, 0.1f)));
+                SetFirstPersonHand(_leftHand, _leftSleeve, hasLeft, leftPose,
+                    _motion.TransformPoint(new Vector3(-0.4f, -0.65f, 0.1f)));
             }
-            else
-            {
-                // Предмет — дочерний объект Motion, а клип уже сэмплирован в SampleMotion,
-                // поэтому right/left уже содержат анимацию. Просто тянем руки к ним.
-                SolveArm(_rightUpper, _rightLower, _rightBone, right, _rig.right - _rig.up);
-                if (twoHanded) SolveArm(_leftUpper, _leftLower, _leftBone, left, -_rig.right - _rig.up);
-            }
+            // Run the humanoid solve for both owner and remote copies. The final hand transform is
+            // snapped to the authored grip after the two-bone solve, so palm position and rotation
+            // match exactly. The gameplay camera still excludes the owner's LocalPlayerBody layer.
+            if (hasRight) SolveArm(_rightUpper, _rightLower, _rightBone, rightPose, _rig.right - _rig.up);
+            if (hasLeft) SolveArm(_leftUpper, _leftLower, _leftBone, leftPose, -_rig.right - _rig.up);
             if (_bucketWater != null) _bucketWater.SetActive(_equipment.BucketFull);
-            UpdateHook(definition, right);
+            var ropeOrigin = hasRight ? rightPose.position : hasLeft ? leftPose.position : _item.position;
+            UpdateHook(definition, ropeOrigin);
         }
         private void SampleMotion(ItemDefinition definition)
         {
@@ -239,7 +329,7 @@ namespace WaveByWave.Player
             }
             return Time.unscaledTime - _localActionStart;
         }
-        private static Vector3 Grip(ItemEquipmentKind kind) => kind switch
+        private static Vector3 LegacyGrip(ItemEquipmentKind kind) => kind switch
         {
             ItemEquipmentKind.Sword => new Vector3(0f, -0.64f, 0f),
             ItemEquipmentKind.Musket => new Vector3(0.05f, -0.32f, 0.03f),
@@ -254,18 +344,27 @@ namespace WaveByWave.Player
             sleeve.rotation = Quaternion.FromToRotation(Vector3.up, delta.normalized);
             sleeve.localScale = new Vector3(0.09f, delta.magnitude * 0.5f, 0.09f);
         }
-        private static void SolveArm(Transform upper, Transform lower, Transform hand, Vector3 target, Vector3 pole)
+        private static void SetFirstPersonHand(Transform hand, Transform sleeve, bool active, Pose pose, Vector3 sleeveRoot)
+        {
+            if (hand != null) hand.gameObject.SetActive(active);
+            if (sleeve != null) sleeve.gameObject.SetActive(active);
+            if (!active) return;
+            if (hand != null) hand.SetPositionAndRotation(pose.position, pose.rotation);
+            if (sleeve != null) Sleeve(sleeve, sleeveRoot, pose.position);
+        }
+        private static void SolveArm(Transform upper, Transform lower, Transform hand, Pose target, Vector3 pole)
         {
             if (upper == null || lower == null || hand == null) return;
             var a = Vector3.Distance(upper.position, lower.position); var b = Vector3.Distance(lower.position, hand.position);
-            var delta = target - upper.position; var distance = Mathf.Clamp(delta.magnitude, Mathf.Abs(a - b) + 0.001f, a + b - 0.001f);
+            var delta = target.position - upper.position; var distance = Mathf.Clamp(delta.magnitude, Mathf.Abs(a - b) + 0.001f, a + b - 0.001f);
             if (a < 0.001f || b < 0.001f || delta.sqrMagnitude < 0.0001f) return;
             var direction = delta.normalized;
             var along = (a * a + distance * distance - b * b) / (2f * distance);
             var perpendicular = Vector3.ProjectOnPlane(pole, direction).normalized;
             var elbow = upper.position + direction * along + perpendicular * Mathf.Sqrt(Mathf.Max(0f, a * a - along * along));
             upper.rotation = Quaternion.FromToRotation(lower.position - upper.position, elbow - upper.position) * upper.rotation;
-            lower.rotation = Quaternion.FromToRotation(hand.position - lower.position, target - lower.position) * lower.rotation;
+            lower.rotation = Quaternion.FromToRotation(hand.position - lower.position, target.position - lower.position) * lower.rotation;
+            hand.SetPositionAndRotation(target.position, target.rotation);
         }
         private void UpdateHook(ItemDefinition definition, Vector3 hand)
         {

@@ -24,6 +24,21 @@ namespace WaveByWave.Items
     public enum ItemEquipmentKind : byte { Automatic, Carry, Sword, Musket, Hook, Bucket, Shovel }
     public enum ShipUpgradeStat : byte { CannonDamage, Armor, Speed, Maneuverability }
 
+    [System.Serializable]
+    public struct ItemHandGripPose
+    {
+        [SerializeField, Tooltip("Должна ли эта рука участвовать в IK для предмета.")]
+        private bool enabled;
+        [SerializeField, Tooltip("Позиция ладони относительно корня prefab предмета.")]
+        private Vector3 localPosition;
+        [SerializeField, Tooltip("Поворот ладони относительно корня prefab предмета, в градусах.")]
+        private Vector3 localEulerAngles;
+
+        public bool Enabled => enabled;
+        public Vector3 LocalPosition => localPosition;
+        public Quaternion LocalRotation => Quaternion.Euler(localEulerAngles);
+    }
+
     [CreateAssetMenu(menuName = "Wave by Wave/Items/Item Definition", fileName = "Item_")]
     public sealed class ItemDefinition : ScriptableObject
     {
@@ -49,6 +64,11 @@ namespace WaveByWave.Items
         [SerializeField] private Vector3 heldPosition = new(0.34f, -0.32f, 0.65f);
         [SerializeField] private Vector3 heldEulerAngles;
         [SerializeField, Min(0.01f)] private float heldScale = 0.65f;
+        [Header("IK рук")]
+        [SerializeField, Tooltip("Использовать точки из этого ItemDefinition вместо компонентов ItemHandGripPoint в prefab.")]
+        private bool overrideHandGripPoints;
+        [SerializeField] private ItemHandGripPose rightHandGrip;
+        [SerializeField] private ItemHandGripPose leftHandGrip;
 
         public ItemEquipmentKind EquipmentKind => equipmentKind != ItemEquipmentKind.Automatic ? equipmentKind :
             id != null && id.StartsWith("cutlass", System.StringComparison.Ordinal) ? ItemEquipmentKind.Sword :
@@ -68,6 +88,13 @@ namespace WaveByWave.Items
         // additional hand-pose offset for exceptional items.
         public Vector3 HeldEulerAngles => overrideHeldPose ? heldEulerAngles : Vector3.zero;
         public float HeldScale => overrideHeldPose ? Mathf.Max(0.01f, heldScale) : 1f;
+        public bool OverridesHandGripPoints => overrideHandGripPoints;
+
+        public bool TryGetHandGrip(ItemGripHand hand, out ItemHandGripPose grip)
+        {
+            grip = hand == ItemGripHand.Right ? rightHandGrip : leftHandGrip;
+            return overrideHandGripPoints && grip.Enabled;
+        }
 
         public string Id => id;
         public string DisplayName => displayName;

@@ -32,3 +32,12 @@ MonoBehaviour:
   heldPosition: {x: 0.32, y: -0.5, z: 0.75}
   heldEulerAngles: {x: 0, y: 0, z: 0}
   heldScale: 1
+  overrideHandGripPoints: 1
+  rightHandGrip:
+    enabled: 1
+    localPosition: {x: 0.12, y: -0.1, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 10}
+  leftHandGrip:
+    enabled: 1
+    localPosition: {x: 0, y: -0.15, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}

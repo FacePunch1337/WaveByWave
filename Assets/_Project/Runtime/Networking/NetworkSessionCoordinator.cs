@@ -24,6 +24,7 @@ namespace WaveByWave.Networking
         private const string LobbyNameKey = "wave_by_wave_name";
         private const string BuildKey = "wave_by_wave_build";
         private const string RelayPortKey = "wave_by_wave_relay_port";
+        private const string EntitiesRelayPortKey = "wave_by_wave_entities_relay_port";
 
         public static NetworkSessionCoordinator Instance { get; private set; }
         public event Action StateChanged;
@@ -169,6 +170,23 @@ namespace WaveByWave.Networking
                 if (!networkManager.StartHost())
                     throw new InvalidOperationException("NGO не смог запустить host.");
                 BindNetworkSceneCallbacks();
+
+                var entitiesRelayPort = 0;
+                string entitiesRelayError = null;
+                for (var attempt = 0; attempt < 4; attempt++)
+                {
+                    entitiesRelayPort = 1 + (Guid.NewGuid().GetHashCode() & 0x7fff);
+                    if (entitiesRelayPort == steamTransport.virtualPort)
+                        continue;
+                    SteamNetcodeSession.Configure(entitiesRelayPort, SteamClient.SteamId);
+                    if (SteamNetcodeSession.TryPrepareHost(out entitiesRelayError))
+                        break;
+                    entitiesRelayPort = 0;
+                }
+                if (entitiesRelayPort == 0)
+                    throw new InvalidOperationException($"Steam relay для Netcode for Entities недоступен: {entitiesRelayError}");
+                CurrentLobby.SetData(EntitiesRelayPortKey, entitiesRelayPort.ToString());
+                SteamNetcodeSession.StartHostAndLocalClient();
 
                 CurrentLobby.SetGameServer(SteamClient.SteamId);
                 CurrentLobby.SetJoinable(true);
@@ -378,6 +396,12 @@ namespace WaveByWave.Networking
                     throw new InvalidOperationException("NGO не смог запустить client.");
                 BindNetworkSceneCallbacks();
 
+                var entitiesRelayPortValue = lobby.GetData(EntitiesRelayPortKey);
+                if (!int.TryParse(entitiesRelayPortValue, out var entitiesRelayPort) || entitiesRelayPort <= 0)
+                    throw new InvalidOperationException("Steam-лобби не опубликовало порт Netcode for Entities.");
+                SteamNetcodeSession.Configure(entitiesRelayPort, lobby.Owner.Id);
+                SteamNetcodeSession.StartClient();
+
                 SetStatus($"Подключение к {lobby.Owner.Name}…");
             }
             catch (Exception exception)
@@ -423,6 +447,7 @@ namespace WaveByWave.Networking
 
         private async Task LeaveLobbyAndShutdownAsync()
         {
+            SteamNetcodeSession.Shutdown();
             await WaitForNextFrameAsync();
             if (_disposed) return;
             if (CurrentLobby.Id != 0)

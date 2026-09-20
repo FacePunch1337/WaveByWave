@@ -64,11 +64,14 @@ namespace WaveByWave.Networking
         public void OnUpdate(ref SystemState state)
         {
             var commands = new EntityCommandBuffer(Allocator.Temp);
-            foreach (var (_, entity) in SystemAPI.Query<RefRO<NetworkId>>()
+            foreach (var (id, entity) in SystemAPI.Query<RefRO<NetworkId>>()
                          .WithAll<NetworkStreamConnection>()
-                         .WithNone<NetworkStreamInGame>()
+                         .WithNone<NetworkStreamInGame, NetworkStreamRequestDisconnect>()
                          .WithEntityAccess())
+            {
                 commands.AddComponent<NetworkStreamInGame>(entity);
+                Debug.Log($"[NFE] {state.WorldUnmanaged.Name}: connection {id.ValueRO.Value} ready for loot synchronization.");
+            }
             commands.Playback(state.EntityManager);
             commands.Dispose();
         }
@@ -89,6 +92,7 @@ namespace WaveByWave.Networking
         private static ulong _hostSteamId;
         private static string _localAddress = "127.0.0.1";
         private static SessionTransport _transport;
+        private static bool _driversNeedReset;
         private static readonly NetworkEndpoint LocalHostClientEndpoint =
             NetworkEndpoint.Parse("fdff::1", 1, NetworkFamily.Ipv6);
 
@@ -105,6 +109,7 @@ namespace WaveByWave.Networking
 
         public static void Configure(int virtualPort, ulong hostSteamId)
         {
+            PrepareDrivers();
             _transport = SessionTransport.Steam;
             _virtualPort = virtualPort;
             _hostSteamId = hostSteamId;
@@ -114,6 +119,7 @@ namespace WaveByWave.Networking
 
         public static void ConfigureLocal(int port, string address)
         {
+            PrepareDrivers();
             _transport = SessionTransport.LocalUdp;
             _virtualPort = port;
             _hostSteamId = 0;
@@ -186,11 +192,53 @@ namespace WaveByWave.Networking
         {
             LootStressTest.ClearLocal();
             DisconnectWorld(ClientServerBootstrap.ClientWorld);
+            DisconnectWorld(ClientServerBootstrap.ServerWorld);
+            _transport = SessionTransport.None;
+            _driversNeedReset = true;
             foreach (var bridge in Bridges)
-                bridge.Close();
+                bridge.Stop();
             _virtualPort = 0;
             _hostSteamId = 0;
-            _transport = SessionTransport.None;
+        }
+
+        public static bool HasPendingDisconnects =>
+            HasConnections(ClientServerBootstrap.ClientWorld) || HasConnections(ClientServerBootstrap.ServerWorld);
+
+        private static bool HasConnections(World world)
+        {
+            if (world == null || !world.IsCreated) return false;
+            using var query = world.EntityManager.CreateEntityQuery(ComponentType.ReadOnly<NetworkStreamConnection>());
+            return !query.IsEmpty;
+        }
+
+        private static void PrepareDrivers()
+        {
+            if (!_driversNeedReset) return;
+            if (HasPendingDisconnects)
+                throw new InvalidOperationException("Предыдущие NFE-соединения ещё останавливаются.");
+            ResetDriver(ClientServerBootstrap.ServerWorld, true);
+            ResetDriver(ClientServerBootstrap.ClientWorld, false);
+            _driversNeedReset = false;
+        }
+
+        private static void ResetDriver(World world, bool server)
+        {
+            if (world == null || !world.IsCreated) return;
+            var manager = world.EntityManager;
+            manager.CompleteAllTrackedJobs();
+            using var driverQuery = manager.CreateEntityQuery(ComponentType.ReadWrite<NetworkStreamDriver>());
+            using var debugQuery = manager.CreateEntityQuery(ComponentType.ReadOnly<NetDebug>());
+            if (driverQuery.IsEmpty) return;
+            var replacement = new NetworkDriverStore();
+            var constructor = new SteamNetworkDriverConstructor();
+            var netDebug = debugQuery.GetSingleton<NetDebug>();
+            if (server) constructor.CreateServerDriver(world, ref replacement, netDebug);
+            else constructor.CreateClientDriver(world, ref replacement, netDebug);
+            var driver = driverQuery.GetSingleton<NetworkStreamDriver>();
+            // Reset also disposes the old bridge, listener, UTP connections and queued packets.
+            // Merely closing the socket leaves the driver listening to the previous Steam session.
+            driver.ResetDriverStore(world.Unmanaged, ref replacement);
+            driverQuery.SetSingleton(driver);
         }
 
         private static void ConfigureWorld(World world, bool listen)
@@ -241,11 +289,23 @@ namespace WaveByWave.Networking
                 return;
 
             var manager = world.EntityManager;
+            manager.CompleteAllTrackedJobs();
+            using (var requests = manager.CreateEntityQuery(new EntityQueryDesc
+            {
+                Any = new[] { ComponentType.ReadOnly<NetworkStreamRequestListen>(),
+                    ComponentType.ReadOnly<NetworkStreamRequestConnect>(), ComponentType.ReadOnly<SendRpcCommandRequest>(),
+                    ComponentType.ReadOnly<ReceiveRpcCommandRequest>() }
+            })) manager.DestroyEntity(requests);
             using var query = manager.CreateEntityQuery(ComponentType.ReadOnly<NetworkStreamConnection>());
             using var connections = query.ToEntityArray(Unity.Collections.Allocator.Temp);
             foreach (var connection in connections)
+            {
+                // Keep InGame until NetCode processes the disconnect. Removing it first can
+                // rewind NetworkTimeSystem to the last snapshot and stall the client's rate
+                // manager before NetworkStreamReceiveSystem gets to clean up this connection.
                 if (!manager.HasComponent<NetworkStreamRequestDisconnect>(connection))
                     manager.AddComponentData(connection, new NetworkStreamRequestDisconnect());
+            }
         }
 
         private static ushort ToPort(int value) => (ushort)Math.Clamp(value, 1, ushort.MaxValue);
@@ -350,6 +410,8 @@ namespace WaveByWave.Networking
         private ulong _hostSteamId;
         private bool _localUdp;
         private bool _disposed;
+        private bool _active;
+        private long _nextSocketWarning;
 
         internal bool IsServer => _server;
         internal string LastError { get; private set; }
@@ -362,13 +424,14 @@ namespace WaveByWave.Networking
 
         internal void ConfigureSteam(int virtualPort, ulong hostSteamId)
         {
-            if (!_localUdp && _virtualPort == virtualPort && _hostSteamId == hostSteamId)
+            if (_active && !_localUdp && _virtualPort == virtualPort && _hostSteamId == hostSteamId)
                 return;
 
             Close();
             _localUdp = false;
             _virtualPort = virtualPort;
             _hostSteamId = hostSteamId;
+            _active = virtualPort > 0;
             _serverEndpoint = NetworkEndpoint.LoopbackIpv4.WithPort((ushort)Math.Clamp(virtualPort, 1, ushort.MaxValue));
         }
 
@@ -378,6 +441,7 @@ namespace WaveByWave.Networking
             _localUdp = true;
             _virtualPort = port;
             _hostSteamId = 0;
+            _active = port > 0;
             _udpServerEndpoint = new IPEndPoint(ResolveIpv4(address), Math.Clamp(port, 1, ushort.MaxValue));
             _serverEndpoint = ToNetworkEndpoint(_udpServerEndpoint);
         }
@@ -385,6 +449,7 @@ namespace WaveByWave.Networking
         internal bool StartServer()
         {
             LastError = null;
+            if (!_active) return false;
             if (!_server)
                 return true;
             if (_listener != null || _udpSocket != null)
@@ -424,6 +489,7 @@ namespace WaveByWave.Networking
 
         private bool EnsureClient()
         {
+            if (!_active) return false;
             if (_server || _client != null || _udpSocket != null)
                 return true;
             if (_virtualPort <= 0)
@@ -457,7 +523,7 @@ namespace WaveByWave.Networking
 
         internal void Pump()
         {
-            if (_disposed)
+            if (_disposed || !_active)
                 return;
             if (SteamNetcodeSession.IsLocalUdp)
             {
@@ -495,6 +561,11 @@ namespace WaveByWave.Networking
 
         internal unsafe void Flush(ref SendJobArguments arguments)
         {
+            if (_disposed || !_active)
+            {
+                for (var i = 0; i < arguments.SendQueue.Count; i++) arguments.SendQueue[i].Drop();
+                return;
+            }
             if (SteamNetcodeSession.IsLocalUdp)
             {
                 FlushUdp(ref arguments);
@@ -557,16 +628,26 @@ namespace WaveByWave.Networking
             _received.Clear();
         }
 
+        internal void Stop()
+        {
+            _active = false;
+            _virtualPort = 0;
+            _hostSteamId = 0;
+            Close();
+        }
+
         private void PumpUdp()
         {
             if (_udpSocket == null)
                 return;
 
-            while (_udpSocket.Poll(0, SelectMode.SelectRead))
+            // Bound the work per frame, including ICMP errors returned as WSAECONNRESET on Windows.
+            for (var i = 0; i < 4096; i++)
             {
                 EndPoint source = new IPEndPoint(IPAddress.Any, 0);
                 try
                 {
+                    if (!_udpSocket.Poll(0, SelectMode.SelectRead)) break;
                     var length = _udpSocket.ReceiveFrom(_udpReceiveBuffer, 0, _udpReceiveBuffer.Length,
                         SocketFlags.None, ref source);
                     if (length <= 0 || source is not IPEndPoint ipSource)
@@ -577,6 +658,11 @@ namespace WaveByWave.Networking
                 }
                 catch (SocketException exception) when (exception.SocketErrorCode == SocketError.WouldBlock)
                 {
+                    break;
+                }
+                catch (SocketException exception)
+                {
+                    ReportSocketError(exception);
                     break;
                 }
             }
@@ -600,17 +686,33 @@ namespace WaveByWave.Networking
 
                 try
                 {
-                    var destination = _server ? ToIpEndpoint(packet.EndpointRef) : _udpServerEndpoint;
+                    // Steam's synthetic IPv6 peer ids are never valid IPv4 UDP destinations.
+                    var destination = _server ? (packet.EndpointRef.Family == NetworkFamily.Ipv4
+                        ? ToIpEndpoint(packet.EndpointRef) : null) : _udpServerEndpoint;
                     if (destination != null)
                         _udpSocket.SendTo(payload, destination);
                 }
-                catch (SocketException exception) when (exception.SocketErrorCode == SocketError.WouldBlock ||
-                    exception.SocketErrorCode == SocketError.NoBufferSpaceAvailable)
+                catch (SocketException exception)
                 {
-                    // This is an unreliable datagram transport; a saturated packet may be dropped.
+                    ReportSocketError(exception);
                 }
-                packet.Drop();
+                finally
+                {
+                    // An exception must not pin this packet in UTP's send queue forever.
+                    packet.Drop();
+                }
             }
+        }
+
+        private void ReportSocketError(SocketException exception)
+        {
+            if (exception.SocketErrorCode == SocketError.WouldBlock ||
+                exception.SocketErrorCode == SocketError.NoBufferSpaceAvailable ||
+                exception.SocketErrorCode == SocketError.ConnectionReset) return;
+            var now = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
+            if (now < _nextSocketWarning) return;
+            _nextSocketWarning = now + 5000;
+            Debug.LogWarning($"[Local NFE] UDP {exception.SocketErrorCode}: {exception.Message}");
         }
 
         private static IPAddress ResolveIpv4(string address)

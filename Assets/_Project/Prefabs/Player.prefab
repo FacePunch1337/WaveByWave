@@ -410,7 +410,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   capacity: 8
   catalog: {fileID: 11400000, guid: 2b563eb9625a0ab42b49b9db3e7db374, type: 2}
-  worldItemPrefab: {fileID: 3761216894357105070, guid: ed0a8e01cee354c1a743594dda3bb230, type: 3}
+  rarityEffectPrefab: {fileID: 1815062955493659562, guid: 046ecc3506c35a444a2e8eeda156d260, type: 3}
   startingItemIds:
   - cutlass
   - musket
@@ -511,7 +511,9 @@ MonoBehaviour:
   hookReelSpeed: 8
   maximumRopeLength: 45
   hookPickupRadius: 0.65
-  hookItemCapacity: 6
+  hookLiftHorizontalDistance: 0.9
+  hookSurfaceHeightSpeed: 5
+  hookReelAcceleration: 24
   bucketLitres: 10
   onWaterScooped:
     m_PersistentCalls:

@@ -33,6 +33,9 @@ MonoBehaviour:
   heldPosition: {x: 0.48, y: -0.52, z: 0.57}
   heldEulerAngles: {x: 0, y: 90, z: -71.2}
   heldScale: 1.7
+  overrideSecondaryHeldPose: 1
+  secondaryHeldPosition: {x: 0.11, y: -0.57, z: 0.65}
+  secondaryHeldEulerAngles: {x: 0, y: 135.7, z: -75.6}
   overrideHandGripPoints: 1
   rightHandGrip:
     enabled: 1

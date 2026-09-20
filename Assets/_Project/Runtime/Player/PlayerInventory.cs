@@ -14,7 +14,8 @@ namespace WaveByWave.Player
     {
         [SerializeField, Min(5)] private int capacity = 8;
         [SerializeField] private ItemCatalog catalog;
-        [SerializeField] private WorldItem worldItemPrefab;
+        [SerializeField, Tooltip("Prefab локального эффекта редкости для свободных DOTS-предметов.")]
+        private GameObject rarityEffectPrefab;
         [SerializeField] private string[] startingItemIds =
         {
             "cutlass", "musket", "hook", "bucket", "shovel", "cannonball", "plank", "food"
@@ -48,7 +49,7 @@ namespace WaveByWave.Player
 
         public override void OnNetworkSpawn()
         {
-            LootStressTest.RegisterCatalog(catalog, worldItemPrefab != null ? worldItemPrefab.RarityEffectPrefab : null,
+            LootStressTest.RegisterCatalog(catalog, rarityEffectPrefab,
                 GetComponent<PlayerEquipment>()?.WaterWaveProfile);
             _slots.OnListChanged += OnListChanged;
 
@@ -226,7 +227,7 @@ namespace WaveByWave.Player
         {
             if (!IsOwner || !IsHost)
                 return false;
-            LootStressTest.RegisterCatalog(catalog, worldItemPrefab != null ? worldItemPrefab.RarityEffectPrefab : null,
+            LootStressTest.RegisterCatalog(catalog, rarityEffectPrefab,
                 GetComponent<PlayerEquipment>()?.WaterWaveProfile);
             return LootStressTest.SetTarget(count, transform.position, radius);
         }
@@ -300,23 +301,17 @@ namespace WaveByWave.Player
 
         private bool SpawnDropServer(FixedString64Bytes itemId, Vector3 position, Vector3 direction, NetworkObject support)
         {
-            if (worldItemPrefab == null) return false;
-            var item = Instantiate(worldItemPrefab, position, Quaternion.identity);
-            item.SetState(itemId, 1);
-            if (!item.PrepareDrop(position, direction, support))
-            {
-                Destroy(item.gameObject);
-                return false;
-            }
-            item.NetworkObject.Spawn();
-            return true;
+            if (catalog == null || !catalog.TryGet(itemId.ToString(), out var definition)) return false;
+            LootStressTest.RegisterCatalog(catalog, rarityEffectPrefab,
+                GetComponent<PlayerEquipment>()?.WaterWaveProfile);
+            return LootStressTest.SpawnWorldItemServer(definition, position, direction, support);
         }
 
         [ServerRpc]
         private void DropSelectedServerRpc(int selectedIndex, Vector3 position, Vector3 direction,
             NetworkObjectReference supportReference, ServerRpcParams rpcParams = default)
         {
-            if (worldItemPrefab == null || selectedIndex < 0 || selectedIndex >= _slots.Count)
+            if (selectedIndex < 0 || selectedIndex >= _slots.Count)
                 return;
 
             if (!NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var client))

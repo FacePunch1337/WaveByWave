@@ -9,6 +9,7 @@ using Unity.Rendering;
 using Unity.Transforms;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using StylizedWater3;
 using WaveByWave.Player;
@@ -28,30 +29,51 @@ namespace WaveByWave.Items
     {
         public int Id;
         public byte Kind;
+        public int CatalogIndex;
+        public float3 StartPosition;
         public float3 Position;
         public quaternion Rotation;
         public quaternion BaseRotation;
+        public float3 ArcUp;
+        public float Duration;
+        public float ArcHeight;
         public ulong HookOwner;
         public ulong SupportId;
         public float3 HookOffset;
         public bool OnWater;
     }
 
+    // Client-side readiness and the server-side item lifetime are independent. A newly connected
+    // client explicitly asks for the current snapshot so pre-existing loose items cannot depend on
+    // the timing of connection-system discovery.
+    public struct LootStressSnapshotRequest : IRpcCommand { public byte ProtocolVersion; }
+
     public struct LootStressEntity : IComponentData { }
     internal struct LootStressConnectionState : IComponentData
     {
         public uint DeliveredRevision;
     }
+    internal struct LootSnapshotRequested : IComponentData
+    {
+        public FixedString64Bytes SceneName;
+    }
 
     public static class LootStressTest
     {
         public const int MaximumCount = 3000;
-        internal const byte Remove = 0, Place = 1, Tether = 2;
+        internal const byte Remove = 0, Place = 1, Tether = 2, Add = 3;
 
         private sealed class ServerItem
         {
             public int CatalogIndex;
             public Vector3 Position;
+            public Vector3 RestPosition;
+            public Vector3 FlightStart;
+            public Vector3 ArcUp;
+            public double FlightStarted;
+            public float FlightDuration;
+            public float ArcHeight;
+            public bool Dynamic;
             public Quaternion Rotation;
             public PlayerEquipment Hook;
             public Vector3 HookOffset;
@@ -75,6 +97,7 @@ namespace WaveByWave.Items
         private static bool _hasState;
         private static string _sceneName;
         private static bool _sceneEventsBound;
+        private static int _nextDynamicId = -1;
         private static readonly RaycastHit[] SurfaceHits = new RaycastHit[256];
 
         internal static WaveProfile WaterProfile => _waterProfile;
@@ -120,7 +143,73 @@ namespace WaveByWave.Items
             // depending on the local Steam/NFE handshake winning a race with the admin slider.
             // The delivery system below sends this revision explicitly to every remote client.
             if (ClientServerBootstrap.ClientWorld is { IsCreated: true } clientWorld)
+            {
                 LootStressPresentation.Apply(clientWorld, _latest);
+                ApplyDynamicItemsLocally();
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Creates the authoritative representation used by every loose item. Inventory and held
+        /// items remain compact gameplay data; as soon as an item enters the world it uses this
+        /// DOTS/NFE path, regardless of whether it came from a drop, the admin panel or the stress test.
+        /// </summary>
+        public static bool SpawnWorldItemServer(ItemDefinition definition, Vector3 feet, Vector3 direction,
+            NetworkObject preferredSupport)
+        {
+            if (definition == null || _catalog == null ||
+                ClientServerBootstrap.ServerWorld is not { IsCreated: true }) return false;
+            var catalogIndex = -1;
+            for (var i = 0; i < _catalog.Items.Count; i++)
+                if (_catalog.Items[i] == definition) { catalogIndex = i; break; }
+            if (catalogIndex < 0 || !TryGetVisual(definition, out _, out _)) return false;
+
+            EnsureStateForCurrentScene(feet);
+            var frame = WorldItem.GetPhysicsFrame(preferredSupport);
+            var up = preferredSupport != null ? frame.MultiplyVector(Vector3.up).normalized : Vector3.up;
+            var aim = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.forward;
+            var planarAim = Vector3.ProjectOnPlane(aim, up);
+            var planarAmount = Mathf.Clamp01(planarAim.magnitude);
+            var forward = planarAim.normalized;
+            if (forward.sqrMagnitude < 0.01f) forward = Vector3.ProjectOnPlane(Vector3.forward, up).normalized;
+            const float speed = 4.5f;
+            const float dropDistance = 0.9f;
+            var verticalVelocity = Vector3.Dot(aim, up) * speed;
+            var horizontalSpeed = speed * planarAmount;
+            var start = feet + up * 0.9f + aim * 0.25f;
+            var target = feet + forward * (dropDistance * Mathf.Max(0.15f, planarAmount));
+            if (!TryResolveSurface(target, out var point, out var normal, out var onWater, out var support))
+                return false;
+
+            var firstFall = BallisticFlightTime(Vector3.Dot(start - point, up), verticalVelocity);
+            target = feet + forward * (dropDistance * Mathf.Max(0.15f, planarAmount) + horizontalSpeed * firstFall);
+            if (!TryResolveSurface(target, out point, out normal, out onWater, out support)) return false;
+
+            var rotationUp = onWater ? Vector3.up : normal;
+            var facing = Vector3.ProjectOnPlane(forward, rotationUp).normalized;
+            if (facing.sqrMagnitude < 0.01f) facing = Vector3.Cross(rotationUp, Vector3.right).normalized;
+            var baseRotation = Quaternion.LookRotation(facing, rotationUp) * definition.RestingRotation;
+            var rotation = onWater ? Quaternion.FromToRotation(Vector3.up, normal) * baseRotation : baseRotation;
+            var end = point + (onWater ? Vector3.up : normal) * GetSurfaceClearance(definition, rotation, normal);
+            var flightDuration = Mathf.Clamp(BallisticFlightTime(Vector3.Dot(start - end, up), verticalVelocity),
+                0.12f, 3f);
+            var arcHeight = 0.25f * Mathf.Clamp01(1f - Mathf.Abs(Vector3.Dot(aim, up)) * 2f) +
+                            Mathf.Max(0f, verticalVelocity * flightDuration + Vector3.Dot(start - end, up)) * 0.25f;
+            var id = _nextDynamicId--;
+            var item = new ServerItem
+            {
+                CatalogIndex = catalogIndex, Position = start, RestPosition = end, FlightStart = start,
+                ArcUp = up, FlightStarted = NetworkManager.Singleton.ServerTime.Time,
+                FlightDuration = flightDuration, ArcHeight = arcHeight, Dynamic = true,
+                Rotation = rotation, BaseRotation = baseRotation, OnWater = onWater,
+                WaterOffset = GetSurfaceClearance(definition, rotation, normal), WaterSize = GetSurfaceSize(definition)
+            };
+            SetSupport(item, support);
+            ServerItems.Add(id, item);
+            var delta = BuildAddDelta(id, item, flightDuration);
+            Broadcast(delta);
+            LootStressPresentation.ApplyDelta(delta);
             return true;
         }
 
@@ -131,8 +220,7 @@ namespace WaveByWave.Items
             if (_catalog == null || !ServerItems.TryGetValue(id, out var item) || item.Hook != null ||
                 item.CatalogIndex < 0 || item.CatalogIndex >= _catalog.Items.Count) return false;
             definition = _catalog.Items[item.CatalogIndex];
-            UpdateSupportedPose(item);
-            UpdateWaterPose(item);
+            UpdateItemPose(item);
             position = item.Position;
             return definition != null;
         }
@@ -146,32 +234,27 @@ namespace WaveByWave.Items
         }
 
         public static void CaptureWithHookServer(PlayerEquipment hook, Vector3 from, Vector3 to, float radius,
-            int maximumTotal, List<int> captured)
+            int offsetStart, List<int> captured)
         {
-            if (hook == null || captured == null || captured.Count >= maximumTotal) return;
+            if (hook == null || captured == null) return;
             var segment = to - from;
-            var candidates = new List<(int id, float distance)>();
             foreach (var pair in ServerItems)
             {
                 var item = pair.Value;
                 if (item.Hook != null) continue;
-                UpdateSupportedPose(item);
-                UpdateWaterPose(item);
+                UpdateItemPose(item);
                 var t = segment.sqrMagnitude > 0.00001f
                     ? Mathf.Clamp01(Vector3.Dot(item.Position - from, segment) / segment.sqrMagnitude) : 0f;
                 var distance = Vector3.Distance(item.Position, from + segment * t);
-                if (distance <= radius) candidates.Add((pair.Key, distance));
-            }
-            candidates.Sort((a, b) => a.distance.CompareTo(b.distance));
-            for (var i = 0; i < candidates.Count && captured.Count < maximumTotal; i++)
-            {
-                if (!ServerItems.TryGetValue(candidates[i].id, out var item) || item.Hook != null) continue;
+                if (distance > radius) continue;
                 item.Hook = hook;
+                item.FlightDuration = 0f;
+                item.RestPosition = item.Position;
                 item.Support = null;
                 item.OnWater = false;
-                item.HookOffset = Vector3.up * 0.1f + Vector3.right * ((captured.Count % 3 - 1) * 0.15f);
-                captured.Add(candidates[i].id);
-                Broadcast(new LootStressDeltaCommand { Id = candidates[i].id, Kind = Tether,
+                item.HookOffset = PlayerEquipment.HookCargoOffset(offsetStart + captured.Count);
+                captured.Add(pair.Key);
+                Broadcast(new LootStressDeltaCommand { Id = pair.Key, Kind = Tether,
                     HookOwner = hook.OwnerClientId, HookOffset = item.HookOffset });
             }
         }
@@ -191,9 +274,12 @@ namespace WaveByWave.Items
                 item.WaterSize = GetSurfaceSize(definition);
                 item.WaterOffset = GetSurfaceClearance(definition, item.Rotation, normal);
                 item.Position = point + (onWater ? Vector3.up : normal) * item.WaterOffset;
+                item.RestPosition = item.Position;
                 SetSupport(item, support);
             }
-            else { item.OnWater = false; item.Support = null; item.Position = position; item.Rotation = rotation; }
+            else { item.OnWater = false; item.Support = null; item.Position = position;
+                item.RestPosition = position; item.Rotation = rotation; }
+            item.FlightDuration = 0f;
             item.Moved = true;
             Broadcast(new LootStressDeltaCommand
                 { Id = id, Kind = Place, Position = item.Position, Rotation = item.Rotation,
@@ -205,6 +291,9 @@ namespace WaveByWave.Items
             out IPlayerInteractable target, out float rayDistance, out Vector3 point) =>
             LootStressPresentation.TryFind(ray, playerPosition, reach, out target, out rayDistance, out point);
 
+        public static void SetFocusedClientItem(IPlayerInteractable target) =>
+            LootStressPresentation.SetFocused(target);
+
         public static void ClearLocal()
         {
             LootStressPresentation.Clear();
@@ -212,6 +301,7 @@ namespace WaveByWave.Items
             _latest = default;
             _hasState = false;
             _sceneName = null;
+            _nextDynamicId = -1;
         }
 
         internal static bool TryGetLatest(out LootStressCommand command)
@@ -232,12 +322,21 @@ namespace WaveByWave.Items
                         HookOwner = item.Hook.OwnerClientId, HookOffset = item.HookOffset }, connection);
                 else if (item.Moved || item.Support != null)
                 {
-                    UpdateSupportedPose(item);
+                    UpdateItemPose(item);
                     Rpc(ecb, new LootStressDeltaCommand { Id = id, Kind = Place,
                         Position = item.Position, Rotation = item.Rotation, BaseRotation = item.BaseRotation,
                         OnWater = item.OnWater,
                         SupportId = SupportWireId(item.Support) }, connection);
                 }
+            }
+            foreach (var pair in ServerItems)
+            {
+                if (!pair.Value.Dynamic) continue;
+                UpdateItemPose(pair.Value);
+                Rpc(ecb, BuildAddDelta(pair.Key, pair.Value, 0f), connection);
+                if (pair.Value.Hook != null)
+                    Rpc(ecb, new LootStressDeltaCommand { Id = pair.Key, Kind = Tether,
+                        HookOwner = pair.Value.Hook.OwnerClientId, HookOffset = pair.Value.HookOffset }, connection);
             }
         }
 
@@ -263,9 +362,58 @@ namespace WaveByWave.Items
             return renderer != null && renderer.sharedMaterials.Length > 0 && renderer.sharedMaterials[0] != null;
         }
 
+        private static void EnsureStateForCurrentScene(Vector3 center)
+        {
+            var scene = SceneManager.GetActiveScene().name;
+            if (_hasState && _sceneName == scene) return;
+            _latest = new LootStressCommand
+            {
+                Count = 0, Center = center, Radius = 15f,
+                Seed = unchecked((uint)Environment.TickCount * 747796405u) | 1u,
+                SceneName = new FixedString64Bytes(scene)
+            };
+            _sceneName = scene;
+            _hasState = true;
+            _stateRevision++;
+            if (_stateRevision == 0) _stateRevision = 1;
+            if (ClientServerBootstrap.ClientWorld is { IsCreated: true } clientWorld)
+                LootStressPresentation.Apply(clientWorld, _latest);
+        }
+
+        private static LootStressDeltaCommand BuildAddDelta(int id, ServerItem item, float duration)
+        {
+            var start = duration > 0f ? item.FlightStart : item.Position;
+            return new LootStressDeltaCommand
+            {
+                Id = id, Kind = Add, CatalogIndex = item.CatalogIndex,
+                StartPosition = start, Position = item.RestPosition, Rotation = item.Rotation,
+                BaseRotation = item.BaseRotation, ArcUp = item.ArcUp, Duration = duration,
+                ArcHeight = duration > 0f ? item.ArcHeight : 0f, OnWater = item.OnWater,
+                SupportId = SupportWireId(item.Support)
+            };
+        }
+
+        private static void ApplyDynamicItemsLocally()
+        {
+            foreach (var pair in ServerItems)
+            {
+                if (!pair.Value.Dynamic) continue;
+                UpdateItemPose(pair.Value);
+                LootStressPresentation.ApplyDelta(BuildAddDelta(pair.Key, pair.Value, 0f));
+                if (pair.Value.Hook != null)
+                    LootStressPresentation.ApplyDelta(new LootStressDeltaCommand
+                    {
+                        Id = pair.Key, Kind = Tether, HookOwner = pair.Value.Hook.OwnerClientId,
+                        HookOffset = pair.Value.HookOffset
+                    });
+            }
+        }
+
         private static void RebuildServerState()
         {
-            ServerItems.Clear();
+            var obsolete = new List<int>();
+            foreach (var pair in ServerItems) if (!pair.Value.Dynamic) obsolete.Add(pair.Key);
+            foreach (var id in obsolete) ServerItems.Remove(id);
             var definitions = RenderableCatalogIndices();
             if (definitions.Count == 0) return;
             var random = new Unity.Mathematics.Random(_latest.Seed == 0 ? 1u : _latest.Seed);
@@ -288,7 +436,7 @@ namespace WaveByWave.Items
                 var waterOffset = GetSurfaceClearance(definition, rotation, Vector3.up);
                 if (onWater) waterOffset = GetSurfaceClearance(definition, rotation, normal);
                 var item = new ServerItem
-                    { CatalogIndex = catalogIndex, Position = position, Rotation = rotation,
+                    { CatalogIndex = catalogIndex, Position = position, RestPosition = position, Rotation = rotation,
                         BaseRotation = baseRotation, OnWater = onWater,
                         WaterOffset = waterOffset, WaterSize = GetSurfaceSize(definition) };
                 SetSupport(item, support);
@@ -345,7 +493,7 @@ namespace WaveByWave.Items
             item.Support = support;
             if (support == null) return;
             var inverse = WorldItem.GetPhysicsFrame(support).inverse;
-            item.LocalPosition = inverse.MultiplyPoint3x4(item.Position);
+            item.LocalPosition = inverse.MultiplyPoint3x4(item.RestPosition);
             item.LocalRotation = Quaternion.Inverse(support.TryGetComponent<Rigidbody>(out var body)
                 ? body.rotation : support.transform.rotation) * item.Rotation;
             item.OnWater = false;
@@ -358,7 +506,7 @@ namespace WaveByWave.Items
         {
             if (item.Support == null || !item.Support.IsSpawned) return;
             var frame = WorldItem.GetPhysicsFrame(item.Support);
-            item.Position = frame.MultiplyPoint3x4(item.LocalPosition);
+            item.RestPosition = frame.MultiplyPoint3x4(item.LocalPosition);
             var rotation = item.Support.TryGetComponent<Rigidbody>(out var body)
                 ? body.rotation : item.Support.transform.rotation;
             item.Rotation = rotation * item.LocalRotation;
@@ -367,12 +515,34 @@ namespace WaveByWave.Items
         private static void UpdateWaterPose(ServerItem item)
         {
             if (!item.OnWater || _water == null ||
-                !_water.TrySurface(item.Position, item.WaterSize, out var height, out var normal)) return;
+                !_water.TrySurface(item.RestPosition, item.WaterSize, out var height, out var normal)) return;
             item.Rotation = Quaternion.FromToRotation(Vector3.up, normal) * item.BaseRotation;
             var definition = item.CatalogIndex >= 0 && item.CatalogIndex < _catalog.Items.Count
                 ? _catalog.Items[item.CatalogIndex] : null;
             item.WaterOffset = GetSurfaceClearance(definition, item.Rotation, normal);
-            item.Position = new Vector3(item.Position.x, height + item.WaterOffset, item.Position.z);
+            item.RestPosition = new Vector3(item.RestPosition.x, height + item.WaterOffset, item.RestPosition.z);
+        }
+
+        private static void UpdateItemPose(ServerItem item)
+        {
+            UpdateSupportedPose(item);
+            UpdateWaterPose(item);
+            if (item.FlightDuration > 0f)
+            {
+                var elapsed = (float)(NetworkManager.Singleton.ServerTime.Time - item.FlightStarted);
+                var t = Mathf.Clamp01(elapsed / item.FlightDuration);
+                item.Position = Vector3.Lerp(item.FlightStart, item.RestPosition, t) +
+                                item.ArcUp * (4f * t * (1f - t) * item.ArcHeight);
+                if (t >= 1f) item.FlightDuration = 0f;
+            }
+            if (item.FlightDuration <= 0f) item.Position = item.RestPosition;
+        }
+
+        private static float BallisticFlightTime(float fallHeight, float verticalVelocity)
+        {
+            const float gravity = 9.81f;
+            var discriminant = verticalVelocity * verticalVelocity + 2f * gravity * fallHeight;
+            return discriminant > 0f ? Mathf.Max(0.12f, (verticalVelocity + Mathf.Sqrt(discriminant)) / gravity) : 0.45f;
         }
 
         internal static float GetSurfaceClearance(ItemDefinition definition, Quaternion rotation, Vector3 normal)
@@ -442,6 +612,26 @@ namespace WaveByWave.Items
 
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
     [UpdateInGroup(typeof(SimulationSystemGroup))]
+    [UpdateBefore(typeof(LootStressLateJoinSystem))]
+    public partial struct LootStressSnapshotRequestSystem : ISystem
+    {
+        public void OnUpdate(ref SystemState state)
+        {
+            var ecb = new EntityCommandBuffer(Allocator.Temp);
+            foreach (var (request, entity) in SystemAPI.Query<RefRO<ReceiveRpcCommandRequest>>()
+                         .WithAll<LootStressSnapshotRequest>().WithEntityAccess())
+            {
+                if (LootStressTest.TryGetLatest(out _))
+                    LootStressTest.WriteLateJoinState(ecb, request.ValueRO.SourceConnection);
+                ecb.DestroyEntity(entity);
+            }
+            ecb.Playback(state.EntityManager);
+            ecb.Dispose();
+        }
+    }
+
+    [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
+    [UpdateInGroup(typeof(SimulationSystemGroup))]
     public partial struct LootStressLateJoinSystem : ISystem
     {
         public void OnUpdate(ref SystemState state)
@@ -450,7 +640,7 @@ namespace WaveByWave.Items
             var revision = LootStressTest.StateRevision;
             var ecb = new EntityCommandBuffer(Allocator.Temp);
             foreach (var (_, connection) in SystemAPI.Query<RefRO<NetworkId>>().WithAll<NetworkStreamInGame>()
-                         .WithEntityAccess())
+                         .WithNone<NetworkStreamRequestDisconnect>().WithEntityAccess())
             {
                 var hasState = state.EntityManager.HasComponent<LootStressConnectionState>(connection);
                 if (hasState && state.EntityManager.GetComponentData<LootStressConnectionState>(connection)
@@ -473,6 +663,25 @@ namespace WaveByWave.Items
         public void OnUpdate(ref SystemState state)
         {
             var ecb = new EntityCommandBuffer(Allocator.Temp);
+            // The world survives leaving/rejoining sessions. Request readiness belongs to the
+            // connection (and loaded scene), never to a once-per-world bool.
+            if (LootStressPresentation.AssetsReady)
+            {
+                var scene = new FixedString64Bytes(SceneManager.GetActiveScene().name);
+                foreach (var (_, connection) in SystemAPI.Query<RefRO<NetworkId>>()
+                             .WithAll<NetworkStreamInGame>().WithNone<NetworkStreamRequestDisconnect>().WithEntityAccess())
+                {
+                    var requested = state.EntityManager.HasComponent<LootSnapshotRequested>(connection);
+                    if (requested && state.EntityManager.GetComponentData<LootSnapshotRequested>(connection)
+                            .SceneName == scene) continue;
+                    var request = ecb.CreateEntity();
+                    ecb.AddComponent(request, new LootStressSnapshotRequest { ProtocolVersion = 1 });
+                    ecb.AddComponent(request, new SendRpcCommandRequest { TargetConnection = connection });
+                    var marker = new LootSnapshotRequested { SceneName = scene };
+                    if (requested) ecb.SetComponent(connection, marker);
+                    else ecb.AddComponent(connection, marker);
+                }
+            }
             var hasInitial = false;
             var initial = default(LootStressCommand);
             var deltas = new NativeList<LootStressDeltaCommand>(Allocator.Temp);
@@ -497,6 +706,7 @@ namespace WaveByWave.Items
             if (hasInitial) LootStressPresentation.Apply(state.World, initial);
             for (var i = 0; i < deltas.Length; i++) LootStressPresentation.ApplyDelta(deltas[i]);
             deltas.Dispose();
+            LootStressPresentation.ApplyPending(state.World);
         }
     }
 
@@ -542,9 +752,13 @@ namespace WaveByWave.Items
             public Quaternion LocalRotation;
             public Vector3 WaterTargetPosition;
             public Quaternion WaterTargetRotation;
+            public Vector3 ArcUp;
+            public float FlightDuration;
+            public float ArcHeight;
             public ulong HookOwner = ulong.MaxValue;
             public Vector3 HookOffset;
             public GameObject Effect;
+            public DotsWorldItemPresentation DynamicPresentation;
         }
 
         private sealed class StressInteractable : IPlayerInteractable
@@ -552,6 +766,7 @@ namespace WaveByWave.Items
             private readonly int _id;
             private readonly string _name;
             public StressInteractable(int id, string name) { _id = id; _name = name; }
+            public int Id => _id;
             public string GetInteractionPrompt(NetworkPlayerController player) => $"Подобрать {_name} ×1";
             public void Interact(NetworkPlayerController player) => player?.Inventory?.PickupStressItem(_id);
         }
@@ -559,6 +774,7 @@ namespace WaveByWave.Items
         private static readonly Dictionary<int, ClientItem> Items = new(LootStressTest.MaximumCount);
         private static readonly List<Material> RuntimeMaterials = new(5);
         private static readonly List<ClientItem> WaterItems = new(LootStressTest.MaximumCount);
+        private static readonly List<LootStressDeltaCommand> PendingDeltas = new();
         private static ItemCatalog _catalog;
         private static GameObject _effectPrefab;
         private static EquipmentWaterQuery _water;
@@ -572,6 +788,13 @@ namespace WaveByWave.Items
         private static string _appliedScene;
         private static World _appliedWorld;
         private static LootStressPresentationDriver _driver;
+        private static bool _hasInitialState;
+        private static bool _flushingDeltas;
+        internal static bool AssetsReady => _catalog != null;
+        private static GameObject _prompt;
+        private static Text _promptName;
+        private static int _focusedId = int.MaxValue;
+        private static int _focusedFrame = -1;
 
         internal static void SetAssets(ItemCatalog catalog, GameObject effectPrefab, WaveProfile waterProfile)
         {
@@ -579,28 +802,50 @@ namespace WaveByWave.Items
             if (effectPrefab != null) _effectPrefab = effectPrefab;
             if (waterProfile != null && _water == null) _water = new EquipmentWaterQuery(waterProfile);
             EnsureDriver();
-            if (_pending.HasValue && ClientServerBootstrap.ClientWorld is { IsCreated: true } world)
-            { var command = _pending.Value; _pending = null; Apply(world, command); }
+            if (ClientServerBootstrap.ClientWorld is { IsCreated: true } world) ApplyPending(world);
+        }
+
+        internal static void ApplyPending(World world)
+        {
+            if (_pending.HasValue && _catalog != null && world != null && world.IsCreated &&
+                _pending.Value.SceneName.ToString() == SceneManager.GetActiveScene().name)
+            {
+                var command = _pending.Value;
+                _pending = null;
+                Apply(world, command);
+            }
+            if (!_pending.HasValue) FlushPendingDeltas();
         }
 
         internal static void Apply(World world, LootStressCommand command)
         {
-            if (_catalog == null) { _pending = command; return; }
             var sceneName = command.SceneName.ToString();
+            if (_catalog == null || world == null || !world.IsCreated ||
+                sceneName != SceneManager.GetActiveScene().name)
+            {
+                _pending = command;
+                return;
+            }
+            _pending = null;
             if (command.Seed != 0 && command.Seed == _appliedSeed && command.Count == _appliedCount &&
-                sceneName == _appliedScene && ReferenceEquals(world, _appliedWorld)) return;
+                sceneName == _appliedScene && ReferenceEquals(world, _appliedWorld))
+            {
+                _hasInitialState = true;
+                FlushPendingDeltas();
+                return;
+            }
             ClearContent(false);
             _appliedSeed = command.Seed;
             _appliedCount = command.Count;
             _appliedScene = sceneName;
             _appliedWorld = world;
-            if (command.Count <= 0 || world == null || !world.IsCreated ||
-                sceneName != SceneManager.GetActiveScene().name) return;
             _activeScene = sceneName;
+            _world = world;
+            _hasInitialState = true;
+            if (command.Count <= 0) { FlushPendingDeltas(); return; }
             var catalogIndices = LootStressTest.RenderableCatalogIndices();
             var variants = BuildVariants(catalogIndices);
             if (variants.Count == 0) return;
-            _world = world;
             var materials = new List<Material>();
             var beamMesh = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
             var glowMaterials = BuildGlowMaterials();
@@ -674,12 +919,50 @@ namespace WaveByWave.Items
                 SetPose(item);
             }
             Debug.Log($"[Loot stress] Created {Items.Count} interactive DOTS items with prefab materials.");
+            FlushPendingDeltas();
         }
 
         internal static void ApplyDelta(LootStressDeltaCommand delta)
         {
-            if (!Items.TryGetValue(delta.Id, out var item)) return;
+            if (_pending.HasValue || _catalog == null || _world == null || !_world.IsCreated || !_hasInitialState)
+            {
+                QueueDelta(delta);
+                return;
+            }
+            if (!Items.TryGetValue(delta.Id, out var item))
+            {
+                if (delta.Kind != LootStressTest.Add)
+                    return;
+                if (delta.CatalogIndex < 0 || delta.CatalogIndex >= _catalog.Items.Count) return;
+                var definition = _catalog.Items[delta.CatalogIndex];
+                var variant = BuildVariant(delta.CatalogIndex);
+                var presentation = DotsWorldItemPresentation.Create(definition);
+                if (definition == null || variant == null || presentation == null) return;
+                item = new ClientItem
+                {
+                    Id = delta.Id, Definition = definition, Variant = variant,
+                    Position = delta.StartPosition, SpawnPosition = delta.StartPosition,
+                    RestPosition = delta.Position, Rotation = delta.Rotation, RestRotation = delta.Rotation,
+                    BaseRotation = delta.BaseRotation, ArcUp = delta.ArcUp,
+                    FlightDuration = delta.Duration, ArcHeight = delta.ArcHeight,
+                    FallStarted = Time.timeAsDouble, Falling = delta.Duration > 0.001f,
+                    OnWater = delta.OnWater, SupportId = delta.SupportId,
+                    WaterTargetPosition = delta.Position, WaterTargetRotation = delta.Rotation,
+                    DynamicPresentation = presentation
+                };
+                item.Support = ResolveSupport(delta.SupportId);
+                if (item.Support != null) SetSupport(item, item.Support);
+                Items.Add(delta.Id, item);
+                if (item.OnWater) WaterItems.Add(item);
+                SetPose(item);
+                return;
+            }
             if (delta.Kind == LootStressTest.Remove) { Destroy(item); Items.Remove(delta.Id); return; }
+            if (delta.Kind == LootStressTest.Add)
+            {
+                // Reliable RPC retries and host-local immediate presentation are deliberately idempotent.
+                return;
+            }
             if (delta.Kind == LootStressTest.Tether)
             {
                 item.HookOwner = delta.HookOwner;
@@ -711,6 +994,29 @@ namespace WaveByWave.Items
             SetPose(item);
         }
 
+        private static void QueueDelta(LootStressDeltaCommand delta)
+        {
+            // A reliable NFE Add may arrive before the initial snapshot/client presentation world.
+            // Retain it until scene/catalog readiness; session shutdown clears the queue.
+            PendingDeltas.Add(delta);
+        }
+
+        private static void FlushPendingDeltas()
+        {
+            if (_flushingDeltas || !_hasInitialState || _catalog == null || _world == null || !_world.IsCreated ||
+                PendingDeltas.Count == 0) return;
+            _flushingDeltas = true;
+            var pending = PendingDeltas.ToArray();
+            PendingDeltas.Clear();
+            // Snapshot Add commands establish identity. Apply them before any queued tether/place/remove
+            // commands in case separate NFE receive batches crossed client-world initialization.
+            for (var i = 0; i < pending.Length; i++)
+                if (pending[i].Kind == LootStressTest.Add) ApplyDelta(pending[i]);
+            for (var i = 0; i < pending.Length; i++)
+                if (pending[i].Kind != LootStressTest.Add) ApplyDelta(pending[i]);
+            _flushingDeltas = false;
+        }
+
         internal static void UpdateDynamicItems()
         {
             if (_world == null || !_world.IsCreated) return;
@@ -739,14 +1045,24 @@ namespace WaveByWave.Items
                     if (item.Falling)
                     {
                         var elapsed = Mathf.Max(0f, (float)(Time.timeAsDouble - item.FallStarted));
-                        item.Position = item.RestPosition;
-                        item.Position.y = Mathf.Max(item.RestPosition.y,
-                            item.SpawnPosition.y - 0.5f * 18f * elapsed * elapsed);
-                        if (item.Position.y <= item.RestPosition.y + 0.001f)
+                        if (item.FlightDuration > 0.001f)
+                        {
+                            var t = Mathf.Clamp01(elapsed / item.FlightDuration);
+                            item.Position = Vector3.Lerp(item.SpawnPosition, item.RestPosition, t) +
+                                            item.ArcUp * (4f * t * (1f - t) * item.ArcHeight);
+                            if (t >= 1f) item.Falling = false;
+                        }
+                        else
+                        {
+                            item.Position = item.RestPosition;
+                            item.Position.y = Mathf.Max(item.RestPosition.y,
+                                item.SpawnPosition.y - 0.5f * 18f * elapsed * elapsed);
+                            if (item.Position.y <= item.RestPosition.y + 0.001f) item.Falling = false;
+                        }
+                        if (!item.Falling)
                         {
                             item.Position = item.RestPosition;
                             item.Rotation = item.RestRotation;
-                            item.Falling = false;
                         }
                         SetPose(item);
                     }
@@ -767,7 +1083,14 @@ namespace WaveByWave.Items
                 if (item.Effect != null) item.Effect.transform.position = item.Position;
             }
             UpdateWaterItems();
+            UpdateFocusedPrompt();
             if (Time.unscaledTime >= _nextEffectRefresh) { _nextEffectRefresh = Time.unscaledTime + 0.5f; RefreshEffects(); }
+        }
+
+        internal static void SetFocused(IPlayerInteractable target)
+        {
+            _focusedId = target is StressInteractable stress ? stress.Id : int.MaxValue;
+            _focusedFrame = Time.frameCount;
         }
 
         internal static bool TryFind(Ray ray, Vector3 playerPosition, float reach,
@@ -801,9 +1124,13 @@ namespace WaveByWave.Items
             foreach (var material in RuntimeMaterials)
                 if (material != null) UnityEngine.Object.Destroy(material);
             RuntimeMaterials.Clear();
+            if (_prompt != null) _prompt.SetActive(false);
             _world = null;
             _activeScene = null;
             if (!resetAppliedCommand) return;
+            PendingDeltas.Clear();
+            _pending = null;
+            _hasInitialState = false;
             _appliedSeed = 0;
             _appliedCount = 0;
             _appliedScene = null;
@@ -812,7 +1139,17 @@ namespace WaveByWave.Items
 
         internal static void ClearScene(string sceneName)
         {
-            if (!string.IsNullOrEmpty(_activeScene) && _activeScene == sceneName) Clear();
+            if (string.IsNullOrEmpty(_activeScene) || _activeScene != sceneName) return;
+            // A snapshot for the destination scene can arrive before NGO unloads the old one.
+            // Keep that snapshot and its deltas across this unload.
+            if (_pending.HasValue && _pending.Value.SceneName.ToString() != sceneName)
+            {
+                ClearContent(false);
+                _hasInitialState = false;
+                _appliedSeed = 0;
+                _appliedWorld = null;
+            }
+            else Clear();
         }
 
         private static void EnsureDriver()
@@ -821,6 +1158,82 @@ namespace WaveByWave.Items
             var host = new GameObject("DOTS Loot Presentation") { hideFlags = HideFlags.HideInHierarchy };
             UnityEngine.Object.DontDestroyOnLoad(host);
             _driver = host.AddComponent<LootStressPresentationDriver>();
+        }
+
+        private static void EnsurePrompt()
+        {
+            if (_prompt != null) return;
+            _prompt = new GameObject("Focused Item Prompt", typeof(RectTransform), typeof(Canvas),
+                typeof(CanvasScaler), typeof(Image));
+            UnityEngine.Object.DontDestroyOnLoad(_prompt);
+            var rect = (RectTransform)_prompt.transform;
+            rect.sizeDelta = new Vector2(310f, 54f);
+            rect.localScale = Vector3.one * 0.0032f;
+            var canvas = _prompt.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 80;
+            var background = _prompt.GetComponent<Image>();
+            background.color = new Color(0.025f, 0.035f, 0.05f, 0.9f);
+            background.raycastTarget = false;
+
+            var keyObject = new GameObject("Interaction Key", typeof(RectTransform), typeof(Image));
+            keyObject.transform.SetParent(_prompt.transform, false);
+            var keyRect = (RectTransform)keyObject.transform;
+            keyRect.anchorMin = keyRect.anchorMax = new Vector2(0f, 0.5f);
+            keyRect.pivot = new Vector2(0f, 0.5f);
+            keyRect.anchoredPosition = new Vector2(8f, 0f);
+            keyRect.sizeDelta = new Vector2(40f, 40f);
+            keyObject.GetComponent<Image>().color = new Color(0.9f, 0.92f, 0.95f, 0.98f);
+            var keyText = CreatePromptText("E", keyObject.transform, Color.black, 22, TextAnchor.MiddleCenter);
+            Stretch(keyText.rectTransform, 0f);
+
+            _promptName = CreatePromptText("Item", _prompt.transform, Color.white, 20, TextAnchor.MiddleLeft);
+            var nameRect = _promptName.rectTransform;
+            nameRect.anchorMin = Vector2.zero;
+            nameRect.anchorMax = Vector2.one;
+            nameRect.offsetMin = new Vector2(60f, 3f);
+            nameRect.offsetMax = new Vector2(-8f, -3f);
+            _prompt.SetActive(false);
+        }
+
+        private static Text CreatePromptText(string value, Transform parent, Color color, int size,
+            TextAnchor alignment)
+        {
+            var child = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            child.transform.SetParent(parent, false);
+            var label = child.GetComponent<Text>();
+            label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            label.text = value;
+            label.fontSize = size;
+            label.fontStyle = FontStyle.Bold;
+            label.alignment = alignment;
+            label.color = color;
+            label.raycastTarget = false;
+            return label;
+        }
+
+        private static void Stretch(RectTransform rect, float inset)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.one * inset;
+            rect.offsetMax = Vector2.one * -inset;
+        }
+
+        private static void UpdateFocusedPrompt()
+        {
+            EnsurePrompt();
+            ClientItem item = null;
+            var visible = _focusedFrame == Time.frameCount && Items.TryGetValue(_focusedId, out item) &&
+                          item.HookOwner == ulong.MaxValue && Camera.main != null &&
+                          !PlayerEquipment.InputCaptured;
+            _prompt.SetActive(visible);
+            if (!visible) return;
+            var camera = Camera.main;
+            _prompt.transform.SetPositionAndRotation(item.Position + Vector3.up *
+                Mathf.Max(0.45f, item.Variant.Radius + 0.22f), camera.transform.rotation);
+            _promptName.text = item.Definition.DisplayName;
+            _promptName.color = item.Definition.RarityColor;
         }
 
         internal static void DriverDestroyed(LootStressPresentationDriver driver)
@@ -833,30 +1246,41 @@ namespace WaveByWave.Items
             var result = new List<Variant>(indices.Count);
             foreach (var index in indices)
             {
-                if (!LootStressTest.TryGetVisual(_catalog.Items[index], out var filter, out var renderer)) continue;
-                var matrix = filter.transform.localToWorldMatrix;
-                var scale = matrix.lossyScale;
-                var extents = Vector3.Scale(filter.sharedMesh.bounds.extents,
-                    new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
-                var materials = renderer.sharedMaterials;
-                var bounds = filter.sharedMesh.bounds;
-                var corners = new Vector3[8];
-                for (var corner = 0; corner < corners.Length; corner++)
-                    corners[corner] = matrix.MultiplyPoint3x4(bounds.center + Vector3.Scale(bounds.extents,
-                        new Vector3((corner & 1) == 0 ? -1f : 1f, (corner & 2) == 0 ? -1f : 1f,
-                            (corner & 4) == 0 ? -1f : 1f)));
-                result.Add(new Variant { Mesh = filter.sharedMesh, Materials = materials,
-                    Offset = matrix.GetColumn(3), Rotation = matrix.rotation, Scale = scale,
-                    Radius = Mathf.Clamp(extents.magnitude, 0.22f, 1.2f), Corners = corners,
-                    SurfaceSize = new Vector2(Mathf.Clamp(filter.sharedMesh.bounds.size.x * Mathf.Abs(scale.x), 0.15f, 1.5f),
-                        Mathf.Clamp(filter.sharedMesh.bounds.size.z * Mathf.Abs(scale.z), 0.15f, 1.5f)) });
+                var variant = BuildVariant(index);
+                if (variant != null) result.Add(variant);
             }
             return result;
+        }
+
+        private static Variant BuildVariant(int index)
+        {
+            if (_catalog == null || index < 0 || index >= _catalog.Items.Count ||
+                !LootStressTest.TryGetVisual(_catalog.Items[index], out var filter, out var renderer)) return null;
+            var matrix = filter.transform.localToWorldMatrix;
+            var scale = matrix.lossyScale;
+            var extents = Vector3.Scale(filter.sharedMesh.bounds.extents,
+                new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
+            var bounds = filter.sharedMesh.bounds;
+            var corners = new Vector3[8];
+            for (var corner = 0; corner < corners.Length; corner++)
+                corners[corner] = matrix.MultiplyPoint3x4(bounds.center + Vector3.Scale(bounds.extents,
+                    new Vector3((corner & 1) == 0 ? -1f : 1f, (corner & 2) == 0 ? -1f : 1f,
+                        (corner & 4) == 0 ? -1f : 1f)));
+            return new Variant { Mesh = filter.sharedMesh, Materials = renderer.sharedMaterials,
+                Offset = matrix.GetColumn(3), Rotation = matrix.rotation, Scale = scale,
+                Radius = Mathf.Clamp(extents.magnitude, 0.22f, 1.2f), Corners = corners,
+                SurfaceSize = new Vector2(Mathf.Clamp(bounds.size.x * Mathf.Abs(scale.x), 0.15f, 1.5f),
+                    Mathf.Clamp(bounds.size.z * Mathf.Abs(scale.z), 0.15f, 1.5f)) };
         }
 
         private static void SetPose(ClientItem item)
         {
             if (_world == null || !_world.IsCreated) return;
+            if (item.DynamicPresentation != null)
+            {
+                item.DynamicPresentation.SetPose(item.Position, item.Rotation);
+                return;
+            }
             var position = item.Position + item.Rotation * item.Variant.Offset;
             var rotation = item.Rotation * item.Variant.Rotation;
             foreach (var entity in item.Entities)
@@ -975,6 +1399,8 @@ namespace WaveByWave.Items
         private static void Destroy(ClientItem item)
         {
             WaterItems.Remove(item);
+            item.DynamicPresentation?.Dispose();
+            item.DynamicPresentation = null;
             if (_world != null && _world.IsCreated)
             {
                 foreach (var entity in item.Entities) if (_world.EntityManager.Exists(entity)) _world.EntityManager.DestroyEntity(entity);

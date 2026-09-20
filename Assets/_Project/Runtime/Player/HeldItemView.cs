@@ -239,12 +239,15 @@ namespace WaveByWave.Player
                     Quaternion.LookRotation(_smoothedLook, source.up));
             }
             _aimBlend = Mathf.MoveTowards(_aimBlend, _equipment.IsAiming ? 1f : 0f, Time.unscaledDeltaTime * 7f);
-            _itemPose.localPosition = definition.EquipmentKind == ItemEquipmentKind.Musket
-                ? Vector3.Lerp(definition.HeldPosition, new Vector3(0f, -0.13f, 0.7f), _aimBlend) : definition.HeldPosition;
-            _itemPose.localRotation = Quaternion.Euler(definition.HeldEulerAngles);
+            _blockBlend = Mathf.MoveTowards(_blockBlend, _equipment.IsBlocking ? 1f : 0f, Time.unscaledDeltaTime * 7f);
+            var secondaryBlend = definition.EquipmentKind == ItemEquipmentKind.Musket ? _aimBlend :
+                definition.EquipmentKind == ItemEquipmentKind.Sword ? _blockBlend : 0f;
+            _itemPose.localPosition = Vector3.Lerp(definition.HeldPosition,
+                definition.SecondaryHeldPosition, secondaryBlend);
+            _itemPose.localRotation = Quaternion.Slerp(Quaternion.Euler(definition.HeldEulerAngles),
+                definition.SecondaryHeldRotation, secondaryBlend);
             _itemPose.localScale = Vector3.one * definition.HeldScale;
             _motion.localPosition = Vector3.zero; _motion.localRotation = Quaternion.identity; _motion.localScale = Vector3.one;
-            _blockBlend = Mathf.MoveTowards(_blockBlend, _equipment.IsBlocking ? 1f : 0f, Time.unscaledDeltaTime * 7f);
             SampleMotion(definition);
             if (_blockHitUntil > Time.unscaledTime)
                 _motion.localPosition += Vector3.back * (0.08f * Mathf.Sin((_blockHitUntil - Time.unscaledTime) / 0.2f * Mathf.PI));
@@ -383,11 +386,12 @@ namespace WaveByWave.Player
             _hookVisual.SetActive(true); var end = _equipment.RenderedHookPosition;
             _hookVisual.transform.position = end;
             var state = _equipment.Hook;
-            var velocity = state.Phase == HookPhase.Flying ? state.Velocity + Vector3.down *
+            var facingDirection = state.Phase == HookPhase.Flying ? state.Velocity + Vector3.down *
                 (_equipment.HookGravity * Mathf.Max(0f, (float)(_equipment.NetworkManager.ServerTime.Time - state.Started)))
-                : state.Phase == HookPhase.Reeling ? hand - end : Vector3.zero;
-            _hookVisual.transform.rotation = velocity.sqrMagnitude > 0.001f
-                ? Quaternion.LookRotation(velocity) * Quaternion.Euler(90f, 0f, 0f) : Quaternion.Euler(90f, 0f, 0f);
+                : end - hand;
+            _hookVisual.transform.rotation = facingDirection.sqrMagnitude > 0.001f
+                ? Quaternion.LookRotation(facingDirection) * Quaternion.Euler(90f, 0f, 0f)
+                : Quaternion.Euler(90f, 0f, 0f);
             var distance = Vector3.Distance(hand, end);
             if (_rope == null) return;
             for (var i = 0; i < _rope.positionCount; i++)

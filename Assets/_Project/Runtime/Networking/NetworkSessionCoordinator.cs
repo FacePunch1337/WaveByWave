@@ -488,6 +488,15 @@ namespace WaveByWave.Networking
 
             await ShutdownNetworkAsync();
             if (_disposed) return;
+            // NFE owns a separate server AND client driver. Let both process disconnect cleanup
+            // before Configure replaces their stores and switches Steam/UDP endpoints.
+            var entitiesDeadline = Time.realtimeSinceStartup + 5f;
+            while (SteamNetcodeSession.HasPendingDisconnects && !_disposed &&
+                   Time.realtimeSinceStartup < entitiesDeadline)
+                await WaitForNextFrameAsync();
+            if (_disposed) return;
+            if (SteamNetcodeSession.HasPendingDisconnects)
+                throw new InvalidOperationException("Не удалось завершить предыдущую NFE-сессию.");
             // Also close a socket prepared before NGO started. Shutdown is idempotent.
             steamTransport?.Shutdown();
             SteamAvailable = SteamClient.IsValid;

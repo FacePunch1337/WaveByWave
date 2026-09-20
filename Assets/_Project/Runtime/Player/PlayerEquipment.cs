@@ -55,7 +55,10 @@ namespace WaveByWave.Player
         [SerializeField, Min(1f)] private float hookGravity = 12f, hookReelSpeed = 8f;
         [SerializeField, Min(1f)] private float maximumRopeLength = 45f;
         [SerializeField, Min(0.05f)] private float hookPickupRadius = 0.65f;
-        [SerializeField, Range(1, 16)] private int hookItemCapacity = 6;
+        [SerializeField, Min(0.1f), Tooltip("На этой горизонтальной дистанции крюк перестаёт скользить по поверхности и поднимается прямо к руке.")]
+        private float hookLiftHorizontalDistance = 0.9f;
+        [SerializeField, Min(0.1f)] private float hookSurfaceHeightSpeed = 5f;
+        [SerializeField, Min(0.1f)] private float hookReelAcceleration = 24f;
         [Header("Инструменты — события для дальнейшей игровой логики")]
         [SerializeField, Min(0.1f)] private float bucketLitres = 10f;
         [SerializeField] private BucketWaterEvent onWaterScooped = new(), onWaterPoured = new();
@@ -95,6 +98,7 @@ namespace WaveByWave.Player
         private ItemDefinition _serverItem;
         private ItemDefinition _localItem;
         private Vector3 _hookPosition;
+        private Vector3 _hookReelVelocity;
         private Vector3 _renderedHook;
         private int _hookRenderFrame = -1;
         private HookPhase _renderPhase;
@@ -665,7 +669,9 @@ namespace WaveByWave.Player
                     if (solid || water || Vector3.Distance(to, hand) >= maximumRopeLength || next - state.Started >= 6d)
                     {
                         water = water && (!solid || waterFraction < fraction);
-                        _hookPosition = water ? waterPoint : solid ? hit.point + hit.normal * 0.06f : to;
+                        var landedPosition = water ? waterPoint : solid ? hit.point + hit.normal * 0.06f : to;
+                        CaptureItemsServer(_hookPosition, landedPosition);
+                        _hookPosition = landedPosition;
                         var support = solid && !water ? hit.collider.GetComponentInParent<NetworkObject>() : null;
                         if (!solid && !water && !TryHookSurface(ref _hookPosition, out support))
                         { ResetHookServer(); break; }
@@ -673,6 +679,7 @@ namespace WaveByWave.Player
                         if (water) ToolEffectClientRpc(_hookPosition, true);
                         break;
                     }
+                    CaptureItemsServer(_hookPosition, to);
                     _hookPosition = to; _hookSampleTime = next;
                 }
                 return;
@@ -684,25 +691,50 @@ namespace WaveByWave.Player
             {
                 if (state.Phase == HookPhase.Reeling)
                 {
-                    var landed = _hookPosition;
-                    TryHookSurface(ref landed, out var landingSupport);
-                    _hookPosition = landed;
-                    LandHookServer(landed, landingSupport);
+                    SettleReleasedHook(hand, dt);
                 }
                 return;
             }
             var previous = _hookPosition;
-            var nextPosition = Vector3.MoveTowards(previous, hand, hookReelSpeed * dt);
+            var toHand = hand - previous;
+            var planarToHand = Vector3.ProjectOnPlane(toHand, Vector3.up);
+            Vector3 desiredVelocity;
+            if (planarToHand.magnitude > hookLiftHorizontalDistance)
+            {
+                var planarDirection = planarToHand.normalized;
+                var surfaceProbe = previous + planarDirection * hookReelSpeed * dt;
+                var surfaceY = previous.y;
+                if (TryHookSurfaceAt(surfaceProbe, Mathf.Max(previous.y, hand.y) + 2f,
+                    out var surfacePoint, out _))
+                    surfaceY = surfacePoint.y;
+                var verticalSpeed = Mathf.Clamp((surfaceY - previous.y) / Mathf.Max(dt, 0.0001f),
+                    -hookSurfaceHeightSpeed, hookSurfaceHeightSpeed);
+                desiredVelocity = planarDirection * hookReelSpeed + Vector3.up * verticalSpeed;
+            }
+            else
+            {
+                desiredVelocity = toHand.sqrMagnitude > 0.0001f
+                    ? toHand.normalized * hookReelSpeed : Vector3.zero;
+            }
+            _hookReelVelocity = Vector3.MoveTowards(_hookReelVelocity, desiredVelocity,
+                hookReelAcceleration * dt);
+            var nextPosition = previous + _hookReelVelocity * dt;
+            if (planarToHand.magnitude <= hookLiftHorizontalDistance &&
+                Vector3.Dot(hand - previous, hand - nextPosition) <= 0f)
+                nextPosition = hand;
             // Stop at intervening solid geometry, rather than pull loot through rocks or walls.
             if (SegmentHit(previous + Vector3.up * 0.12f, nextPosition + Vector3.up * 0.12f, 0.05f, null, out var obstacle, out _))
+            {
                 nextPosition = obstacle.point + obstacle.normal * 0.07f;
+                _hookReelVelocity = Vector3.zero;
+            }
             CaptureItemsServer(previous, nextPosition);
             _hookPosition = nextPosition;
             _hook.Value = new EquipmentHookState
             {
                 Phase = HookPhase.Reeling,
                 Origin = previous,
-                Velocity = (nextPosition - previous) / 0.05f,
+                Velocity = (nextPosition - previous) / Mathf.Max(dt, 0.0001f),
                 Started = Now
             };
             if (Vector3.Distance(nextPosition, hand) < 0.45f)
@@ -711,6 +743,7 @@ namespace WaveByWave.Player
         private void LandHookServer(Vector3 position, NetworkObject support)
         {
             if (support != null && !support.IsSpawned) support = null;
+            _hookReelVelocity = Vector3.zero;
             _hook.Value = new EquipmentHookState
             {
                 Phase = HookPhase.Landed,
@@ -723,18 +756,67 @@ namespace WaveByWave.Player
         }
         private bool TryHookSurface(ref Vector3 position, out NetworkObject support)
         {
-            support = null;
-            var solid = SegmentHit(position + Vector3.up * 0.3f, position + Vector3.down * 128f, 0.04f, null,
-                out var surface, out _);
-            var water = _water.TryHeight(position, out var height);
-            if (!solid && !water) return false;
-            if (solid && (!water || surface.point.y >= height))
-            {
-                position = surface.point + surface.normal * 0.07f;
-                support = surface.collider.GetComponentInParent<NetworkObject>();
-            }
-            else position.y = height;
+            if (!TryHookSurfaceAt(position, position.y + 0.3f, out var surfacePoint, out support))
+                return false;
+            position = surfacePoint;
             return true;
+        }
+
+        private bool TryHookSurfaceAt(Vector3 horizontalPosition, float probeTopY, out Vector3 point,
+            out NetworkObject support)
+        {
+            support = null;
+            point = horizontalPosition;
+            var origin = new Vector3(horizontalPosition.x, probeTopY, horizontalPosition.z);
+            var solid = SegmentHit(origin, origin + Vector3.down * 128f, 0.04f, null,
+                out var surface, out _);
+            var waterHeight = float.NegativeInfinity;
+            var water = _water != null && _water.TryHeight(horizontalPosition, out waterHeight) &&
+                        waterHeight <= probeTopY + 0.05f;
+            if (!solid && !water)
+                return false;
+            if (solid && (!water || surface.point.y >= waterHeight))
+            {
+                point = surface.point + surface.normal * 0.07f;
+                support = surface.collider.GetComponentInParent<NetworkObject>();
+                if (support != null && !support.IsSpawned) support = null;
+            }
+            else
+                point = new Vector3(horizontalPosition.x, waterHeight, horizontalPosition.z);
+            return true;
+        }
+
+        private void SettleReleasedHook(Vector3 hand, float dt)
+        {
+            var previous = _hookPosition;
+            var planarVelocity = Vector3.ProjectOnPlane(_hookReelVelocity, Vector3.up);
+            planarVelocity = Vector3.MoveTowards(planarVelocity, Vector3.zero, hookReelAcceleration * dt);
+            var targetY = previous.y;
+            NetworkObject support = null;
+            var hasSurface = TryHookSurfaceAt(previous, Mathf.Max(previous.y, hand.y) + 2f,
+                out var surfacePoint, out support);
+            if (hasSurface) targetY = surfacePoint.y;
+            var verticalVelocity = Mathf.Clamp((targetY - previous.y) / Mathf.Max(dt, 0.0001f),
+                -hookSurfaceHeightSpeed, hookSurfaceHeightSpeed);
+            _hookReelVelocity = planarVelocity + Vector3.up * verticalVelocity;
+            var next = previous + _hookReelVelocity * dt;
+            if (Mathf.Abs(next.y - targetY) <= hookSurfaceHeightSpeed * dt)
+                next.y = targetY;
+            CaptureItemsServer(previous, next);
+            _hookPosition = next;
+
+            if (planarVelocity.sqrMagnitude < 0.0025f && (!hasSurface || Mathf.Abs(next.y - targetY) < 0.01f))
+            {
+                LandHookServer(next, support);
+                return;
+            }
+            _hook.Value = new EquipmentHookState
+            {
+                Phase = HookPhase.Reeling,
+                Origin = previous,
+                Velocity = (next - previous) / Mathf.Max(dt, 0.0001f),
+                Started = Now
+            };
         }
         private void CaptureItemsServer(Vector3 from, Vector3 to)
         {
@@ -742,19 +824,26 @@ namespace WaveByWave.Player
             var delta = to - from;
             foreach (var item in WorldItem.ActiveItems)
             {
-                if (_hookItems.Count >= hookItemCapacity) break;
                 if (item == null || !item.IsSpawned || item.IsTetheredTo(this) || _claimedThisThrow.Contains(item)) continue;
                 var position = item.GetServerPosition();
                 var t = delta.sqrMagnitude > 0.00001f ? Mathf.Clamp01(Vector3.Dot(position - from, delta) / delta.sqrMagnitude) : 0f;
                 var nearest = from + delta * t;
                 if (Vector3.Distance(position, nearest) > hookPickupRadius || HasSolidBetween(nearest + Vector3.up * 0.2f, position)) continue;
-                item.CaptureWithHookServer(this, Vector3.up * 0.1f + Vector3.right * ((_hookItems.Count % 3) - 1) * 0.15f);
+                item.CaptureWithHookServer(this, HookCargoOffset(_hookItems.Count + _stressHookItems.Count));
                 // A losing hook must not recapture the same item every tick while ropes overlap.
                 _claimedThisThrow.Add(item);
                 _hookItems.Add(item);
             }
             LootStressTest.CaptureWithHookServer(this, from, to, hookPickupRadius,
-                hookItemCapacity - _hookItems.Count, _stressHookItems);
+                _hookItems.Count, _stressHookItems);
+        }
+
+        public static Vector3 HookCargoOffset(int index)
+        {
+            if (index <= 0) return Vector3.up * 0.1f;
+            var radius = 0.11f * Mathf.Sqrt(index);
+            var angle = index * 137.50776f * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Cos(angle) * radius, 0.1f, Mathf.Sin(angle) * radius);
         }
         private void ResetHookServer()
         {
@@ -773,19 +862,22 @@ namespace WaveByWave.Player
                 if (retrieved)
                 {
                     var frame = WorldItem.GetPhysicsFrame(support);
-                    release += frame.MultiplyVector(Vector3.right) * ((i % 3 - 1) * 0.2f) +
-                        frame.MultiplyVector(Vector3.forward) * (0.35f + i / 3 * 0.2f);
+                    release += frame.MultiplyVector(HookCargoOffset(i) + Vector3.forward * 0.35f);
                 }
                 item.ReleaseFromHookServer(this, release, releaseSupport, water);
             }
             for (var i = 0; i < _stressHookItems.Count; i++)
             {
-                var release = retrieved ? feet + Vector3.right * ((i % 3 - 1) * 0.2f) +
-                    Vector3.forward * (0.35f + i / 3 * 0.2f) : _hookPosition;
+                var cargoIndex = _hookItems.Count + i;
+                var release = retrieved
+                    ? feet + WorldItem.GetPhysicsFrame(support).MultiplyVector(
+                        HookCargoOffset(cargoIndex) + Vector3.forward * 0.35f)
+                    : _hookPosition + HookCargoOffset(cargoIndex);
                 LootStressTest.ReleaseFromHookServer(_stressHookItems[i], this, release, Quaternion.identity);
             }
             _stressHookItems.Clear();
-            _hookItems.Clear(); _claimedThisThrow.Clear(); _hook.Value = default; _serverReeling = false; _chargeStarted = -1d;
+            _hookItems.Clear(); _claimedThisThrow.Clear(); _hook.Value = default; _serverReeling = false;
+            _hookReelVelocity = Vector3.zero; _chargeStarted = -1d;
             _charging.Value = false;
         }
 

@@ -9,8 +9,8 @@ using UnityEngine.Rendering;
 
 namespace WaveByWave.Items
 {
-    // The NGO WorldItem remains an invisible authority/interaction proxy. Its visible mesh is
-    // an Entities Graphics entity, so ordinary drops and mass loot share the same render path.
+    // Single loose-item presentation for the same Entities Graphics path used by mass loot.
+    // Gameplay authority and replication live in LootStressTest; this class owns only render entities.
     internal sealed class DotsWorldItemPresentation : IDisposable
     {
         private sealed class Template

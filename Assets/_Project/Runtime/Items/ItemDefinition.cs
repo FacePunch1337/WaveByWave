@@ -64,6 +64,11 @@ namespace WaveByWave.Items
         [SerializeField] private Vector3 heldPosition = new(0.34f, -0.32f, 0.65f);
         [SerializeField] private Vector3 heldEulerAngles;
         [SerializeField, Min(0.01f)] private float heldScale = 0.65f;
+        [Header("ПКМ: блок / прицеливание")]
+        [SerializeField, Tooltip("Использовать отдельную позицию и поворот предмета во время действия на ПКМ.")]
+        private bool overrideSecondaryHeldPose;
+        [SerializeField] private Vector3 secondaryHeldPosition;
+        [SerializeField] private Vector3 secondaryHeldEulerAngles;
         [Header("IK рук")]
         [SerializeField, Tooltip("Использовать точки из этого ItemDefinition вместо компонентов ItemHandGripPoint в prefab.")]
         private bool overrideHandGripPoints;
@@ -88,6 +93,10 @@ namespace WaveByWave.Items
         // additional hand-pose offset for exceptional items.
         public Vector3 HeldEulerAngles => overrideHeldPose ? heldEulerAngles : Vector3.zero;
         public float HeldScale => overrideHeldPose ? Mathf.Max(0.01f, heldScale) : 1f;
+        public Vector3 SecondaryHeldPosition => overrideSecondaryHeldPose ? secondaryHeldPosition :
+            EquipmentKind == ItemEquipmentKind.Musket ? new Vector3(0f, -0.13f, 0.7f) : HeldPosition;
+        public Quaternion SecondaryHeldRotation => Quaternion.Euler(
+            overrideSecondaryHeldPose ? secondaryHeldEulerAngles : HeldEulerAngles);
         public bool OverridesHandGripPoints => overrideHandGripPoints;
 
         public bool TryGetHandGrip(ItemGripHand hand, out ItemHandGripPose grip)

@@ -1535,9 +1535,10 @@ namespace WaveByWave.Player
             // Query after ship, player and camera presentation agree with this frame's HUD.
             // A station's release key must not also interact again in the same frame.
             if (!_interactionInputBlockedThisFrame && !PlayerEquipment.InputCaptured &&
-                !IsAtControlStation && Keyboard.current != null &&
-                (Keyboard.current.eKey.wasPressedThisFrame || _loweringAnchor != null))
+                !IsAtControlStation && Keyboard.current != null)
                 UpdateInteraction();
+            else
+                LootStressTest.SetFocusedClientItem(null);
         }
 
         private void ApplyOwnerPlatformPresentation()
@@ -1672,6 +1673,7 @@ namespace WaveByWave.Player
         private void UpdateInteraction()
         {
             var target = FindInteractionTarget(_loweringAnchor == null, out var aimedDirectly);
+            LootStressTest.SetFocusedClientItem(target);
             _lookedAtAnchor = aimedDirectly ? target as ShipAnchor : null;
 
             if (_loweringAnchor != null)
@@ -2370,7 +2372,7 @@ namespace WaveByWave.Player
                 return;
 
             _customizationPreviewYaw = Mathf.Repeat(
-                _customizationPreviewYaw + mouse.delta.ReadValue().x * customizationRotationSensitivity,
+                _customizationPreviewYaw - mouse.delta.ReadValue().x * customizationRotationSensitivity,
                 360f);
         }
 

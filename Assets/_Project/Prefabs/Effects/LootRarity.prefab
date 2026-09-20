@@ -339,7 +339,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startSizeY:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 1
       minScalar: 1
       maxCurve:
@@ -392,7 +392,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startSizeZ:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 1
       minScalar: 1
       maxCurve:
@@ -5034,5 +5034,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0b65d6417612ec7408076eb1b0d00a88, type: 3}
   m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Items.LootRarityGlow
-  beam: {fileID: 0}
-  sparks: {fileID: 0}
+  beam: {fileID: 1817578094686202045}
+  sparks: {fileID: 4073429432288766155}

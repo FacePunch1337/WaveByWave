@@ -13,8 +13,9 @@ MonoBehaviour:
   m_Name: Item_upgrade_cannons
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Items.ItemDefinition
   id: upgrade_cannons
-  displayName: "Усиленные пушки"
-  description: "ЛКМ на корабле: +15% урона пушек."
+  displayName: "\u0423\u0441\u0438\u043B\u0435\u043D\u043D\u044B\u0435 \u043F\u0443\u0448\u043A\u0438"
+  description: "\u041B\u041A\u041C \u043D\u0430 \u043A\u043E\u0440\u0430\u0431\u043B\u0435:
+    +15% \u0443\u0440\u043E\u043D\u0430 \u043F\u0443\u0448\u0435\u043A."
   category: 3
   rarity: 2
   icon: {fileID: 0}
@@ -31,3 +32,12 @@ MonoBehaviour:
   heldPosition: {x: 0.25, y: -0.35, z: 0.65}
   heldEulerAngles: {x: 0, y: 0, z: 0}
   heldScale: 1
+  overrideHandGripPoints: 1
+  rightHandGrip:
+    enabled: 1
+    localPosition: {x: 0.6, y: 0, z: 0}
+    localEulerAngles: {x: -73.51, y: -170.24, z: -106.8}
+  leftHandGrip:
+    enabled: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}

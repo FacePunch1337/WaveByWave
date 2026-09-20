@@ -44,7 +44,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3692177591442134904}
-  m_Mesh: {fileID: 4300000, guid: 2aa5c31bb273f314080738a6b8ede9ad, type: 3}
+  m_Mesh: {fileID: -2893882437805235404, guid: eba3530266c91d04c8d58c21579751e6, type: 3}
 --- !u!65 &886592260026745575
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -126,7 +126,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2921550585
+  GlobalObjectIdHash: 2580955697
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -189,7 +189,7 @@ Transform:
   m_GameObject: {fileID: 7100000000000000001}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0.08715574, w: 0.9961947}
-  m_LocalPosition: {x: 0.486, y: 0.133, z: 0}
+  m_LocalPosition: {x: -0.001, y: -0.016, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

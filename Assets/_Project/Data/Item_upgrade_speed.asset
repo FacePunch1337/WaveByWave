@@ -13,8 +13,9 @@ MonoBehaviour:
   m_Name: Item_upgrade_speed
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Items.ItemDefinition
   id: upgrade_speed
-  displayName: "Ходовые паруса"
-  description: "ЛКМ на корабле: +10% скорости."
+  displayName: "\u0425\u043E\u0434\u043E\u0432\u044B\u0435 \u043F\u0430\u0440\u0443\u0441\u0430"
+  description: "\u041B\u041A\u041C \u043D\u0430 \u043A\u043E\u0440\u0430\u0431\u043B\u0435:
+    +10% \u0441\u043A\u043E\u0440\u043E\u0441\u0442\u0438."
   category: 3
   rarity: 2
   icon: {fileID: 0}
@@ -31,3 +32,12 @@ MonoBehaviour:
   heldPosition: {x: 0.25, y: -0.35, z: 0.65}
   heldEulerAngles: {x: 0, y: 0, z: 0}
   heldScale: 1
+  overrideHandGripPoints: 1
+  rightHandGrip:
+    enabled: 1
+    localPosition: {x: 0.6, y: 0, z: 0}
+    localEulerAngles: {x: -73.51, y: -170.24, z: -106.8}
+  leftHandGrip:
+    enabled: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}

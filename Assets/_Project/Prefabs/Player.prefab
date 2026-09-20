@@ -455,6 +455,7 @@ MonoBehaviour:
     m_Bits: 4294967295
   interactionProximityDistance: 1.25
   anchorHandleApproachDuration: 0.4
+  customizationRotationSensitivity: 0.22
   body: {fileID: 6118798433937442670}
   bodyCollider: {fileID: 4118798433937442670}
   _kccMotor: {fileID: 834781239487123987}
@@ -550,6 +551,10 @@ MonoBehaviour:
     Bandana: 0
     Hat: 0
     Coat: 0
+    Gloves: 0
+    EyePatch: 0
+    Earrings: 0
+    Boots: 0
   loadSavedAppearance: 1
   hairPrefabs:
   - {fileID: 1493029877609452, guid: e647d12a901e2e745b2136f0d332d4ce, type: 3}
@@ -571,10 +576,39 @@ MonoBehaviour:
   - {fileID: 1750872242681108, guid: 7bc2eb251a04856428d495723148b5d6, type: 3}
   - {fileID: 1066733773037418, guid: 4431ad3227728b440b4ddae5370e8bdc, type: 3}
   - {fileID: 1850713688961706, guid: c8b5f699a0194304bae05b20851377a7, type: 3}
+  eyePatchPrefabs:
+  - {fileID: 1688598394418214, guid: c2868d41159bf434f9c7e14202b2c599, type: 3}
+  earringPrefabs:
+  - {fileID: 1464250164781288, guid: e673e423a4c9f464daa700d637653e18, type: 3}
+  - {fileID: 1077534056919182, guid: 2bec9553a558521448cf324fdc95960f, type: 3}
   coatPrefabs:
   - {fileID: 1123883519733634, guid: 5a7e697c3351fdf459b4bcca3138e099, type: 3}
   - {fileID: 1505159769865574, guid: 8323d8cf83c8ec84083cca6ec70a25df, type: 3}
   - {fileID: 1498404331278890, guid: de5e3af0e9cf5584ca4b32b9d798ca7c, type: 3}
+  gloveLeftPrefabs:
+  - {fileID: 1606289276077774, guid: 314d7595821d6f248bb32f76bb4c3338, type: 3}
+  - {fileID: 1065558293610736, guid: 541480a0fa8b24c4bae0d5a3dc0266bf, type: 3}
+  - {fileID: 1785930726601004, guid: fd0eba4757d9c0142b269337a847b82e, type: 3}
+  - {fileID: 1162599485906792, guid: cbe334c5c1286a149a0460d97cf9b7e9, type: 3}
+  gloveRightPrefabs:
+  - {fileID: 1258684795943262, guid: 9841952479a20e241a849fc1ab9c2753, type: 3}
+  - {fileID: 1276710461762498, guid: db0f4b45dccd80d43b087af2742774af, type: 3}
+  - {fileID: 1709278691541524, guid: f2f66c46116fd0a4692b66f3641a393d, type: 3}
+  - {fileID: 1779546752707350, guid: 0db34079e371d4b4b8a4d06f13f46226, type: 3}
+  bootLeftPrefabs:
+  - {fileID: 1272484153607856, guid: a52145df7e416584b852aa24710d13b2, type: 3}
+  - {fileID: 1728259763089642, guid: 791d0adc285ed2e4491e0e531bb990c8, type: 3}
+  - {fileID: 1459183878917962, guid: e444e2798ce455e4784ae897acc522c8, type: 3}
+  - {fileID: 1677918667347894, guid: cbd3867c7dcd0104484a1b434b8272c5, type: 3}
+  bootRightPrefabs:
+  - {fileID: 1390061051045862, guid: 179c7f713e5fec34fa2b8b26f787211b, type: 3}
+  - {fileID: 1736934122377256, guid: 0b9201a4b3b52244a979cdad7f2abfe1, type: 3}
+  - {fileID: 1130376229453246, guid: f30e182aff525af4f817239b9fdef74b, type: 3}
+  - {fileID: 1090860115099440, guid: bbf581df8b105ed488bed28eade56b21, type: 3}
+  hookLeftPrefab: {fileID: 1574214325094798, guid: 15e4d907d5a25b24c985ad900998c36e, type: 3}
+  hookRightPrefab: {fileID: 1435364148979400, guid: d9bef3ca876edaa4c8248596cfaefbd6, type: 3}
+  woodenLegLeftPrefab: {fileID: 1785822326954964, guid: d148f392e11e7114d94266255b78c8cc, type: 3}
+  woodenLegRightPrefab: {fileID: 1253620320603336, guid: 1dced5ccfbeb05b45949658e7dbba7e8, type: 3}
 --- !u!114 &9300074001
 MonoBehaviour:
   m_ObjectHideFlags: 0

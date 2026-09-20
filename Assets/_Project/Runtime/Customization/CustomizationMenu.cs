@@ -48,19 +48,19 @@ namespace WaveByWave.Customization
                 typeof(VerticalLayoutGroup));
             panel.transform.SetParent(_canvas.transform, false);
             var panelRect = panel.GetComponent<RectTransform>();
-            panelRect.anchorMin = new Vector2(0.67f, 0.08f);
-            panelRect.anchorMax = new Vector2(0.97f, 0.92f);
+            panelRect.anchorMin = new Vector2(0.67f, 0.03f);
+            panelRect.anchorMax = new Vector2(0.97f, 0.97f);
             panelRect.offsetMin = panelRect.offsetMax = Vector2.zero;
             panel.GetComponent<Image>().color = new Color(0.025f, 0.045f, 0.065f, 0.94f);
             var layout = panel.GetComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(28, 28, 28, 28);
-            layout.spacing = 14f;
+            layout.padding = new RectOffset(22, 22, 20, 20);
+            layout.spacing = 6f;
             layout.childControlHeight = true;
             layout.childControlWidth = true;
             layout.childForceExpandHeight = false;
 
-            CreateLabel(panel.transform, "ПИРАТСКИЙ ГАРДЕРОБ", 32, 64f, FontStyle.Bold);
-            CreateLabel(panel.transform, "Изменения сразу видны всем игрокам", 18, 34f, FontStyle.Normal,
+            CreateLabel(panel.transform, "ПИРАТСКИЙ ГАРДЕРОБ", 29, 48f, FontStyle.Bold);
+            CreateLabel(panel.transform, "Изменения сразу видны всем игрокам", 16, 26f, FontStyle.Normal,
                 new Color(0.65f, 0.78f, 0.86f));
 
             CreateRow(panel.transform, PirateCustomizationCategory.Pirate, "Персонаж");
@@ -68,19 +68,23 @@ namespace WaveByWave.Customization
             CreateRow(panel.transform, PirateCustomizationCategory.Bandana, "Бандана");
             CreateRow(panel.transform, PirateCustomizationCategory.Hat, "Шляпа");
             CreateRow(panel.transform, PirateCustomizationCategory.Coat, "Одежда");
+            CreateRow(panel.transform, PirateCustomizationCategory.Gloves, "Руки");
+            CreateRow(panel.transform, PirateCustomizationCategory.EyePatch, "Повязка");
+            CreateRow(panel.transform, PirateCustomizationCategory.Earrings, "Серьги");
+            CreateRow(panel.transform, PirateCustomizationCategory.Boots, "Ноги");
 
             var spacer = new GameObject("Spacer", typeof(RectTransform), typeof(LayoutElement));
             spacer.transform.SetParent(panel.transform, false);
             spacer.GetComponent<LayoutElement>().flexibleHeight = 1f;
 
-            var save = CreateButton(panel.transform, "СОХРАНИТЬ И ВЫЙТИ", 58f,
+            var save = CreateButton(panel.transform, "СОХРАНИТЬ И ВЫЙТИ", 48f,
                 new Color(0.12f, 0.55f, 0.43f));
             save.onClick.AddListener(() =>
             {
                 _appearance?.SaveLocal();
                 _player?.ExitCustomization();
             });
-            CreateLabel(panel.transform, "Esc — выйти без отдельного сохранения", 16, 28f,
+            CreateLabel(panel.transform, "ЛКМ по персонажу — вращать · Esc — выйти", 14, 22f,
                 FontStyle.Normal, new Color(0.55f, 0.65f, 0.7f));
         }
 
@@ -90,7 +94,7 @@ namespace WaveByWave.Customization
                 typeof(HorizontalLayoutGroup));
             row.transform.SetParent(parent, false);
             row.GetComponent<Image>().color = new Color(0.075f, 0.11f, 0.14f, 0.96f);
-            row.GetComponent<LayoutElement>().preferredHeight = 82f;
+            row.GetComponent<LayoutElement>().preferredHeight = 52f;
             var layout = row.GetComponent<HorizontalLayoutGroup>();
             layout.padding = new RectOffset(12, 12, 8, 8);
             layout.spacing = 8f;
@@ -99,14 +103,14 @@ namespace WaveByWave.Customization
             layout.childControlWidth = true;
             layout.childForceExpandWidth = false;
 
-            var titleLabel = CreateLabel(row.transform, title, 19, 58f, FontStyle.Bold);
+            var titleLabel = CreateLabel(row.transform, title, 16, 36f, FontStyle.Bold);
             titleLabel.GetComponent<LayoutElement>().preferredWidth = 150f;
-            var left = CreateButton(row.transform, "‹", 54f, new Color(0.18f, 0.27f, 0.33f), 58f);
-            var value = CreateLabel(row.transform, "—", 20, 58f, FontStyle.Normal);
+            var left = CreateButton(row.transform, "‹", 36f, new Color(0.18f, 0.27f, 0.33f), 46f);
+            var value = CreateLabel(row.transform, "—", 16, 36f, FontStyle.Normal);
             value.GetComponent<LayoutElement>().preferredWidth = 150f;
             value.GetComponent<LayoutElement>().flexibleWidth = 1f;
             _values[category] = value;
-            var right = CreateButton(row.transform, "›", 54f, new Color(0.18f, 0.27f, 0.33f), 58f);
+            var right = CreateButton(row.transform, "›", 36f, new Color(0.18f, 0.27f, 0.33f), 46f);
             left.onClick.AddListener(() => _appearance?.Cycle(category, -1));
             right.onClick.AddListener(() => _appearance?.Cycle(category, 1));
         }

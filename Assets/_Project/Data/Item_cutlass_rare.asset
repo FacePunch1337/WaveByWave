@@ -29,14 +29,14 @@ MonoBehaviour:
   restingEulerAngles: {x: 0, y: 0, z: 0}
   equipmentKind: 2
   overrideHeldPose: 1
-  heldPosition: {x: 0.32, y: -0.12, z: 0.78}
-  heldEulerAngles: {x: 0, y: 0, z: 0}
-  heldScale: 1
+  heldPosition: {x: 0.35, y: -0.5, z: 0.6}
+  heldEulerAngles: {x: -81.3, y: -51.2, z: 52.5}
+  heldScale: 1.7
   overrideHandGripPoints: 1
   rightHandGrip:
     enabled: 1
-    localPosition: {x: 0, y: 0.007, z: 0.058}
-    localEulerAngles: {x: 0, y: 0, z: 10}
+    localPosition: {x: 0.03, y: 0.09, z: 0.04}
+    localEulerAngles: {x: -8.2, y: 10, z: 90}
   leftHandGrip:
     enabled: 0
     localPosition: {x: 0, y: 0, z: 0}

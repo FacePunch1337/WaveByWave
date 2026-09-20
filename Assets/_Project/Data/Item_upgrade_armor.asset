@@ -13,8 +13,10 @@ MonoBehaviour:
   m_Name: Item_upgrade_armor
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Items.ItemDefinition
   id: upgrade_armor
-  displayName: "Обшивка корпуса"
-  description: "ЛКМ на корабле: усилить защиту корпуса."
+  displayName: "\u041E\u0431\u0448\u0438\u0432\u043A\u0430 \u043A\u043E\u0440\u043F\u0443\u0441\u0430"
+  description: "\u041B\u041A\u041C \u043D\u0430 \u043A\u043E\u0440\u0430\u0431\u043B\u0435:
+    \u0443\u0441\u0438\u043B\u0438\u0442\u044C \u0437\u0430\u0449\u0438\u0442\u0443
+    \u043A\u043E\u0440\u043F\u0443\u0441\u0430."
   category: 3
   rarity: 1
   icon: {fileID: 0}
@@ -31,3 +33,12 @@ MonoBehaviour:
   heldPosition: {x: 0.25, y: -0.35, z: 0.65}
   heldEulerAngles: {x: 0, y: 0, z: 0}
   heldScale: 1
+  overrideHandGripPoints: 1
+  rightHandGrip:
+    enabled: 1
+    localPosition: {x: 0.6, y: 0, z: 0}
+    localEulerAngles: {x: -73.51, y: -170.24, z: -106.8}
+  leftHandGrip:
+    enabled: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}

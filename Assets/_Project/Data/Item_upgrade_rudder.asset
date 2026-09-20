@@ -13,8 +13,9 @@ MonoBehaviour:
   m_Name: Item_upgrade_rudder
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Items.ItemDefinition
   id: upgrade_rudder
-  displayName: "Улучшенный руль"
-  description: "ЛКМ на корабле: +15% манёвренности."
+  displayName: "\u0423\u043B\u0443\u0447\u0448\u0435\u043D\u043D\u044B\u0439 \u0440\u0443\u043B\u044C"
+  description: "\u041B\u041A\u041C \u043D\u0430 \u043A\u043E\u0440\u0430\u0431\u043B\u0435:
+    +15% \u043C\u0430\u043D\u0451\u0432\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u0438."
   category: 3
   rarity: 3
   icon: {fileID: 0}
@@ -31,3 +32,12 @@ MonoBehaviour:
   heldPosition: {x: 0.25, y: -0.35, z: 0.65}
   heldEulerAngles: {x: 0, y: 0, z: 0}
   heldScale: 1
+  overrideHandGripPoints: 1
+  rightHandGrip:
+    enabled: 1
+    localPosition: {x: 0.6, y: 0, z: 0}
+    localEulerAngles: {x: -73.51, y: -170.24, z: -106.8}
+  leftHandGrip:
+    enabled: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}

@@ -35,8 +35,8 @@ MonoBehaviour:
   overrideHandGripPoints: 1
   rightHandGrip:
     enabled: 1
-    localPosition: {x: 0, y: 0, z: 0}
-    localEulerAngles: {x: 0, y: 0, z: 0}
+    localPosition: {x: 0.6, y: 0, z: 0}
+    localEulerAngles: {x: -73.51, y: -170.24, z: -106.8}
   leftHandGrip:
     enabled: 0
     localPosition: {x: 0, y: 0, z: 0}

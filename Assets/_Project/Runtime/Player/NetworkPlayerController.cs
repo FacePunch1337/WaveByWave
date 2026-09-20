@@ -52,6 +52,8 @@ namespace WaveByWave.Player
         [SerializeField, Min(0f)] private float interactionProximityDistance = 1.25f;
         [Tooltip("Time to ease into an anchor handle, in the rotating handle's local frame.")]
         [SerializeField, Min(0f)] private float anchorHandleApproachDuration = 0.4f;
+        [Tooltip("Degrees of wardrobe preview rotation per mouse pixel.")]
+        [SerializeField, Min(0f)] private float customizationRotationSensitivity = 0.22f;
 
         [Header("References")]
         [SerializeField] private Rigidbody body;
@@ -90,6 +92,7 @@ namespace WaveByWave.Player
         private ShipCannon _activeCannon;
         private CustomizationStation _activeCustomizationStation;
         private CustomizationMenu _customizationMenu;
+        private float _customizationPreviewYaw;
         private ShipCannon _pendingCannon;
         private bool _cannonControlActive;
         private float _cannonRequestDeadline;
@@ -2281,6 +2284,8 @@ namespace WaveByWave.Player
             _desiredBodyRotation = rotation;
             UpdatePlatformAnchorFromCurrentPose();
             ResetPresentationPose();
+            if (_activeCustomizationStation != null && _presentationRoot != null)
+                _presentationRoot.localRotation = Quaternion.Euler(0f, _customizationPreviewYaw, 0f);
             return true;
         }
 
@@ -2309,6 +2314,7 @@ namespace WaveByWave.Player
             if (appearance == null)
                 return;
             _activeCustomizationStation = station;
+            _customizationPreviewYaw = 0f;
             _isCustomizing.Value = true;
             ClearMovementInput();
             BeginAnchorApproach(station.Station);
@@ -2324,6 +2330,7 @@ namespace WaveByWave.Player
             if (_activeCustomizationStation == null && _customizationMenu == null)
                 return;
             _activeCustomizationStation = null;
+            _customizationPreviewYaw = 0f;
             if (IsSpawned && IsOwner)
                 _isCustomizing.Value = false;
             _anchorApproachStation = null;
@@ -2343,10 +2350,28 @@ namespace WaveByWave.Player
                 return;
             }
             ClearMovementInput();
+            UpdateCustomizationPreviewRotation();
             SnapToActiveControlStation();
             animationSync.SetLocomotion(0f, true, 0f);
             if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
                 ExitCustomization();
+        }
+
+        private void UpdateCustomizationPreviewRotation()
+        {
+            var mouse = Mouse.current;
+            if (mouse == null)
+                return;
+
+            // LMB rotates in the unobstructed preview area. RMB works across the whole screen,
+            // allowing a drag to continue if the pointer crosses the menu boundary.
+            var overCharacterPreview = mouse.position.ReadValue().x < Screen.width * 0.67f;
+            if (!mouse.rightButton.isPressed && !(mouse.leftButton.isPressed && overCharacterPreview))
+                return;
+
+            _customizationPreviewYaw = Mathf.Repeat(
+                _customizationPreviewYaw + mouse.delta.ReadValue().x * customizationRotationSensitivity,
+                360f);
         }
 
         private void GetAnchorApproachPose(Transform station, out Vector3 position, out Quaternion rotation)

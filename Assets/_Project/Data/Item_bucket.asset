@@ -19,6 +19,12 @@ MonoBehaviour:
   category: 1
   rarity: 0
   icon: {fileID: 0}
+  maximumStack: 1
+  supplyKind: 0
+  potency: 40
+  treasureExperience: 25
+  upgradeStat: 0
+  upgradeBonus: 0.1
   worldVisualPrefab: {fileID: 3692177591442134904, guid: 1a5852af43565255897de645436cff7c, type: 3}
   restingEulerAngles: {x: 0, y: 0, z: 0}
   equipmentKind: 5
@@ -26,3 +32,12 @@ MonoBehaviour:
   heldPosition: {x: 0.32, y: -0.43, z: 0.7}
   heldEulerAngles: {x: 0, y: 0, z: 0}
   heldScale: 1
+  overrideHandGripPoints: 1
+  rightHandGrip:
+    enabled: 1
+    localPosition: {x: 0, y: 0.96, z: -0.49}
+    localEulerAngles: {x: -180, y: 97.4, z: 20.74}
+  leftHandGrip:
+    enabled: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}

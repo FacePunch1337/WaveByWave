@@ -29,6 +29,8 @@ namespace WaveByWave.Player
         private float _aimSpeed;
         private Transform _externalPose;
         private int _normalCullingMask;
+        private Camera _view;
+        private Camera _customizationView;
         public Vector2 AimAngles => new(_yaw, -_pitch);
 
         private void Awake()
@@ -38,10 +40,10 @@ namespace WaveByWave.Player
             if (referenceFrame == transform || referenceFrame == eyeTarget)
                 referenceFrame = null;
 
-            var view = GetComponent<Camera>();
-            _normalCullingMask = view.cullingMask;
-            view.fieldOfView = 75f;
-            view.nearClipPlane = 0.03f;
+            _view = GetComponent<Camera>();
+            _normalCullingMask = _view.cullingMask;
+            _view.fieldOfView = 75f;
+            _view.nearClipPlane = 0.03f;
         }
 
         public void SetTarget(Transform target, Transform body)
@@ -85,7 +87,7 @@ namespace WaveByWave.Player
 
         private void Update()
         {
-            if (eyeTarget == null || _externalPose != null || PlayerEquipment.InputCaptured)
+            if (eyeTarget == null || PlayerEquipment.InputCaptured)
                 return;
 
             var delta = Mouse.current != null ? Mouse.current.delta.ReadValue() * sensitivity : Vector2.zero;
@@ -130,19 +132,44 @@ namespace WaveByWave.Player
         public void SetExternalPose(Transform pose)
         {
             _externalPose = pose;
-            var view = GetComponent<Camera>();
+            if (_customizationView != null)
+                Destroy(_customizationView.gameObject);
+            var cameraObject = new GameObject("Pirate Customization Camera", typeof(Camera));
+            _customizationView = cameraObject.GetComponent<Camera>();
+            if (_view != null)
+            {
+                _customizationView.CopyFrom(_view);
+                _customizationView.depth = _view.depth + 10f;
+                _view.enabled = false;
+            }
             var bodyLayer = LayerMask.NameToLayer(NetworkPlayerController.LocalBodyLayerName);
-            if (view != null && bodyLayer >= 0)
-                view.cullingMask = _normalCullingMask | 1 << bodyLayer;
+            if (bodyLayer >= 0)
+                _customizationView.cullingMask = _normalCullingMask | 1 << bodyLayer;
+            RefreshCustomizationCamera();
         }
 
         public void ClearExternalPose()
         {
             _externalPose = null;
-            var view = GetComponent<Camera>();
-            if (view != null)
-                view.cullingMask = _normalCullingMask;
+            if (_customizationView != null)
+                Destroy(_customizationView.gameObject);
+            _customizationView = null;
+            if (_view != null)
+                _view.enabled = true;
             SnapToEyes();
+        }
+
+        private void OnDestroy()
+        {
+            if (_customizationView != null)
+                Destroy(_customizationView.gameObject);
+        }
+
+        private void RefreshCustomizationCamera()
+        {
+            if (_customizationView != null && _externalPose != null)
+                _customizationView.transform.SetPositionAndRotation(
+                    _externalPose.position, _externalPose.rotation);
         }
 
         public void SetAimLimits(Vector2 yaw, Vector2 elevation, float speed)
@@ -187,14 +214,7 @@ namespace WaveByWave.Player
 
         private void SnapToEyes()
         {
-            if (_externalPose != null)
-            {
-                var blend = 1f - Mathf.Exp(-10f * Mathf.Max(0.001f, Time.unscaledDeltaTime));
-                transform.SetPositionAndRotation(
-                    Vector3.Lerp(transform.position, _externalPose.position, blend),
-                    Quaternion.Slerp(transform.rotation, _externalPose.rotation, blend));
-                return;
-            }
+            RefreshCustomizationCamera();
             if (eyeTarget == null)
                 return;
 

@@ -109,6 +109,7 @@ namespace WaveByWave.Player
             if (definition == null || definition.WorldVisualPrefab == null) return;
             _item = Instantiate(definition.WorldVisualPrefab, _motion).transform;
             _item.name = "Held " + definition.Id;
+            ItemVisualUtility.SelectPreferredChild(_item.gameObject);
             foreach (var collider in _item.GetComponentsInChildren<Collider>()) { collider.enabled = false; Destroy(collider); }
             foreach (var body in _item.GetComponentsInChildren<Rigidbody>()) Destroy(body);
             foreach (var renderer in _item.GetComponentsInChildren<Renderer>())

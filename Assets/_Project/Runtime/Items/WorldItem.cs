@@ -278,10 +278,12 @@ namespace WaveByWave.Items
             _modelBounds = new Bounds(Vector3.zero, size);
             if (definition != null && definition.WorldVisualPrefab != null)
             {
-                var root = definition.WorldVisualPrefab.transform;
-                var rootMatrix = Matrix4x4.TRS(Vector3.zero, root.localRotation, root.localScale) * root.worldToLocalMatrix;
+                var prefabRoot = definition.WorldVisualPrefab.transform;
+                var boundsRoot = ItemVisualUtility.GetBoundsRoot(definition.WorldVisualPrefab);
+                var rootMatrix = Matrix4x4.TRS(Vector3.zero, prefabRoot.localRotation, prefabRoot.localScale) *
+                                 prefabRoot.worldToLocalMatrix;
                 var initialized = false;
-                foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
+                foreach (var filter in boundsRoot.GetComponentsInChildren<MeshFilter>(true))
                 {
                     if (filter.sharedMesh == null) continue;
                     var bounds = filter.sharedMesh.bounds;
@@ -329,6 +331,7 @@ namespace WaveByWave.Items
             {
                 _visual = Instantiate(definition.WorldVisualPrefab, transform);
                 _visual.transform.localPosition = Vector3.zero;
+                ItemVisualUtility.SelectPreferredChild(_visual);
                 foreach (var collider in _visual.GetComponentsInChildren<Collider>()) collider.enabled = false;
                 foreach (var body in _visual.GetComponentsInChildren<Rigidbody>())
                 {

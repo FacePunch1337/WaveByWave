@@ -152,4 +152,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaveByWave.Items.WorldItem
   ShowTopMostFoldoutHeaderGroup: 1
   catalog: {fileID: 11400000, guid: 2b563eb9625a0ab42b49b9db3e7db374, type: 2}
-  glowMaterial: {fileID: 2100000, guid: 30d99fca3b2241cc9ae092e9b3560506, type: 2}
+  rarityEffectPrefab: {fileID: 1815062955493659562, guid: 046ecc3506c35a444a2e8eeda156d260, type: 3}

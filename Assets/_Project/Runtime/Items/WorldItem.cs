@@ -30,7 +30,7 @@ namespace WaveByWave.Items
         private NetworkObject _support;
         private PlatformNetworkTransform _supportMotion;
         private Bounds _modelBounds;
-        private GameObject _visual;
+        private DotsWorldItemPresentation _visual;
         private GameObject _rarityEffect;
         private EquipmentWaterQuery _water;
         private bool _waterPoseInitialized;
@@ -76,11 +76,15 @@ namespace WaveByWave.Items
             _supportMotion = null;
             _water?.Dispose();
             _water = null;
+            _visual?.Dispose();
+            _visual = null;
         }
         public override void OnDestroy()
         {
             _water?.Dispose();
             _water = null;
+            _visual?.Dispose();
+            _visual = null;
             base.OnDestroy();
         }
         private void OnItemChanged(FixedString64Bytes previous, FixedString64Bytes current)
@@ -157,6 +161,7 @@ namespace WaveByWave.Items
             // A settled object on static ground must not dirty its trigger every frame.
             if (transform.position.Equals(position) && transform.rotation.Equals(rotation)) return;
             transform.SetPositionAndRotation(position, rotation);
+            _visual?.SetPose(position, rotation);
         }
 
         public NetworkObject SupportingObject => ResolveSupport();
@@ -424,20 +429,14 @@ namespace WaveByWave.Items
             if (!IsClient) return;
             var definition = Definition;
             if (definition == null) return;
-            if (_visual != null) Destroy(_visual);
+            _visual?.Dispose();
+            _visual = null;
             var original = GetComponent<Renderer>();
             if (original != null) original.enabled = false;
             if (definition.WorldVisualPrefab != null)
             {
-                _visual = ItemVisualUtility.InstantiatePresentation(definition.WorldVisualPrefab, transform,
-                    definition.DisplayName);
-                foreach (var collider in _visual.GetComponentsInChildren<Collider>()) collider.enabled = false;
-                foreach (var body in _visual.GetComponentsInChildren<Rigidbody>())
-                {
-                    body.isKinematic = true;
-                    body.useGravity = false;
-                    Destroy(body);
-                }
+                _visual = DotsWorldItemPresentation.Create(definition);
+                _visual?.SetPose(transform.position, transform.rotation);
             }
             else
             {

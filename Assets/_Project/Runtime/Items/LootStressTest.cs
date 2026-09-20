@@ -844,6 +844,9 @@ namespace WaveByWave.Items
                 if (!_world.EntityManager.Exists(entity)) continue;
                 _world.EntityManager.SetComponentData(entity,
                     LocalTransform.FromPositionRotationScale(position, rotation, 1f));
+                if (_world.EntityManager.HasComponent<LocalToWorld>(entity))
+                    _world.EntityManager.SetComponentData(entity,
+                        new LocalToWorld { Value = float4x4.TRS(position, rotation, item.Variant.Scale) });
                 _world.EntityManager.SetComponentData(entity,
                     new PostTransformMatrix { Value = float4x4.Scale(item.Variant.Scale) });
             }
@@ -852,6 +855,12 @@ namespace WaveByWave.Items
                 _world.EntityManager.SetComponentData(item.BeamEntity,
                     LocalTransform.FromPositionRotationScale(item.Position + Vector3.up * 0.72f,
                         Quaternion.identity, 1f));
+                if (_world.EntityManager.HasComponent<LocalToWorld>(item.BeamEntity))
+                    _world.EntityManager.SetComponentData(item.BeamEntity, new LocalToWorld
+                    {
+                        Value = float4x4.TRS(item.Position + Vector3.up * 0.72f,
+                            Quaternion.identity, new float3(0.08f, 1.4f, 0.08f))
+                    });
                 _world.EntityManager.SetComponentData(item.BeamEntity,
                     new PostTransformMatrix { Value = float4x4.Scale(0.08f, 1.4f, 0.08f) });
             }

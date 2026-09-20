@@ -94,6 +94,12 @@ namespace WaveByWave.Player
             }
         }
 
+        private void LateUpdate()
+        {
+            if (_canvasObject != null)
+                _canvasObject.SetActive(!PlayerEquipment.InputCaptured);
+        }
+
         private void OnDestroy()
         {
             if (_inventory != null)

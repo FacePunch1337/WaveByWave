@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using WaveByWave.Player;
 
 namespace WaveByWave.Combat
 {
@@ -132,6 +133,12 @@ namespace WaveByWave.Combat
             {
                 Destroy(gameObject);
                 return;
+            }
+
+            if (_screenSpace && _group != null)
+            {
+                _group.alpha = PlayerEquipment.InputCaptured ? 0f : 1f;
+                _group.blocksRaycasts = !PlayerEquipment.InputCaptured;
             }
 
             if (!_screenSpace)

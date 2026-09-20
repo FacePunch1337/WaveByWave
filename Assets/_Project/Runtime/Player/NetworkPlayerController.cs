@@ -2289,7 +2289,7 @@ namespace WaveByWave.Player
             BeginAnchorApproach(station.Station);
             SetOwnerPhysicsSimulation(false);
             _camera?.SetReferenceFrame(null);
-            _camera?.SetExternalPose(station.CameraPose);
+            _camera?.SetExternalView(station.ViewCamera);
             _customizationMenu = gameObject.AddComponent<CustomizationMenu>();
             _customizationMenu.Initialize(this, appearance);
         }

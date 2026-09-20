@@ -27,10 +27,8 @@ namespace WaveByWave.Player
         private bool _aimLimited;
         private Vector2 _aimYawLimits, _aimPitchLimits;
         private float _aimSpeed;
-        private Transform _externalPose;
-        private int _normalCullingMask;
         private Camera _view;
-        private Camera _customizationView;
+        private Camera _externalView;
         public Vector2 AimAngles => new(_yaw, -_pitch);
 
         private void Awake()
@@ -41,7 +39,6 @@ namespace WaveByWave.Player
                 referenceFrame = null;
 
             _view = GetComponent<Camera>();
-            _normalCullingMask = _view.cullingMask;
             _view.fieldOfView = 75f;
             _view.nearClipPlane = 0.03f;
         }
@@ -129,47 +126,28 @@ namespace WaveByWave.Player
 
         public void RefreshPose() => SnapToEyes();
 
-        public void SetExternalPose(Transform pose)
+        public void SetExternalView(Camera externalView)
         {
-            _externalPose = pose;
-            if (_customizationView != null)
-                Destroy(_customizationView.gameObject);
-            var cameraObject = new GameObject("Pirate Customization Camera", typeof(Camera));
-            _customizationView = cameraObject.GetComponent<Camera>();
-            if (_view != null)
+            if (externalView == null)
             {
-                _customizationView.CopyFrom(_view);
-                _customizationView.depth = _view.depth + 10f;
-                _view.enabled = false;
+                Debug.LogError("Customization station has no dedicated camera assigned.", this);
+                return;
             }
-            var bodyLayer = LayerMask.NameToLayer(NetworkPlayerController.LocalBodyLayerName);
-            if (bodyLayer >= 0)
-                _customizationView.cullingMask = _normalCullingMask | 1 << bodyLayer;
-            RefreshCustomizationCamera();
+
+            _externalView = externalView;
+            _externalView.enabled = true;
+            if (_view != null)
+                _view.enabled = false;
         }
 
         public void ClearExternalPose()
         {
-            _externalPose = null;
-            if (_customizationView != null)
-                Destroy(_customizationView.gameObject);
-            _customizationView = null;
+            if (_externalView != null)
+                _externalView.enabled = false;
+            _externalView = null;
             if (_view != null)
                 _view.enabled = true;
             SnapToEyes();
-        }
-
-        private void OnDestroy()
-        {
-            if (_customizationView != null)
-                Destroy(_customizationView.gameObject);
-        }
-
-        private void RefreshCustomizationCamera()
-        {
-            if (_customizationView != null && _externalPose != null)
-                _customizationView.transform.SetPositionAndRotation(
-                    _externalPose.position, _externalPose.rotation);
         }
 
         public void SetAimLimits(Vector2 yaw, Vector2 elevation, float speed)
@@ -214,7 +192,6 @@ namespace WaveByWave.Player
 
         private void SnapToEyes()
         {
-            RefreshCustomizationCamera();
             if (eyeTarget == null)
                 return;
 

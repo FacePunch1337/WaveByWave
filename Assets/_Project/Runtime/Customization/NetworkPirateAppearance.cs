@@ -15,7 +15,8 @@ namespace WaveByWave.Customization
 
         [Header("Base pirate")]
         [SerializeField] private Transform visualRoot;
-        [SerializeField] private GameObject basePiratePrefab;
+        [Tooltip("The pirate body authored directly inside the Player prefab.")]
+        [SerializeField] private Transform pirateRoot;
         [SerializeField] private Material[] pirateMaterials;
         [Header("Head")]
         [SerializeField] private GameObject[] hairPrefabs;
@@ -152,24 +153,16 @@ namespace WaveByWave.Customization
 
         private void BuildBasePirate()
         {
-            if (basePiratePrefab == null || _appearanceRoot != null)
+            if (_appearanceRoot != null)
                 return;
 
-            _appearanceRoot = new GameObject("Runtime Pirate Appearance").transform;
-            _appearanceRoot.SetParent(visualRoot, false);
-            foreach (Transform child in visualRoot)
-                if (child != _appearanceRoot)
-                    child.gameObject.SetActive(false);
-
-            _pirateRoot = Instantiate(basePiratePrefab, _appearanceRoot).transform;
-            _pirateRoot.name = "Pirate Body";
-            _pirateRoot.localPosition = Vector3.zero;
-            _pirateRoot.localRotation = Quaternion.identity;
-            _pirateRoot.localScale = Vector3.one;
-            foreach (var collider in _pirateRoot.GetComponentsInChildren<Collider>(true))
-                Destroy(collider);
-            foreach (var body in _pirateRoot.GetComponentsInChildren<Rigidbody>(true))
-                Destroy(body);
+            _appearanceRoot = visualRoot;
+            _pirateRoot = pirateRoot != null ? pirateRoot : visualRoot.Find("Pirate Body");
+            if (_pirateRoot == null)
+            {
+                Debug.LogError("Player prefab is missing its authored Pirate Body visual.", this);
+                return;
+            }
 
             _pirateAnimator = _pirateRoot.GetComponentInChildren<Animator>(true);
             if (_pirateAnimator != null && _locomotionController != null)
@@ -226,7 +219,7 @@ namespace WaveByWave.Customization
             current.name = prefabs[index - 1].name;
             current.transform.localPosition = new Vector3(-0.005f, 0f, 0f);
             current.transform.localRotation = new Quaternion(-0.5f, 0.5f, 0.5f, 0.5f);
-            current.transform.localScale = Vector3.one;
+            current.transform.localScale = Vector3.one * 1.7f;
             // The source pack authors all head-slot attachments in Blender axes. Hair
             // has one more corrected child, while hats and bandanas render on the root.
             if (current.GetComponent<Renderer>() != null)
@@ -245,7 +238,7 @@ namespace WaveByWave.Customization
             current.name = prefabs[index - 1].name;
             current.transform.localPosition = Vector3.zero;
             current.transform.localRotation = Quaternion.identity;
-            current.transform.localScale = Vector3.one;
+            current.transform.localScale = Vector3.one * 1.7f;
             DisablePhysics(current);
             RetargetSkinnedMeshes(current);
         }

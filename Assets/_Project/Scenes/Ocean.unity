@@ -1220,7 +1220,7 @@ BoxCollider:
   m_Enabled: 1
   serializedVersion: 3
   m_Size: {x: 2000, y: 500, z: 2000}
-  m_Center: {x: 0, y: -247, z: 0}
+  m_Center: {x: 0, y: -246, z: 0}
 --- !u!114 &1135397474
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1237,6 +1237,7 @@ MonoBehaviour:
   underwaterVolume: {fileID: 1135397472}
   horizontalSize: 2000
   depth: 500
+  surfacePadding: 4
 --- !u!4 &1135397473
 Transform:
   m_ObjectHideFlags: 0

@@ -11,6 +11,7 @@ using KinematicCharacterController;
 using WaveByWave.Player;
 using WaveByWave.Ships;
 using WaveByWave.Items;
+using WaveByWave.Generation;
 using PhysicsCollider = Unity.Physics.Collider;
 using EngineCollider = UnityEngine.Collider;
 using EngineMeshCollider = UnityEngine.MeshCollider;
@@ -174,13 +175,16 @@ namespace WaveByWave.Collision
         public void RefreshStaticObstacles()
         {
             ReleaseWorld();
+            var bodies = new List<Unity.Physics.RigidBody>();
+            AddIslandObstacles(bodies);
+
             var candidates = UnityEngine.Object.FindObjectsByType<EngineCollider>(
                 FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-            var bodies = new List<Unity.Physics.RigidBody>();
             foreach (var obstacle in candidates)
             {
                 if (!obstacle.enabled || obstacle.isTrigger || obstacle.attachedRigidbody != null ||
                     obstacle.transform.IsChildOf(transform) ||
+                    obstacle.GetComponentInParent<ProceduralIsland>() != null ||
                     obstacle.GetComponentInParent<KinematicCharacterMotor>() != null ||
                     obstacle.GetComponentInParent<MovingPlatform>() != null ||
                     (_obstacleLayers & (1 << obstacle.gameObject.layer)) == 0 ||
@@ -207,6 +211,45 @@ namespace WaveByWave.Collision
                 staticBodies[i] = bodies[i];
             _world.CollisionWorld.BuildBroadphase(ref _world, Time.fixedDeltaTime, float3.zero);
             _sceneChanged = false;
+        }
+
+        private void AddIslandObstacles(List<Unity.Physics.RigidBody> bodies)
+        {
+            var islands = UnityEngine.Object.FindObjectsByType<ProceduralIsland>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            foreach (var island in islands)
+            {
+                if (!island.ShipCollisionActive || !island.TryBuildShipCollisionHull(out var sourceVertices) ||
+                    sourceVertices == null || sourceVertices.Length < 4)
+                    continue;
+
+                var signedScale = island.transform.lossyScale;
+                var vertices = new NativeArray<float3>(sourceVertices.Length, Allocator.Temp);
+                try
+                {
+                    for (var i = 0; i < sourceVertices.Length; i++)
+                        vertices[i] = Vector3.Scale(sourceVertices[i], signedScale);
+
+                    var parameters = ConvexHullGenerationParameters.Default;
+                    parameters.BevelRadius = 0f;
+                    parameters.SimplificationTolerance = 0.02f;
+                    parameters.MinimumAngle = 0f;
+                    var geometry = Unity.Physics.ConvexCollider.Create(vertices, parameters);
+                    _obstacleGeometry.Add(geometry);
+                    bodies.Add(new Unity.Physics.RigidBody
+                    {
+                        Collider = geometry,
+                        WorldFromBody = new RigidTransform(ToQuaternion(island.transform.rotation),
+                            island.transform.position),
+                        Scale = 1f,
+                        Entity = Entity.Null
+                    });
+                }
+                finally
+                {
+                    vertices.Dispose();
+                }
+            }
         }
 
         public Motion ResolveMotion(Vector3 startPosition, Quaternion startRotation,

@@ -26,6 +26,7 @@ namespace WaveByWave.Generation
         public bool GeometryReady => _initialized && !_meshing && _dirty.Count == 0;
         public bool Ready => GeometryReady && _decorated && _hasCompletedInitialBuild;
         public bool InitialBuildComplete => _hasCompletedInitialBuild;
+        public bool ShipCollisionActive => isActiveAndEnabled && _hasCompletedInitialBuild && _presentationRequested;
         public int LastDigRevision { get; private set; }
         public float Diameter => _parameters.Diameter;
         public float BedrockDepth => _parameters.SandDepth;
@@ -289,6 +290,51 @@ namespace WaveByWave.Generation
         {
             var local = transform.InverseTransformPoint(position);
             return new Vector2(local.x, local.z).sqrMagnitude < Mathf.Pow(Diameter * 0.5f + margin, 2f);
+        }
+
+        /// <summary>
+        /// Builds a cheap, immutable collision outline for the ship query world. Players and
+        /// digging continue to use the exact chunk MeshColliders. The ship deliberately uses
+        /// the original island field, so an excavation never forces expensive collider cooking
+        /// and cannot create a navigable channel through an island.
+        /// </summary>
+        public bool TryBuildShipCollisionHull(out Vector3[] vertices)
+        {
+            vertices = null;
+            if (Settings == null || Diameter <= 0f)
+                return false;
+
+            const int angularSamples = 48;
+            const int radialSamples = 72;
+            var top = Settings.SandHeight + Mathf.Max(0.5f, _parameters.CellSize * 2f);
+            var bottom = _parameters.Origin.y;
+            // Sample below the visible shoreline. This matches the part of the coast hit by
+            // the ship's draft and avoids making tiny dry sand tongues into costly contacts.
+            var sampleHeight = Mathf.Max(bottom + _parameters.CellSize, -0.8f);
+            var maximumRadius = Diameter * 0.65f + _parameters.CellSize * 2f;
+            var minimumRadius = Mathf.Max(0.5f, Diameter * 0.15f);
+            vertices = new Vector3[angularSamples * 2];
+
+            for (var angleIndex = 0; angleIndex < angularSamples; angleIndex++)
+            {
+                var angle = angleIndex * Mathf.PI * 2f / angularSamples;
+                var direction = new float2(math.cos(angle), math.sin(angle));
+                var outside = minimumRadius;
+                for (var radiusIndex = 1; radiusIndex <= radialSamples; radiusIndex++)
+                {
+                    var radius = maximumRadius * radiusIndex / radialSamples;
+                    var local = new float3(direction.x * radius, sampleHeight, direction.y * radius);
+                    if (math.cmax(_parameters.InitialDensity(local)) > 0f)
+                        outside = radius;
+                }
+
+                var x = direction.x * outside;
+                var z = direction.y * outside;
+                vertices[angleIndex] = new Vector3(x, bottom, z);
+                vertices[angleIndex + angularSamples] = new Vector3(x, top, z);
+            }
+
+            return true;
         }
 
         public bool TrySurface(float x, float z, out Vector3 point, out Vector3 normal, bool original = false)

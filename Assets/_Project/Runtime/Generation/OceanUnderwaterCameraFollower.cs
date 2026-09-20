@@ -1,6 +1,7 @@
 using StylizedWater3;
 using StylizedWater3.UnderwaterRendering;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace WaveByWave.Generation
 {
@@ -13,10 +14,23 @@ namespace WaveByWave.Generation
         [SerializeField] private BoxCollider underwaterVolume;
         [SerializeField, Min(100f)] private float horizontalSize = 2000f;
         [SerializeField, Min(20f)] private float depth = 500f;
+        [SerializeField, Min(3f)] private float surfacePadding = 4f;
 
         private Camera _playerCamera;
 
         private void Awake() => ConfigureVolume();
+
+        private void OnEnable()
+        {
+            ConfigureVolume();
+            RenderPipelineManager.beginCameraRendering += HandleBeginCameraRendering;
+        }
+
+        private void OnDisable()
+        {
+            RenderPipelineManager.beginCameraRendering -= HandleBeginCameraRendering;
+        }
+
         private void OnValidate() => ConfigureVolume();
 
         private void ConfigureVolume()
@@ -27,14 +41,13 @@ namespace WaveByWave.Generation
             {
                 underwaterVolume.isTrigger = true;
                 underwaterVolume.size = new Vector3(horizontalSize, depth, horizontalSize);
-                underwaterVolume.center = new Vector3(0f, -depth * 0.5f + 3f, 0f);
+                underwaterVolume.center = new Vector3(0f, -depth * 0.5f + surfacePadding, 0f);
             }
             if (underwaterArea != null)
             {
                 underwaterArea.boxCollider = underwaterVolume;
                 underwaterArea.waterLevelSource = UnderwaterArea.WaterLevelSource.Ocean;
-                if (OceanFollowBehaviour.Instance != null)
-                    underwaterArea.waterMaterial = OceanFollowBehaviour.Instance.material;
+                BindOceanMaterial();
             }
         }
 
@@ -47,15 +60,52 @@ namespace WaveByWave.Generation
             if (_playerCamera == null)
                 return;
 
-            if (OceanFollowBehaviour.Instance != null && underwaterArea != null)
-                underwaterArea.waterMaterial = OceanFollowBehaviour.Instance.material;
+            FollowCamera(_playerCamera);
+        }
+
+        private void HandleBeginCameraRendering(ScriptableRenderContext _, Camera camera)
+        {
+            if (!Application.isPlaying || camera == null || camera.cameraType != CameraType.Game ||
+                !camera.isActiveAndEnabled)
+                return;
+
+            // This callback runs before renderer features inspect UnderwaterArea. It therefore
+            // remains correct when NGO activates the owner camera after the scene has loaded or
+            // when a dedicated customization camera temporarily replaces the first-person view.
+            _playerCamera = camera;
+            FollowCamera(camera);
+        }
+
+        private void FollowCamera(Camera camera)
+        {
+            BindOceanMaterial();
 
             var position = transform.position;
-            position.x = _playerCamera.transform.position.x;
-            position.z = _playerCamera.transform.position.z;
+            position.x = camera.transform.position.x;
+            position.z = camera.transform.position.z;
             if (OceanFollowBehaviour.Instance != null)
+            {
                 position.y = OceanFollowBehaviour.Instance.transform.position.y;
+                if (underwaterArea != null)
+                    underwaterArea.waterLevel = position.y;
+            }
             transform.position = position;
+        }
+
+        private void BindOceanMaterial()
+        {
+            if (underwaterArea == null || OceanFollowBehaviour.Instance == null ||
+                OceanFollowBehaviour.Instance.material == null)
+                return;
+
+            var material = OceanFollowBehaviour.Instance.material;
+            underwaterArea.waterMaterial = material;
+
+            // Stylized Water 3 requires the water material to be double-sided for the
+            // underwater mask and waterline to be visible from below the surface.
+            if (Application.isPlaying && material.HasProperty("_Cull") &&
+                material.GetInt("_Cull") != (int)CullMode.Off)
+                material.SetInt("_Cull", (int)CullMode.Off);
         }
     }
 }

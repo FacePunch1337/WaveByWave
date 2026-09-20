@@ -67,7 +67,7 @@ namespace WaveByWave.Generation
         private readonly Dictionary<ulong, float> _snapshotRequests = new();
         private readonly HashSet<ulong> _pendingSnapshotClients = new();
         private readonly HashSet<int> _initialIslands = new();
-        private readonly List<Vector3> _initialPlayerCenters = new();
+        private readonly HashSet<int> _streamedIslandIds = new();
         private readonly RaycastHit[] _surfaceHits = new RaycastHit[64];
         private OceanLoadingCurtain _loadingCurtain;
 
@@ -373,80 +373,165 @@ namespace WaveByWave.Generation
                 _initialGenerationStarted = true;
                 return;
             }
-            if (_ships.Length == 0 || !CollectInitialPlayerCenters())
+            if (_ships.Length == 0)
                 return;
 
             _initialGenerationStarted = true;
             var missing = _initialTargetCount - _initialIslands.Count;
             for (var n = 0; n < missing; n++)
             {
-                var center = _initialPlayerCenters[(_initialIslands.Count + n) % _initialPlayerCenters.Count];
-                if (!TryGenerateIslandAt(center, settings.InitialIslandRadius, out var id))
+                var ship = NextSpawnedShip(_initialIslands.Count);
+                if (ship == null) break;
+                var course = ShipCourse(ship);
+                var anchor = ship.transform.position;
+                var distance = settings.InitialIslandRadius;
+                if (TryFindFurthestInitialIsland(ship.transform.position, course, out var previous))
+                {
+                    anchor = previous.transform.position;
+                    distance = settings.IslandChainDistance;
+                }
+                if (!TryGenerateIslandAhead(ship, anchor, distance, course, out var id))
                     continue;
                 _initialIslands.Add(id);
             }
         }
 
-        private bool CollectInitialPlayerCenters()
+        private NetworkShipController NextSpawnedShip(int offset)
         {
-            _initialPlayerCenters.Clear();
-            if (_manager == null || !_manager.IsServer)
-                return false;
-            foreach (var client in _manager.ConnectedClientsList)
+            if (_ships.Length == 0) return null;
+            for (var i = 0; i < _ships.Length; i++)
             {
-                var player = client.PlayerObject;
-                if (player == null) continue;
-                var position = player.transform.position;
-                var nearOceanShip = false;
-                foreach (var ship in _ships)
-                {
-                    if (ship == null || !ship.IsSpawned ||
-                        (ship.transform.position - position).sqrMagnitude > 100f * 100f) continue;
-                    nearOceanShip = true;
-                    break;
-                }
-                if (nearOceanShip) _initialPlayerCenters.Add(position);
+                var ship = _ships[(offset + i) % _ships.Length];
+                if (ship != null && ship.IsSpawned) return ship;
             }
-            return _initialPlayerCenters.Count > 0;
+            return null;
+        }
+
+        private bool TryFindFurthestInitialIsland(Vector3 shipPosition, Vector3 course,
+            out ProceduralIsland island)
+        {
+            island = null;
+            var furthest = 0f;
+            OrderedRange(settings.IslandChainDistance, out _, out var chainMaximum);
+            var maximumDistance = Mathf.Max(settings.IslandRecoveryRadius, chainMaximum * 2f);
+            var minimumDot = Mathf.Cos((Mathf.Clamp(settings.IslandForwardArc, 0f, 80f) + 10f) *
+                                       Mathf.Deg2Rad);
+            foreach (var id in _initialIslands)
+            {
+                if (!_islands.TryGetValue(id, out var record) || record.Island == null) continue;
+                var offset = Vector3.ProjectOnPlane(record.Island.transform.position - shipPosition, Vector3.up);
+                var distance = offset.magnitude;
+                if (distance < 0.01f || distance > maximumDistance ||
+                    Vector3.Dot(offset / distance, course) < minimumDot) continue;
+                var projection = Vector3.Dot(offset, course);
+                if (projection <= furthest) continue;
+                furthest = projection;
+                island = record.Island;
+            }
+            return island != null;
         }
 
         private void MaintainIslands()
         {
             if (!settings.GenerateIslands || _ships.Length == 0) return;
+            _streamedIslandIds.Clear();
+            var generatedThisTick = false;
+            foreach (var ship in _ships)
+            {
+                if (ship == null || !ship.IsSpawned) continue;
+                var course = ShipCourse(ship);
+                var currentId = FindClosestStreamingIsland(ship.transform.position);
+                if (currentId == 0 && !generatedThisTick &&
+                    TryGenerateIslandAhead(ship, ship.transform.position, settings.InitialIslandRadius,
+                        course, out currentId))
+                    generatedThisTick = true;
+                if (currentId == 0) continue;
+                _streamedIslandIds.Add(currentId);
+
+                var nextId = FindNextStreamingIsland(ship, currentId, course);
+                if (nextId == 0 && !generatedThisTick &&
+                    _islands.TryGetValue(currentId, out var current) && current.Island != null &&
+                    TryGenerateIslandAhead(ship, current.Island.transform.position,
+                        settings.IslandChainDistance, course, out nextId))
+                    generatedThisTick = true;
+                if (nextId != 0) _streamedIslandIds.Add(nextId);
+            }
+
             _removeIds.Clear();
-            var despawnRadius = Mathf.Max(settings.IslandDespawnRadius, settings.StreamingIslandRadius.y + 20f);
             foreach (var pair in _islands)
-                if (!pair.Value.Test && pair.Value.Island != null &&
-                    !NearAnyPlayerOrShip(pair.Value.Island.transform.position, despawnRadius)) _removeIds.Add(pair.Key);
+            {
+                var record = pair.Value;
+                if (record.Test || record.ScenePlaced || record.Island == null ||
+                    _streamedIslandIds.Contains(pair.Key) || HasPlayerNear(record.Island)) continue;
+                _removeIds.Add(pair.Key);
+            }
             foreach (var id in _removeIds) RemoveIsland(id);
-            if (CountStreamingIslands() >= Mathf.Clamp(settings.IslandsPerShip, 1, 16) * _ships.Length) return;
-            TryGenerateIslandAroundShip(settings.StreamingIslandRadius, out _);
         }
 
-        private int CountStreamingIslands()
+        private int FindClosestStreamingIsland(Vector3 position)
         {
-            var count = 0;
-            foreach (var record in _islands.Values)
-                if (!record.Test && !record.ScenePlaced)
-                    count++;
-            return count;
+            var result = 0;
+            OrderedRange(settings.IslandChainDistance, out _, out var chainMaximum);
+            var maximumDistance = Mathf.Max(settings.IslandRecoveryRadius, chainMaximum * 1.25f);
+            var best = maximumDistance * maximumDistance;
+            foreach (var pair in _islands)
+            {
+                var record = pair.Value;
+                if (record.Test || record.ScenePlaced || record.Island == null) continue;
+                var offset = Vector3.ProjectOnPlane(record.Island.transform.position - position, Vector3.up);
+                var squared = offset.sqrMagnitude;
+                if (squared >= best) continue;
+                best = squared;
+                result = pair.Key;
+            }
+            return result;
         }
 
-        private bool TryGenerateIslandAroundShip(Vector2 generationRadius, out int id)
+        private int FindNextStreamingIsland(NetworkShipController ship, int currentId, Vector3 course)
+        {
+            if (!_islands.TryGetValue(currentId, out var current) || current.Island == null) return 0;
+            OrderedRange(settings.IslandChainDistance, out var minimum, out var maximum);
+            // A little hysteresis keeps an already generated island from being discarded
+            // when the helm changes the course by only a few degrees.
+            var acceptanceArc = Mathf.Min(89f, Mathf.Clamp(settings.IslandForwardArc, 0f, 80f) + 12f);
+            var minimumDot = Mathf.Cos(acceptanceArc * Mathf.Deg2Rad);
+            var anchor = current.Island.transform.position;
+            var result = 0;
+            var best = float.PositiveInfinity;
+            foreach (var pair in _islands)
+            {
+                if (pair.Key == currentId) continue;
+                var record = pair.Value;
+                if (record.Test || record.ScenePlaced || record.Island == null) continue;
+                var separation = Vector3.ProjectOnPlane(record.Island.transform.position - anchor, Vector3.up).magnitude;
+                if (separation < minimum - 0.5f || separation > maximum + 0.5f) continue;
+                var fromShip = Vector3.ProjectOnPlane(record.Island.transform.position - ship.transform.position,
+                    Vector3.up);
+                var distance = fromShip.magnitude;
+                if (distance < 0.01f || Vector3.Dot(fromShip / distance, course) + 0.0001f < minimumDot)
+                    continue;
+                if (distance >= best) continue;
+                best = distance;
+                result = pair.Key;
+            }
+            return result;
+        }
+
+        private bool TryGenerateIslandAhead(NetworkShipController ship, Vector3 anchor,
+            Vector2 distanceRange, Vector3 course, out int id)
         {
             id = 0;
-            var ship = _ships[_random.NextInt(_ships.Length)];
-            if (ship == null || !ship.IsSpawned) return false;
-            return TryGenerateIslandAt(ship.transform.position, generationRadius, out id);
-        }
-
-        private bool TryGenerateIslandAt(Vector3 center, Vector2 generationRadius, out int id)
-        {
-            id = 0;
-            for (var attempt = 0; attempt < 24; attempt++)
+            OrderedRange(distanceRange, out var minimum, out var maximum);
+            var arc = Mathf.Clamp(settings.IslandForwardArc, 0f, 80f);
+            for (var attempt = 0; attempt < 32; attempt++)
             {
                 var size = (IslandSize)_random.NextInt(3);
-                var position = InRing(center, generationRadius);
+                var distance = maximum - minimum <= 0.001f
+                    ? minimum : _random.NextFloat(minimum, maximum);
+                var direction = Quaternion.AngleAxis(_random.NextFloat(-arc, arc), Vector3.up) * course;
+                var position = anchor + direction * distance;
+                if (Vector3.Dot(Vector3.ProjectOnPlane(position - ship.transform.position, Vector3.up),
+                        course) <= 1f) continue;
                 var radius = settings.Diameter(size) * 0.5f;
                 if (!IsOpenWater(position, radius + settings.IslandSpacing * 0.5f, out var level)) continue;
                 var valid = true;
@@ -461,6 +546,32 @@ namespace WaveByWave.Generation
                 id = GenerateIsland(position, size, _random.NextUInt() | 1u, false);
                 return id != 0;
             }
+            return false;
+        }
+
+        private static void OrderedRange(Vector2 range, out float minimum, out float maximum)
+        {
+            minimum = Mathf.Max(1f, Mathf.Min(range.x, range.y));
+            maximum = Mathf.Max(minimum, Mathf.Max(range.x, range.y));
+        }
+
+        private static Vector3 ShipCourse(NetworkShipController ship)
+        {
+            var velocity = Vector3.ProjectOnPlane(ship.GetPlanarPointVelocity(ship.transform.position), Vector3.up);
+            if (velocity.sqrMagnitude > 0.04f) return velocity.normalized;
+            var forward = Vector3.ProjectOnPlane(ship.transform.forward, Vector3.up);
+            return forward.sqrMagnitude > 0.0001f ? forward.normalized : Vector3.forward;
+        }
+
+        private bool HasPlayerNear(ProceduralIsland island)
+        {
+            if (_manager == null || !_manager.IsServer || island == null) return false;
+            var radius = island.Diameter * 0.5f + 12f;
+            var squared = radius * radius;
+            foreach (var client in _manager.ConnectedClientsList)
+                if (client.PlayerObject != null &&
+                    (client.PlayerObject.transform.position - island.transform.position).sqrMagnitude <= squared)
+                    return true;
             return false;
         }
 
@@ -681,7 +792,7 @@ namespace WaveByWave.Generation
                 if (!record.ScenePlaced && record.Island != null) Destroy(record.Island.gameObject);
             _islands.Clear(); _floating.Clear(); _outgoing.Clear(); _snapshotRequests.Clear();
             _pendingSnapshotClients.Clear();
-            _initialIslands.Clear();
+            _initialIslands.Clear(); _streamedIslandIds.Clear();
         }
         private void ClearForSnapshot()
         {
@@ -703,7 +814,7 @@ namespace WaveByWave.Generation
             foreach (var id in _removeIds) _islands.Remove(id);
             _floating.Clear(); _outgoing.Clear(); _snapshotRequests.Clear();
             _pendingSnapshotClients.Clear();
-            _initialIslands.Clear();
+            _initialIslands.Clear(); _streamedIslandIds.Clear();
             _loadingComplete = false;
             _loadingCurtain?.Show(0, 0);
         }

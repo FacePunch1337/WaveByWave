@@ -35,21 +35,25 @@ namespace WaveByWave.Generation
         [Min(1f)] public float LootDespawnRadius = 100f;
         [Min(0.1f)] public float LootFadeDuration = 1.2f;
         public List<WeightedLootEntry> FloatingLoot = new();
-        [Header("Предзагрузка островов")]
+        [Header("Цепочка и предзагрузка островов")]
         [FormerlySerializedAs("IslandRadius")]
-        [Tooltip("Кольцо, в котором первые острова строятся под загрузочной шторкой.")]
+        [Tooltip("Минимальная и максимальная дистанция от корабля до первого острова впереди. Первые острова полностью строятся под загрузочной шторкой.")]
         public Vector2 InitialIslandRadius = new(65f, 130f);
-        [Range(0, 32), Tooltip("Точное общее количество островов, которое должно быть полностью создано вокруг игроков до снятия загрузочной шторки.")]
+        [Range(0, 32), Tooltip("Точное общее количество островов, которое должно быть полностью создано впереди кораблей до снятия загрузочной шторки.")]
         public int InitialIslandCount = 4;
-        [Tooltip("Кольцо упреждающей генерации следующих островов. Минимум должен быть дальше дистанции показа.")]
-        public Vector2 StreamingIslandRadius = new(160f, 230f);
+        [FormerlySerializedAs("StreamingIslandRadius")]
+        [Tooltip("Минимальная и максимальная дистанция между центрами текущего и следующего острова. Следующий остров создаётся впереди по курсу корабля.")]
+        public Vector2 IslandChainDistance = new(160f, 230f);
+        [Range(0f, 80f), Tooltip("Максимальное случайное отклонение следующего острова влево или вправо от курса корабля.")]
+        public float IslandForwardArc = 35f;
         [Min(10f), Tooltip("Полностью готовый остров становится видимым только внутри этой дистанции.")]
         public float IslandRevealRadius = 135f;
         [Min(0.1f)] public float IslandStreamingInterval = 0.5f;
-        [Range(1, 16), Tooltip("Количество островов, поддерживаемое стримингом на корабль уже после стартовой загрузки.")]
-        public int IslandsPerShip = 5;
-        [Min(20f)] public float IslandDespawnRadius = 300f;
-        [Min(2f)] public float IslandSpacing = 20f;
+        [FormerlySerializedAs("IslandDespawnRadius")]
+        [Min(20f), Tooltip("Максимальная дистанция, на которой уже существующий остров можно повторно включить в цепочку корабля после резкой смены курса или телепортации.")]
+        public float IslandRecoveryRadius = 300f;
+        [Min(2f), Tooltip("Минимальный свободный промежуток между геометрией соседних островов.")]
+        public float IslandSpacing = 20f;
         public GameObject LoadingCurtainPrefab;
 
         [Header("Геометрия острова, метры")]

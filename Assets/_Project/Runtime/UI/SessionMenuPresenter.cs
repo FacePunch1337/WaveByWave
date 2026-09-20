@@ -64,7 +64,8 @@ namespace WaveByWave.UI
 
         private void Update()
         {
-            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            if (!WaveByWave.Customization.CustomizationMenu.InputCaptured &&
+                Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
                 SetOpen(panel != null && !panel.activeSelf);
 
             Refresh();

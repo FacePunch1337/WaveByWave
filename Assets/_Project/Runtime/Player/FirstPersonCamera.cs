@@ -27,6 +27,8 @@ namespace WaveByWave.Player
         private bool _aimLimited;
         private Vector2 _aimYawLimits, _aimPitchLimits;
         private float _aimSpeed;
+        private Transform _externalPose;
+        private int _normalCullingMask;
         public Vector2 AimAngles => new(_yaw, -_pitch);
 
         private void Awake()
@@ -37,6 +39,7 @@ namespace WaveByWave.Player
                 referenceFrame = null;
 
             var view = GetComponent<Camera>();
+            _normalCullingMask = view.cullingMask;
             view.fieldOfView = 75f;
             view.nearClipPlane = 0.03f;
         }
@@ -82,7 +85,7 @@ namespace WaveByWave.Player
 
         private void Update()
         {
-            if (eyeTarget == null || PlayerEquipment.InputCaptured)
+            if (eyeTarget == null || _externalPose != null || PlayerEquipment.InputCaptured)
                 return;
 
             var delta = Mouse.current != null ? Mouse.current.delta.ReadValue() * sensitivity : Vector2.zero;
@@ -123,6 +126,24 @@ namespace WaveByWave.Player
         private void LateUpdate() => SnapToEyes();
 
         public void RefreshPose() => SnapToEyes();
+
+        public void SetExternalPose(Transform pose)
+        {
+            _externalPose = pose;
+            var view = GetComponent<Camera>();
+            var bodyLayer = LayerMask.NameToLayer(NetworkPlayerController.LocalBodyLayerName);
+            if (view != null && bodyLayer >= 0)
+                view.cullingMask = _normalCullingMask | 1 << bodyLayer;
+        }
+
+        public void ClearExternalPose()
+        {
+            _externalPose = null;
+            var view = GetComponent<Camera>();
+            if (view != null)
+                view.cullingMask = _normalCullingMask;
+            SnapToEyes();
+        }
 
         public void SetAimLimits(Vector2 yaw, Vector2 elevation, float speed)
         {
@@ -166,6 +187,14 @@ namespace WaveByWave.Player
 
         private void SnapToEyes()
         {
+            if (_externalPose != null)
+            {
+                var blend = 1f - Mathf.Exp(-10f * Mathf.Max(0.001f, Time.unscaledDeltaTime));
+                transform.SetPositionAndRotation(
+                    Vector3.Lerp(transform.position, _externalPose.position, blend),
+                    Quaternion.Slerp(transform.rotation, _externalPose.rotation, blend));
+                return;
+            }
             if (eyeTarget == null)
                 return;
 

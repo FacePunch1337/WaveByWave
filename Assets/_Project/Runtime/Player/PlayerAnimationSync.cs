@@ -25,6 +25,14 @@ namespace WaveByWave.Player
         private readonly NetworkVariable<FixedString32Bytes> _action = new(
             default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+        public Animator CurrentAnimator => animator;
+
+        public void SetAnimator(Animator value)
+        {
+            animator = value;
+            ApplyLocomotion();
+        }
+
         public override void OnNetworkSpawn()
         {
             _actionSequence.OnValueChanged += OnActionSequenceChanged;

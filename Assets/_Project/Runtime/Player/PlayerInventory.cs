@@ -75,8 +75,7 @@ namespace WaveByWave.Player
 
         private void Update()
         {
-            if (!IsSpawned || !IsOwner || Keyboard.current == null || EquipmentAdminPanel.InputCaptured ||
-                WaveByWave.UI.SessionMenuPresenter.InputCaptured)
+            if (!IsSpawned || !IsOwner || Keyboard.current == null || PlayerEquipment.InputCaptured)
                 return;
 
             var keys = new[]

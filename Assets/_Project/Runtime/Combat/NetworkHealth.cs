@@ -32,6 +32,7 @@ namespace WaveByWave.Combat
 
         private readonly NetworkVariable<float> _health = new(100f);
         private readonly NetworkVariable<bool> _dead = new(false);
+        private readonly NetworkVariable<ushort> _damageSequence = new();
         private readonly List<RendererState> _renderers = new();
         private readonly List<Collider> _creatureColliders = new();
 
@@ -73,6 +74,7 @@ namespace WaveByWave.Combat
         {
             _health.OnValueChanged += OnHealthChanged;
             _dead.OnValueChanged += OnDeadChanged;
+            _damageSequence.OnValueChanged += OnDamageSequenceChanged;
 
             if (IsServer)
             {
@@ -94,6 +96,7 @@ namespace WaveByWave.Combat
         {
             _health.OnValueChanged -= OnHealthChanged;
             _dead.OnValueChanged -= OnDeadChanged;
+            _damageSequence.OnValueChanged -= OnDamageSequenceChanged;
             if (_flashRoutine != null)
             {
                 StopCoroutine(_flashRoutine);
@@ -136,6 +139,9 @@ namespace WaveByWave.Combat
             if (_player == null && _body != null && !_body.isKinematic)
                 _body.AddForce(impulse, ForceMode.VelocityChange);
 
+            // A replicated sequence makes the hit presentation observer-safe: every peer
+            // currently observing this object receives the flash, including host mode.
+            _damageSequence.Value++;
             DamageFeedbackClientRpc(impulse);
             if (_health.Value <= 0f)
                 DieServer();
@@ -198,10 +204,16 @@ namespace WaveByWave.Combat
         [ClientRpc]
         private void DamageFeedbackClientRpc(Vector3 knockback)
         {
-            PlayFlash();
-            _healthBar?.Flash();
             if (_player != null && IsOwner)
                 _player.ApplyDamageKnockback(knockback);
+        }
+
+        private void OnDamageSequenceChanged(ushort previous, ushort current)
+        {
+            if (previous == current || !IsClient)
+                return;
+            PlayFlash();
+            _healthBar?.Flash();
         }
 
         private void OnHealthChanged(float previous, float current)
@@ -248,6 +260,8 @@ namespace WaveByWave.Combat
 
         private void CachePresentation()
         {
+            _renderers.Clear();
+            _creatureColliders.Clear();
             var root = visualRoot != null ? visualRoot : transform;
             foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
             {
@@ -262,6 +276,19 @@ namespace WaveByWave.Combat
 
             if (_player == null)
                 _creatureColliders.AddRange(GetComponentsInChildren<Collider>(true));
+        }
+
+        public void RefreshPresentationRenderers()
+        {
+            if (_flashRoutine != null)
+            {
+                StopCoroutine(_flashRoutine);
+                RestoreFlashMaterials();
+                _flashRoutine = null;
+            }
+            CachePresentation();
+            if (IsSpawned)
+                ApplyDeadPresentation(_dead.Value, false);
         }
 
         private void PlayFlash()

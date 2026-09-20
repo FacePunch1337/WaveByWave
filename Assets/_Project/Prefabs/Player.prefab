@@ -175,6 +175,7 @@ GameObject:
   - component: {fileID: 6238248586613136058}
   - component: {fileID: 5343483037834142729}
   - component: {fileID: 9300074000}
+  - component: {fileID: 9300074002}
   - component: {fileID: 9300074001}
   m_Layer: 0
   m_Name: Player
@@ -538,6 +539,49 @@ MonoBehaviour:
   flashDuration: 0.12
   visualRoot: {fileID: 5745219096532022790}
   worldBarHeight: 2.15
+--- !u!114 &9300074002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3701689364900276936}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4c9e715ea22b4c189fc59cc4723a7a03, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Customization.NetworkPirateAppearance
+  visualRoot: {fileID: 5745219096532022790}
+  basePiratePrefab: {fileID: 100100000, guid: d7fed009e395d9747b05b0a0819fefdd, type: 3}
+  pirateMaterials:
+  - {fileID: 2100000, guid: debcc6c190453ea47bec6eca478fb90b, type: 2}
+  - {fileID: 2100000, guid: 6b1976d7487e21745bd6f44572abc7b1, type: 2}
+  - {fileID: 2100000, guid: ed7422018f110bf42a4b3d14cd439171, type: 2}
+  - {fileID: 2100000, guid: 5ff2bb26ec897d84b8f799e38efb9d3f, type: 2}
+  hairPrefabs:
+  - {fileID: 100100000, guid: e647d12a901e2e745b2136f0d332d4ce, type: 3}
+  - {fileID: 100100000, guid: 87eb77e149f01084eb7e47ad20e484d9, type: 3}
+  - {fileID: 100100000, guid: 68f287e38929ef749bd209d1f14507e6, type: 3}
+  - {fileID: 100100000, guid: 257a4d69592b3204294c3c7a0a52034b, type: 3}
+  - {fileID: 100100000, guid: 1b47989381ecf3d4c87e20d551942898, type: 3}
+  - {fileID: 100100000, guid: e9cffaf2f24c02c4aae7da9bc3171b3e, type: 3}
+  - {fileID: 100100000, guid: db5cfc157114141438a872ca8b6f6a1f, type: 3}
+  - {fileID: 100100000, guid: 7770a94a7c360d5429245b5806fec828, type: 3}
+  bandanaPrefabs:
+  - {fileID: 100100000, guid: d52b5de537f04b2478e532e3137521f7, type: 3}
+  - {fileID: 100100000, guid: fb0e4957339165042805aa18a56852d4, type: 3}
+  - {fileID: 100100000, guid: 191551a37ad933c498bf249d2a2dee44, type: 3}
+  hatPrefabs:
+  - {fileID: 100100000, guid: 9882b80119942c74ebfa60fe3f10c66d, type: 3}
+  - {fileID: 100100000, guid: dafb66a8ab6300e47bef5cdb63801c9e, type: 3}
+  - {fileID: 100100000, guid: 4fd97584961cda84b83e9ff1cad5308d, type: 3}
+  - {fileID: 100100000, guid: 7bc2eb251a04856428d495723148b5d6, type: 3}
+  - {fileID: 100100000, guid: 4431ad3227728b440b4ddae5370e8bdc, type: 3}
+  - {fileID: 100100000, guid: c8b5f699a0194304bae05b20851377a7, type: 3}
+  coatPrefabs:
+  - {fileID: 100100000, guid: 5a7e697c3351fdf459b4bcca3138e099, type: 3}
+  - {fileID: 100100000, guid: 8323d8cf83c8ec84083cca6ec70a25df, type: 3}
+  - {fileID: 100100000, guid: de5e3af0e9cf5584ca4b32b9d798ca7c, type: 3}
 --- !u!1 &5659961861333063538
 GameObject:
   m_ObjectHideFlags: 0

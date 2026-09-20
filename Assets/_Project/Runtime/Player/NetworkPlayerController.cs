@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using WaveByWave.Combat;
+using WaveByWave.Customization;
 using WaveByWave.Items;
 using WaveByWave.Networking;
 using WaveByWave.Ships;
@@ -87,6 +88,8 @@ namespace WaveByWave.Player
         private ShipMastControl _activeMastControl;
         private ShipAnchor _activeAnchor;
         private ShipCannon _activeCannon;
+        private CustomizationStation _activeCustomizationStation;
+        private CustomizationMenu _customizationMenu;
         private ShipCannon _pendingCannon;
         private bool _cannonControlActive;
         private float _cannonRequestDeadline;
@@ -159,7 +162,9 @@ namespace WaveByWave.Player
         public bool IsAtAnchor => _activeAnchor != null;
         public bool IsAtCannon => _activeCannon != null;
         public ShipCannon ActiveCannon => _activeCannon;
-        public bool IsAtControlStation => IsAtHelm || IsAtSailControl || IsAtMastControl || IsAtAnchor || IsAtCannon;
+        public CustomizationStation ActiveCustomizationStation => _activeCustomizationStation;
+        public bool IsAtControlStation => IsAtHelm || IsAtSailControl || IsAtMastControl || IsAtAnchor ||
+            IsAtCannon || _activeCustomizationStation != null;
 
         public ShipAnchor AnchorBeingReleased => _loweringAnchor;
         public Transform OwnerView => _camera != null ? _camera.transform : null;
@@ -351,6 +356,12 @@ namespace WaveByWave.Player
 
             if (_sceneTransitioning)
                 return;
+
+            if (_activeCustomizationStation != null)
+            {
+                UpdateCustomization();
+                return;
+            }
 
             if (_anchorHandleIndex >= 0 && (_activeAnchor == null ||
                 _activeAnchor.Ship == null || !_activeAnchor.Ship.IsSpawned))
@@ -623,6 +634,7 @@ namespace WaveByWave.Player
             ClearMovementInput();
             if (!alive)
             {
+                ExitCustomization();
                 StopShipControlInputsForMenu();
                 ResetAnchorInteraction();
                 _activeHelm = null;
@@ -2231,13 +2243,15 @@ namespace WaveByWave.Player
                 station = _activeAnchor.GetHandleStation(_anchorHandleIndex);
             else if (_activeCannon != null)
                 station = _activeCannon.Station;
+            else if (_activeCustomizationStation != null)
+                station = _activeCustomizationStation.Station;
 
             if (station == null)
                 return false;
 
             var position = station.position;
             var rotation = station.rotation;
-            if (_activeAnchor != null || _activeCannon != null)
+            if (_activeAnchor != null || _activeCannon != null || _activeCustomizationStation != null)
                 GetAnchorApproachPose(station, out position, out rotation);
             SetBodyPose(position, rotation);
             _desiredBodyRotation = rotation;
@@ -2253,6 +2267,59 @@ namespace WaveByWave.Player
             var presented = _presentationRoot != null ? _presentationRoot : transform;
             _anchorApproachPositionOffset = station.InverseTransformPoint(presented.position);
             _anchorApproachRotationOffset = Quaternion.Inverse(station.rotation) * presented.rotation;
+        }
+
+        public void ToggleCustomization(CustomizationStation station)
+        {
+            if (!IsOwner || station == null || _sceneTransitioning)
+                return;
+            if (_activeCustomizationStation == station)
+            {
+                ExitCustomization();
+                return;
+            }
+            if (IsAtControlStation || _pendingAnchor != null || _pendingCannon != null)
+                return;
+
+            var appearance = GetComponent<NetworkPirateAppearance>();
+            if (appearance == null)
+                return;
+            _activeCustomizationStation = station;
+            ClearMovementInput();
+            BeginAnchorApproach(station.Station);
+            SetOwnerPhysicsSimulation(false);
+            _camera?.SetReferenceFrame(null);
+            _camera?.SetExternalPose(station.CameraPose);
+            _customizationMenu = gameObject.AddComponent<CustomizationMenu>();
+            _customizationMenu.Initialize(this, appearance);
+        }
+
+        public void ExitCustomization()
+        {
+            if (_activeCustomizationStation == null && _customizationMenu == null)
+                return;
+            _activeCustomizationStation = null;
+            _anchorApproachStation = null;
+            if (_customizationMenu != null)
+                _customizationMenu.CloseSilently();
+            _customizationMenu = null;
+            _camera?.ClearExternalPose();
+            if (IsOwner && IsSpawned && !_sceneTransitioning && (_health == null || !_health.IsDead))
+                SetOwnerPhysicsSimulation(true);
+        }
+
+        private void UpdateCustomization()
+        {
+            if (_activeCustomizationStation == null)
+            {
+                ExitCustomization();
+                return;
+            }
+            ClearMovementInput();
+            SnapToActiveControlStation();
+            animationSync.SetLocomotion(0f, true, 0f);
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+                ExitCustomization();
         }
 
         private void GetAnchorApproachPose(Transform station, out Vector3 position, out Quaternion rotation)
@@ -2320,6 +2387,7 @@ namespace WaveByWave.Player
             if (!IsOwner)
                 return;
 
+            ExitCustomization();
             _sceneTransitioning = true;
             StopShipControlInputsForMenu();
             ResetAnchorInteraction();
@@ -2479,6 +2547,7 @@ namespace WaveByWave.Player
 
         public override void OnNetworkDespawn()
         {
+            ExitCustomization();
             ResetAnchorInteraction();
             RestoreOwnerBodyLayers();
             if (_kccMotor != null)

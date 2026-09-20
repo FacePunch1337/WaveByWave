@@ -16,7 +16,9 @@ namespace WaveByWave.Player
         {
             if (_inventory == null || !_inventory.IsSpawned || !_inventory.IsOwner || !_inventory.IsHost) return;
             if (SessionMenuPresenter.InputCaptured && InputCaptured) SetOpen(false);
-            if (!SessionMenuPresenter.InputCaptured && Keyboard.current != null && Keyboard.current.f2Key.wasPressedThisFrame)
+            if (!SessionMenuPresenter.InputCaptured &&
+                !WaveByWave.Customization.CustomizationMenu.InputCaptured && Keyboard.current != null &&
+                Keyboard.current.f2Key.wasPressedThisFrame)
             {
                 if (_canvas == null) Build();
                 SetOpen(!InputCaptured);

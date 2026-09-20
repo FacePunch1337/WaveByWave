@@ -136,7 +136,8 @@ namespace WaveByWave.Player
                 return _renderedHook;
             }
         }
-        public static bool InputCaptured => SessionMenuPresenter.InputCaptured || EquipmentAdminPanel.InputCaptured;
+        public static bool InputCaptured => SessionMenuPresenter.InputCaptured || EquipmentAdminPanel.InputCaptured ||
+            WaveByWave.Customization.CustomizationMenu.InputCaptured;
         public event Action<float> SuccessfulBlock;
 
         private sealed class Bullet

@@ -272,16 +272,17 @@ namespace WaveByWave.Editor
         private static WorldItem CreateWorldItemPrefab(Material material, ItemCatalog catalog)
         {
             var root = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            root.name = "WorldItem";
+            root.name = "Cannonball";
             root.transform.localScale = Vector3.one * 0.45f;
             root.GetComponent<MeshRenderer>().sharedMaterial = material;
             root.GetComponent<Collider>().isTrigger = true;
             root.AddComponent<NetworkObject>().SynchronizeTransform = false;
             var item = root.AddComponent<WorldItem>();
             SetObjectReference(item, "catalog", catalog);
-            SetObjectReference(item, "glowMaterial", AssetDatabase.LoadAssetAtPath<Material>(Materials + "/LootGlow.mat"));
+            SetObjectReference(item, "rarityEffectPrefab",
+                AssetDatabase.LoadAssetAtPath<GameObject>(Prefabs + "/Effects/LootRarity.prefab"));
 
-            var path = Prefabs + "/WorldItem.prefab";
+            var path = Prefabs + "/Items/Cannonball.prefab";
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
             return prefab.GetComponent<WorldItem>();

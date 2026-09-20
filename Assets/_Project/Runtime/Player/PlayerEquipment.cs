@@ -79,6 +79,7 @@ namespace WaveByWave.Player
         private readonly HashSet<WorldItem> _claimedThisThrow = new();
         private readonly List<Bullet> _bullets = new();
         private readonly Dictionary<int, EquipmentProjectileVisual> _bulletVisuals = new();
+        private readonly List<int> _stressHookItems = new();
         private NetworkPlayerController _player;
         private PlayerInventory _inventory;
         private NetworkHealth _health;
@@ -751,6 +752,8 @@ namespace WaveByWave.Player
                 _claimedThisThrow.Add(item);
                 _hookItems.Add(item);
             }
+            LootStressTest.CaptureWithHookServer(this, from, to, hookPickupRadius,
+                hookItemCapacity - _hookItems.Count, _stressHookItems);
         }
         private void ResetHookServer()
         {
@@ -774,6 +777,13 @@ namespace WaveByWave.Player
                 }
                 item.ReleaseFromHookServer(this, release, releaseSupport, water);
             }
+            for (var i = 0; i < _stressHookItems.Count; i++)
+            {
+                var release = retrieved ? feet + Vector3.right * ((i % 3 - 1) * 0.2f) +
+                    Vector3.forward * (0.35f + i / 3 * 0.2f) : _hookPosition;
+                LootStressTest.ReleaseFromHookServer(_stressHookItems[i], this, release, Quaternion.identity);
+            }
+            _stressHookItems.Clear();
             _hookItems.Clear(); _claimedThisThrow.Clear(); _hook.Value = default; _serverReeling = false; _chargeStarted = -1d;
             _charging.Value = false;
         }

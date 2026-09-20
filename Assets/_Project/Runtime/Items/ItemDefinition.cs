@@ -39,7 +39,7 @@ namespace WaveByWave.Items
         [SerializeField, Min(0)] private int treasureExperience = 25;
         [SerializeField] private ShipUpgradeStat upgradeStat;
         [SerializeField, Range(0f, 1f)] private float upgradeBonus = 0.1f;
-        [SerializeField, Tooltip("Полный prefab предмета. Его authoredVisual используется в мире, в руках и при броске.")]
+        [SerializeField, Tooltip("Полный prefab предмета с одним MeshFilter. Его меш и материалы используются в мире, в руках и DOTS-спавне.")]
         private GameObject worldVisualPrefab;
         [SerializeField, Tooltip("Поворот лежащей модели относительно поверхности, в градусах.")]
         private Vector3 restingEulerAngles;

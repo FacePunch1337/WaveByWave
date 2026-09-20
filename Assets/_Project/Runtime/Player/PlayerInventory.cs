@@ -48,7 +48,7 @@ namespace WaveByWave.Player
 
         public override void OnNetworkSpawn()
         {
-            LootStressTest.RegisterCatalog(catalog);
+            LootStressTest.RegisterCatalog(catalog, worldItemPrefab != null ? worldItemPrefab.RarityEffectPrefab : null);
             _slots.OnListChanged += OnListChanged;
 
             if (IsServer && _slots.Count == 0)
@@ -225,8 +225,39 @@ namespace WaveByWave.Player
         {
             if (!IsOwner || !IsHost)
                 return false;
-            LootStressTest.RegisterCatalog(catalog);
+            LootStressTest.RegisterCatalog(catalog, worldItemPrefab != null ? worldItemPrefab.RarityEffectPrefab : null);
             return LootStressTest.SetTarget(count, transform.position, radius);
+        }
+
+        public void PickupStressItem(int id)
+        {
+            if (IsOwner) PickupStressItemServerRpc(id);
+        }
+
+        [ServerRpc]
+        private void PickupStressItemServerRpc(int id, ServerRpcParams rpcParams = default)
+        {
+            if (!NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var client) ||
+                client.PlayerObject == null || client.PlayerObject != NetworkObject ||
+                !LootStressTest.TryGetServerItem(id, out var definition, out var position) ||
+                Vector3.Distance(transform.position, position) > 4f || !TryStoreSingleServer(definition)) return;
+            LootStressTest.RemoveServerItem(id);
+        }
+
+        private bool TryStoreSingleServer(ItemDefinition definition)
+        {
+            if (!IsServer || definition == null) return false;
+            var id = new FixedString64Bytes(definition.Id);
+            for (var pass = 0; pass < 2; pass++)
+            for (var i = 0; i < _slots.Count; i++)
+            {
+                var slot = _slots[i];
+                if (pass == 0 && (slot.IsEmpty || !slot.ItemId.Equals(id) || slot.Amount >= definition.MaximumStack)) continue;
+                if (pass == 1 && !slot.IsEmpty) continue;
+                _slots[i] = new InventorySlotState(definition.Id, (ushort)((slot.IsEmpty ? 0 : slot.Amount) + 1));
+                return true;
+            }
+            return false;
         }
 
         [ServerRpc]

@@ -9,35 +9,37 @@ namespace WaveByWave.Items
         public static GameObject InstantiatePresentation(GameObject prefab, Transform parent, string instanceName = null)
         {
             if (prefab == null) return null;
-
-            // ItemDefinition points at the complete network item prefab. Only its explicitly
-            // authored visual is cloned, so held items never contain nested NetworkObjects.
-            if (prefab.TryGetComponent<WorldItem>(out var worldItem) && worldItem.AuthoredVisual != null)
+            var sourceFilter = prefab.GetComponentInChildren<MeshFilter>(true);
+            var sourceRenderer = sourceFilter != null ? sourceFilter.GetComponent<MeshRenderer>() : null;
+            if (sourceFilter == null || sourceFilter.sharedMesh == null || sourceRenderer == null)
             {
-                var presentation = new GameObject(string.IsNullOrWhiteSpace(instanceName)
-                    ? prefab.name + " Presentation" : instanceName);
-                presentation.transform.SetParent(parent, false);
-                presentation.transform.localPosition = prefab.transform.localPosition;
-                presentation.transform.localRotation = prefab.transform.localRotation;
-                presentation.transform.localScale = prefab.transform.localScale;
-
-                var visual = Object.Instantiate(worldItem.AuthoredVisual, presentation.transform, false);
-                visual.name = worldItem.AuthoredVisual.name;
-                visual.SetActive(true);
-                return presentation;
+                Debug.LogError($"Item prefab '{prefab.name}' requires one MeshFilter and MeshRenderer.", prefab);
+                return null;
             }
 
-            var instance = Object.Instantiate(prefab, parent, false);
-            if (!string.IsNullOrWhiteSpace(instanceName)) instance.name = instanceName;
-            return instance;
+            // The item prefab itself is the single source of truth. Clone only its authored
+            // mesh presentation; NetworkObject, collider and gameplay scripts never get nested.
+            var presentation = new GameObject(string.IsNullOrWhiteSpace(instanceName)
+                ? prefab.name + " Presentation" : instanceName, typeof(MeshFilter), typeof(MeshRenderer));
+            presentation.transform.SetParent(parent, false);
+            var authored = sourceFilter.transform.localToWorldMatrix;
+            presentation.transform.localPosition = authored.GetColumn(3);
+            presentation.transform.localRotation = authored.rotation;
+            presentation.transform.localScale = authored.lossyScale;
+            presentation.GetComponent<MeshFilter>().sharedMesh = sourceFilter.sharedMesh;
+            var renderer = presentation.GetComponent<MeshRenderer>();
+            renderer.sharedMaterials = sourceRenderer.sharedMaterials;
+            renderer.shadowCastingMode = sourceRenderer.shadowCastingMode;
+            renderer.receiveShadows = sourceRenderer.receiveShadows;
+            renderer.lightProbeUsage = sourceRenderer.lightProbeUsage;
+            renderer.reflectionProbeUsage = sourceRenderer.reflectionProbeUsage;
+            return presentation;
         }
 
         public static Transform GetBoundsRoot(GameObject prefab)
         {
             if (prefab == null)
                 return null;
-            if (prefab.TryGetComponent<WorldItem>(out var worldItem) && worldItem.AuthoredVisual != null)
-                return worldItem.AuthoredVisual.transform;
             return prefab.transform;
         }
     }

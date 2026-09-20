@@ -11,6 +11,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using WaveByWave.Core;
+using WaveByWave.Items;
 using WaveByWave.Networking;
 using WaveByWave.Player;
 using WaveByWave.Ships;
@@ -53,11 +54,20 @@ namespace WaveByWave.Editor
         {
             Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Player.prefab"), "Player prefab");
             Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Ship.prefab"), "Ship prefab");
-            Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/WorldItem.prefab"), "WorldItem prefab");
-            var worldItem = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/WorldItem.prefab");
+            Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Items/Cannonball.prefab"), "Item prefab");
+            var worldItem = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Items/Cannonball.prefab");
             if (worldItem.GetComponent<Rigidbody>() != null || worldItem.GetComponent<NetworkTransform>() != null ||
                 worldItem.GetComponent<NetworkRigidbody>() != null || !worldItem.GetComponent<Collider>().isTrigger)
                 throw new InvalidOperationException("Loot must use procedural placement and only a pickup trigger, without Rigidbody or NetworkTransform.");
+            var itemCatalog = Require(AssetDatabase.LoadAssetAtPath<ItemCatalog>("Assets/_Project/Data/ItemCatalog.asset"),
+                "Item catalog");
+            foreach (var definition in itemCatalog.Items)
+            {
+                if (definition == null || definition.WorldVisualPrefab == null) continue;
+                var filters = definition.WorldVisualPrefab.GetComponentsInChildren<MeshFilter>(true);
+                if (filters.Length != 1 || filters[0].sharedMesh == null || filters[0].GetComponent<MeshRenderer>() == null)
+                    throw new InvalidOperationException($"Item prefab '{definition.WorldVisualPrefab.name}' must contain exactly one MeshFilter and MeshRenderer.");
+            }
             Require(AssetDatabase.LoadAssetAtPath<NetworkPrefabsList>("Assets/_Project/Data/NetworkPrefabs.asset"), "Network prefab list");
             Require(AssetDatabase.LoadAssetAtPath<WaveProfile>("Assets/Stylized Water 3/Profiles/Ocean Wave Profile.asset"), "Ocean wave profile");
 

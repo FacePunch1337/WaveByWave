@@ -13,8 +13,6 @@ namespace WaveByWave.Items
         [SerializeField] private ItemCatalog catalog;
         [SerializeField, Tooltip("Prefab эффекта редкости. Луч, частицы и материал настраиваются в нём.")]
         private GameObject rarityEffectPrefab;
-        [SerializeField, Tooltip("Авторский визуал этого prefab. Код не изменяет его локальные transform'ы.")]
-        private GameObject authoredVisual;
         [SerializeField] private string initialItemId = "cannonball";
         [SerializeField, Min(1)] private int initialAmount = 1;
         [SerializeField, Min(0.05f)] private float throwDuration = 0.45f;
@@ -36,7 +34,7 @@ namespace WaveByWave.Items
         public FixedString64Bytes ItemId => _itemId.Value;
         public ushort Amount => _amount.Value;
         public ItemDefinition Definition => catalog != null && catalog.TryGet(ItemId.ToString(), out var item) ? item : null;
-        public GameObject AuthoredVisual => authoredVisual;
+        public GameObject RarityEffectPrefab => rarityEffectPrefab;
 
         private void Awake()
         {
@@ -51,7 +49,6 @@ namespace WaveByWave.Items
         public override void OnNetworkSpawn()
         {
             ActiveItems.Add(this);
-            if (authoredVisual != null) authoredVisual.SetActive(false);
             if (IsServer && _itemId.Value.IsEmpty)
             {
                 var maximum = catalog != null && catalog.TryGet(initialItemId, out var definition)

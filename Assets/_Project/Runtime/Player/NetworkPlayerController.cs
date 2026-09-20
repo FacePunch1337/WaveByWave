@@ -1706,6 +1706,13 @@ namespace WaveByWave.Player
             // targeted beside it.
             var nearestPickupDistance = float.PositiveInfinity;
             IPlayerInteractable nearestPickup = null;
+            if (LootStressTest.TryFindClientItem(ray, playerPosition, interactionDistance,
+                    out var stressPickup, out var stressDistance, out var stressPoint) &&
+                HasInteractionLineOfSight(ray.origin, stressPoint, stressPickup))
+            {
+                nearestPickupDistance = stressDistance;
+                nearestPickup = stressPickup;
+            }
             for (var i = 0; i < count; i++)
             {
                 var collider = hits[i].collider;

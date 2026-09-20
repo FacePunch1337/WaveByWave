@@ -22,7 +22,8 @@ namespace WaveByWave.Generation
         public int Id { get; private set; }
         public IslandSize Size { get; private set; }
         public uint Seed { get; private set; }
-        public bool Ready => _initialized && !_meshing && _dirty.Count == 0;
+        public bool GeometryReady => _initialized && !_meshing && _dirty.Count == 0;
+        public bool Ready => GeometryReady && _decorated && _hasCompletedInitialBuild;
         public int LastDigRevision { get; private set; }
         public float Diameter => _parameters.Diameter;
         public float BedrockDepth => _parameters.SandDepth;
@@ -30,7 +31,7 @@ namespace WaveByWave.Generation
         private IslandFieldParameters _parameters;
         private NativeArray<float2> _density;
         private JobHandle _job;
-        private bool _initialized, _meshing, _decorated;
+        private bool _initialized, _meshing, _decorated, _hasCompletedInitialBuild, _presentationRequested;
         private IslandMeshJob _meshJob;
         private int _activeChunk;
         private readonly List<Chunk> _chunks = new();
@@ -60,7 +61,7 @@ namespace WaveByWave.Generation
             BeginInitialize(id, size, seed, settings);
             var horizontalCells = _parameters.Points.x - 1;
             var verticalCells = _parameters.Points.y - 1;
-            var chunkSize = Mathf.Clamp(settings.ChunkCells, 4, 16);
+            var chunkSize = Mathf.Clamp(settings.ChunkCells, 8, 64);
             for (var z = 0; z < horizontalCells; z += chunkSize)
             for (var y = 0; y < verticalCells; y += chunkSize)
             for (var x = 0; x < horizontalCells; x += chunkSize)
@@ -76,6 +77,8 @@ namespace WaveByWave.Generation
         {
             BeginInitialize(id, size, seed, settings);
             _decorated = true;
+            _hasCompletedInitialBuild = true;
+            _presentationRequested = true;
             if (bakedChunks != null)
                 foreach (var baked in bakedChunks)
                 {
@@ -92,6 +95,7 @@ namespace WaveByWave.Generation
                         Minimum = new int3(baked.Minimum.x, baked.Minimum.y, baked.Minimum.z),
                         Maximum = new int3(baked.Maximum.x, baked.Maximum.y, baked.Maximum.z),
                         Mesh = mesh, Filter = filter, Renderer = renderer, Collider = collider });
+                    collider.enabled = mesh.vertexCount > 0;
                 }
             if (decorationRoot != null)
                 for (var i = 0; i < decorationRoot.childCount; i++)
@@ -133,7 +137,16 @@ namespace WaveByWave.Generation
                     Colors = new NativeList<Color32>(1024, Allocator.Persistent) };
                 _job = _meshJob.Schedule(); _meshing = true;
             }
-            if (Ready && !_decorated) { _decorated = true; CreateDecorations(); }
+            if (GeometryReady && !_decorated)
+            {
+                _decorated = true;
+                CreateDecorations();
+            }
+            if (GeometryReady && _decorated && !_hasCompletedInitialBuild)
+            {
+                _hasCompletedInitialBuild = true;
+                ApplyPresentationVisibility();
+            }
         }
 
         private void FinishMesh()
@@ -154,6 +167,7 @@ namespace WaveByWave.Generation
                     chunk.Mesh = new Mesh { name = $"Island {Id} chunk", indexFormat = IndexFormat.UInt32 };
                     chunk.Mesh.MarkDynamic(); chunk.Filter.sharedMesh = chunk.Mesh;
                 }
+                chunk.Collider.enabled = false;
                 chunk.Collider.sharedMesh = null;
                 chunk.Mesh.Clear();
                 if (_meshJob.Vertices.Length > 0)
@@ -167,7 +181,11 @@ namespace WaveByWave.Generation
                     chunk.Mesh.RecalculateBounds();
                     chunk.Collider.sharedMesh = chunk.Mesh;
                 }
-                if (chunk.Renderer != null) chunk.Renderer.enabled = _meshJob.Vertices.Length > 0;
+                if (chunk.Renderer != null)
+                    chunk.Renderer.enabled = _hasCompletedInitialBuild && _presentationRequested &&
+                                             _meshJob.Vertices.Length > 0;
+                chunk.Collider.enabled = _hasCompletedInitialBuild && _presentationRequested &&
+                                         _meshJob.Vertices.Length > 0;
             }
             _meshJob.Vertices.Dispose(); _meshJob.Normals.Dispose(); _meshJob.Colors.Dispose();
             _meshing = false;
@@ -202,6 +220,27 @@ namespace WaveByWave.Generation
         }
 
         private void Enqueue(int i) { if (_queued.Add(i)) _dirty.Enqueue(i); }
+
+        public void SetPresentationVisible(bool visible)
+        {
+            if (_presentationRequested == visible)
+                return;
+            _presentationRequested = visible;
+            ApplyPresentationVisibility();
+        }
+
+        private void ApplyPresentationVisibility()
+        {
+            var visible = _hasCompletedInitialBuild && _presentationRequested;
+            foreach (var chunk in _chunks)
+            {
+                var hasGeometry = chunk.Mesh != null && chunk.Mesh.vertexCount > 0;
+                if (chunk.Renderer != null) chunk.Renderer.enabled = visible && hasGeometry;
+                if (chunk.Collider != null) chunk.Collider.enabled = visible && hasGeometry;
+            }
+            foreach (var decoration in _decorations)
+                if (decoration != null) decoration.gameObject.SetActive(visible);
+        }
 
         public float2 DensityAt(Vector3 worldPosition) => SampleDensity(worldPosition, false);
 
@@ -288,6 +327,7 @@ namespace WaveByWave.Generation
                     if (DensityAt(point - Vector3.up * 0.15f).x < -0.1f) break;
                     var instance = Instantiate(entry.Prefab, point, rotation, transform);
                     instance.transform.localScale *= scale;
+                    instance.SetActive(_hasCompletedInitialBuild && _presentationRequested);
                     _decorations.Add(instance.transform);
                     break;
                 }

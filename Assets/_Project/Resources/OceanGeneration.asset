@@ -54,15 +54,19 @@ MonoBehaviour:
     Weight: 1
     MinimumAmount: 1
     MaximumAmount: 1
-  IslandRadius: {x: 45, y: 130}
-  IslandsPerShip: 5
-  IslandDespawnRadius: 190
+  InitialIslandRadius: {x: 500, y: 500}
+  StreamingIslandRadius: {x: 500, y: 500}
+  IslandRevealRadius: 500
+  IslandStreamingInterval: 0.1
+  IslandsPerShip: 4
+  IslandDespawnRadius: 1000
   IslandSpacing: 20
+  LoadingCurtainPrefab: {fileID: 6158068724119337578, guid: 4a746500186db7e48a0546af0c93a5b8, type: 3}
   SmallDiameter: 20
   MediumDiameter: 40
   LargeDiameter: 70
   VoxelSize: 0.2
-  ChunkCells: 10
+  ChunkCells: 32
   SandHeight: 1.8
   SandDepth: 2.4
   NoiseScale: 2.8
@@ -88,7 +92,7 @@ MonoBehaviour:
   DigRadius: 0.65
   DigPenetration: 0.22
   DigSmoothing: 0.45
-  MeshUploadsPerFrame: 2
+  MeshUploadsPerFrame: 4
   BurialDepth: {x: 0.6, y: 1.6}
   ChestCountSmall: {x: 1, y: 1}
   ChestCountMedium: {x: 1, y: 2}

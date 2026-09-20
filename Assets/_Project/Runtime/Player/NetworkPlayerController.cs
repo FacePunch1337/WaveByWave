@@ -33,6 +33,24 @@ namespace WaveByWave.Player
         [SerializeField, Min(0f)] private float airAcceleration = 12f;
         [SerializeField, Range(1f, 89f)] private float maximumSlopeAngle = 50f;
         [SerializeField, Min(0f)] private float groundStickSpeed = 2f;
+        [SerializeField, Min(0.1f)] private float walkAnimationReferenceSpeed = 3.2f;
+        [SerializeField, Min(0.1f)] private float sprintAnimationReferenceSpeed = 8.25f;
+
+        [Header("Swimming")]
+        [SerializeField, Min(0.1f)] private float swimSpeed = 3.5f;
+        [SerializeField, Min(0f)] private float swimAcceleration = 18f;
+        [SerializeField, Min(0.1f), Tooltip("Глубина корня персонажа под поверхностью волны во время плавания.")]
+        private float swimSurfaceDepth = 0.7f;
+        [SerializeField, Min(0.05f)] private float swimEnterDepth = 0.55f;
+        [SerializeField, Min(0.01f)] private float swimExitDepth = 0.35f;
+        [SerializeField, Min(0.1f)] private float waterHeightSharpness = 10f;
+        [SerializeField, Min(0.1f)] private float buoyancySharpness = 7f;
+        [SerializeField, Min(0.1f)] private float buoyancyAcceleration = 22f;
+        [SerializeField, Min(0.1f)] private float maximumSwimVerticalSpeed = 4f;
+        [SerializeField, Min(0.1f)] private float waterJumpSpeed = 5.5f;
+        [SerializeField, Min(0.05f)] private float waterJumpReentryDelay = 0.4f;
+        [SerializeField, Min(0f), Tooltip("После полного истощения спринт снова доступен с этого запаса стамины.")]
+        private float sprintResumeStamina = 15f;
 
         [Header("Moving platforms")]
         [SerializeField, Min(0.02f)] private float platformProbeDistance = 0.22f;
@@ -90,6 +108,10 @@ namespace WaveByWave.Player
         private ShipMastControl _activeMastControl;
         private ShipAnchor _activeAnchor;
         private ShipCannon _activeCannon;
+        private ClimbableLadder _activeLadder;
+        private float _ladderProgress;
+        private Vector3 _ladderApproachLocalPosition;
+        private Quaternion _ladderApproachLocalRotation = Quaternion.identity;
         private CustomizationStation _activeCustomizationStation;
         private CustomizationMenu _customizationMenu;
         private float _customizationPreviewYaw;
@@ -143,6 +165,13 @@ namespace WaveByWave.Player
         private PhysicsMaterial _motorPhysicsMaterial;
         private bool _useKccMotor;
         private NetworkHealth _health;
+        private PlayerEquipment _equipment;
+        private EquipmentWaterQuery _waterQuery;
+        private bool _isSwimming;
+        private bool _isSprinting;
+        private bool _sprintExhausted;
+        private float _smoothedWaterHeight;
+        private float _ignoreSwimmingUntil;
 
         // The ordinary OwnerNetworkTransform remains responsible for movement replication.
         // This small parallel state keeps presentation relative to the supporting platform,
@@ -159,6 +188,8 @@ namespace WaveByWave.Player
             Quaternion.identity, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
         private readonly NetworkVariable<bool> _isCustomizing = new(
             false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        private readonly NetworkVariable<bool> _isClimbing = new(
+            false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
         public PlayerInventory Inventory => inventory;
         public bool IsAtHelm => _activeHelm != null;
@@ -169,8 +200,11 @@ namespace WaveByWave.Player
         public ShipCannon ActiveCannon => _activeCannon;
         public CustomizationStation ActiveCustomizationStation => _activeCustomizationStation;
         public bool IsCustomizing => _activeCustomizationStation != null || _isCustomizing.Value;
+        public bool IsSwimming => _isSwimming;
+        public ClimbableLadder ActiveLadder => _activeLadder;
+        public bool IsAtLadder => _activeLadder != null || _isClimbing.Value;
         public bool IsAtControlStation => IsAtHelm || IsAtSailControl || IsAtMastControl || IsAtAnchor ||
-            IsAtCannon || _activeCustomizationStation != null;
+            IsAtCannon || IsAtLadder || _activeCustomizationStation != null;
 
         public ShipAnchor AnchorBeingReleased => _loweringAnchor;
         public Transform OwnerView => _camera != null ? _camera.transform : null;
@@ -194,6 +228,7 @@ namespace WaveByWave.Player
             animationSync ??= GetComponent<PlayerAnimationSync>();
             inventory ??= GetComponent<PlayerInventory>();
             _health = GetComponent<NetworkHealth>();
+            _equipment = GetComponent<PlayerEquipment>();
             _networkTransform = GetComponent<OwnerNetworkTransform>();
             cameraTarget ??= transform;
             firstPersonHiddenRoot ??= transform.Find("Visual");
@@ -240,6 +275,8 @@ namespace WaveByWave.Player
 
         public override void OnDestroy()
         {
+            _waterQuery?.Dispose();
+            _waterQuery = null;
             if (_motorPhysicsMaterial != null)
                 Destroy(_motorPhysicsMaterial);
             base.OnDestroy();
@@ -282,6 +319,8 @@ namespace WaveByWave.Player
             }
 
             ActivateOwnerCamera();
+            _waterQuery?.Dispose();
+            _waterQuery = new EquipmentWaterQuery(_equipment != null ? _equipment.WaterWaveProfile : null);
             EnableKccMotor();
             var anchorProgress = GetComponent<AnchorHoldProgress>();
             if (anchorProgress == null)
@@ -363,6 +402,9 @@ namespace WaveByWave.Player
             if (_sceneTransitioning)
                 return;
 
+            if (_isClimbing.Value && _activeLadder == null)
+                LeaveLadder(false);
+
             if (_activeCustomizationStation != null)
             {
                 UpdateCustomization();
@@ -396,6 +438,12 @@ namespace WaveByWave.Player
                 _menuWasOpen = false;
                 ResyncRigidbodyAfterMenu();
                 // Consume the frame that closed the menu so Escape cannot also leave the helm.
+                return;
+            }
+
+            if (_activeLadder != null)
+            {
+                UpdateLadderInput();
                 return;
             }
 
@@ -478,14 +526,24 @@ namespace WaveByWave.Player
                 (keyboard.dKey.isPressed ? 1f : 0f) - (keyboard.aKey.isPressed ? 1f : 0f),
                 (keyboard.wKey.isPressed ? 1f : 0f) - (keyboard.sKey.isPressed ? 1f : 0f)), 1f);
             _sprintHeld = keyboard.leftShiftKey.isPressed;
-            _jumpQueued |= keyboard.spaceKey.wasPressedThisFrame;
+            if (keyboard.spaceKey.wasPressedThisFrame)
+            {
+                _jumpQueued = true;
+                var canPreviewJump = _equipment == null || _equipment.CanJump;
+                if (canPreviewJump && (_isSwimming || _kccMotor != null &&
+                        _kccMotor.GroundingStatus.IsStableOnGround))
+                    animationSync.BeginJump(_isSwimming ? waterJumpSpeed :
+                        Mathf.Sqrt(jumpHeight * -2f * gravity));
+            }
         }
 
         private void ClearMovementInput()
         {
             _moveInput = Vector2.zero;
             _sprintHeld = false;
+            _isSprinting = false;
             _jumpQueued = false;
+            _equipment?.SetMovementExertion(false, false);
         }
 
         private void EnableKccMotor()
@@ -552,19 +610,35 @@ namespace WaveByWave.Player
             if (!_useKccMotor || !IsOwner || _sceneTransitioning || IsAtControlStation)
             {
                 currentVelocity = Vector3.zero;
+                _isSprinting = false;
                 _jumpQueued = false;
+                _equipment?.SetMovementExertion(false, false);
                 return;
             }
 
             var characterUp = _kccMotor.CharacterUp;
-            var speed = moveSpeed * (_sprintHeld ? sprintMultiplier : 1f);
             var inputDirection = _desiredBodyRotation *
                                  new Vector3(_moveInput.x, 0f, _moveInput.y);
             inputDirection = Vector3.ProjectOnPlane(inputDirection, characterUp);
             if (inputDirection.sqrMagnitude > 1f)
                 inputDirection.Normalize();
 
+            if (UpdateSwimmingState(_kccMotor.TransientPosition, deltaTime, out var waterHeight))
+            {
+                SimulateSwimming(ref currentVelocity, inputDirection, characterUp, waterHeight, deltaTime);
+                return;
+            }
+
             var stableOnGround = _kccMotor.GroundingStatus.IsStableOnGround;
+            if (_equipment != null && _equipment.Stamina <= 0.01f)
+                _sprintExhausted = true;
+            else if (_equipment == null || _equipment.Stamina >= sprintResumeStamina)
+                _sprintExhausted = false;
+            var sprinting = stableOnGround && !_sprintExhausted && _sprintHeld &&
+                            _moveInput.y > 0.1f && Mathf.Abs(_moveInput.x) <= 0.25f;
+            _isSprinting = sprinting;
+            var speed = moveSpeed * (sprinting ? sprintMultiplier : 1f);
+            var jumped = false;
             if (stableOnGround)
             {
                 currentVelocity = _kccMotor.GetDirectionTangentToSurface(
@@ -580,8 +654,11 @@ namespace WaveByWave.Player
                 currentVelocity = Vector3.MoveTowards(
                     currentVelocity, desiredGroundVelocity, groundAcceleration * deltaTime);
 
-                if (_jumpQueued)
+                if (_jumpQueued && (_equipment == null || _equipment.TryUseJumpStamina()))
                 {
+                    jumped = true;
+                    sprinting = false;
+                    _isSprinting = false;
                     _airbornePlatformMomentum = Vector3.zero;
                     SetKccAirbornePlatformFrame(_platform);
                     _kccMotor.ForceUnground();
@@ -614,10 +691,104 @@ namespace WaveByWave.Player
             }
 
             _jumpQueued = false;
+            _equipment?.SetMovementExertion(sprinting, false);
+            var horizontalAnimationSpeed = Vector3.ProjectOnPlane(currentVelocity, characterUp).magnitude;
+            var animationReferenceSpeed = sprinting ? sprintAnimationReferenceSpeed : walkAnimationReferenceSpeed;
+            var animationAmount = Mathf.Clamp01(horizontalAnimationSpeed / Mathf.Max(0.1f, speed));
+            var animationMove = _moveInput * animationAmount;
+            var animationRate = animationMove.sqrMagnitude > 0.0001f
+                ? Mathf.Clamp(horizontalAnimationSpeed / Mathf.Max(0.1f, animationReferenceSpeed), 0.65f, 1.8f)
+                : 1f;
             animationSync.SetLocomotion(
-                _moveInput.magnitude * (speed / Mathf.Max(0.01f, moveSpeed)),
-                _isGrounded,
-                Vector3.Dot(currentVelocity, characterUp));
+                animationMove,
+                stableOnGround && !jumped,
+                Vector3.Dot(currentVelocity, characterUp),
+                sprinting,
+                false,
+                0f,
+                animationRate);
+        }
+
+        private bool UpdateSwimmingState(Vector3 position, float deltaTime, out float waterHeight)
+        {
+            waterHeight = 0f;
+            if (Time.time < _ignoreSwimmingUntil)
+                return false;
+            if (_waterQuery == null || !_waterQuery.TrySurface(position,
+                    Vector2.one * Mathf.Max(0.25f, bodyCollider != null ? bodyCollider.radius * 2f : 0.7f),
+                    out var sampledHeight, out _))
+            {
+                _isSwimming = false;
+                return false;
+            }
+
+            var depth = sampledHeight - position.y;
+            var shouldSwim = _isSwimming ? depth >= swimExitDepth : depth >= swimEnterDepth;
+            if (!shouldSwim)
+            {
+                _isSwimming = false;
+                return false;
+            }
+
+            if (!_isSwimming)
+            {
+                _isSwimming = true;
+                _smoothedWaterHeight = sampledHeight;
+                _kccMotor.ForceUnground();
+                ClearPlatformReference();
+            }
+            else
+            {
+                var blend = 1f - Mathf.Exp(-waterHeightSharpness * deltaTime);
+                _smoothedWaterHeight = Mathf.Lerp(_smoothedWaterHeight, sampledHeight, blend);
+            }
+
+            waterHeight = _smoothedWaterHeight;
+            return true;
+        }
+
+        private void SimulateSwimming(ref Vector3 currentVelocity, Vector3 inputDirection,
+            Vector3 characterUp, float waterHeight, float deltaTime)
+        {
+            _isGrounded = false;
+            _isSprinting = false;
+            if (_jumpQueued && (_equipment == null || _equipment.TryUseJumpStamina()))
+            {
+                _jumpQueued = false;
+                _isSwimming = false;
+                _ignoreSwimmingUntil = Time.time + waterJumpReentryDelay;
+                _kccMotor.ForceUnground();
+                var launchHorizontal = Vector3.ProjectOnPlane(currentVelocity, characterUp);
+                currentVelocity = launchHorizontal + characterUp * waterJumpSpeed;
+                _equipment?.SetMovementExertion(false, false);
+                animationSync.BeginJump(waterJumpSpeed);
+                return;
+            }
+            _jumpQueued = false;
+            var verticalVelocity = Mathf.Clamp(Vector3.Dot(currentVelocity, characterUp),
+                -maximumSwimVerticalSpeed, maximumSwimVerticalSpeed);
+            var horizontalVelocity = Vector3.ProjectOnPlane(currentVelocity, characterUp);
+            var desiredHorizontal = inputDirection.sqrMagnitude > 0.0001f
+                ? inputDirection.normalized * (swimSpeed * Mathf.Clamp01(_moveInput.magnitude))
+                : Vector3.zero;
+            horizontalVelocity = Vector3.MoveTowards(horizontalVelocity, desiredHorizontal,
+                swimAcceleration * deltaTime);
+
+            var targetRootHeight = waterHeight - swimSurfaceDepth;
+            var heightError = targetRootHeight - _kccMotor.TransientPosition.y;
+            var desiredVerticalVelocity = Mathf.Clamp(heightError * buoyancySharpness,
+                -maximumSwimVerticalSpeed, maximumSwimVerticalSpeed);
+            verticalVelocity = Mathf.MoveTowards(verticalVelocity, desiredVerticalVelocity,
+                buoyancyAcceleration * deltaTime);
+            currentVelocity = horizontalVelocity + characterUp * verticalVelocity;
+
+            var swimForward = Mathf.Clamp01(_moveInput.y) * Mathf.Clamp01(_moveInput.magnitude);
+            _equipment?.SetMovementExertion(false, true);
+            var swimAnimationRate = swimForward > 0.01f
+                ? Mathf.Clamp(horizontalVelocity.magnitude / Mathf.Max(0.1f, swimSpeed), 0.7f, 1.5f)
+                : 1f;
+            animationSync.SetLocomotion(_moveInput, false, verticalVelocity, false, true, swimForward,
+                swimAnimationRate);
         }
 
         public void ApplyDamageKnockback(Vector3 velocityChange)
@@ -640,6 +811,7 @@ namespace WaveByWave.Player
             ClearMovementInput();
             if (!alive)
             {
+                LeaveLadder(false);
                 ExitCustomization();
                 StopShipControlInputsForMenu();
                 ResetAnchorInteraction();
@@ -659,6 +831,13 @@ namespace WaveByWave.Player
         {
             if (!_useKccMotor)
                 return;
+
+            if (_isSwimming)
+            {
+                _isGrounded = false;
+                ClearPlatformReference();
+                return;
+            }
 
             var wasGrounded = _isGrounded;
             var previousPlatform = _platform;
@@ -841,7 +1020,7 @@ namespace WaveByWave.Player
             // BaseVelocity may already be projected to zero by the kinematic client proxy
             // when this callback runs. Input intent remains stable and is the value the host
             // and remote client can reproduce identically.
-            var intendedSpeed = moveSpeed * (_sprintHeld ? sprintMultiplier : 1f);
+            var intendedSpeed = moveSpeed * (_isSprinting ? sprintMultiplier : 1f);
             var approachSpeed = Mathf.Max(
                 0f,
                 Vector3.Dot(intendedDirection * intendedSpeed, pushDirection));
@@ -1844,6 +2023,108 @@ namespace WaveByWave.Player
                 inventory.DropSelected();
         }
 
+        public void ToggleLadder(ClimbableLadder ladder)
+        {
+            if (!IsOwner || ladder == null || _sceneTransitioning)
+                return;
+            if (_activeLadder == ladder)
+            {
+                LeaveLadder(false);
+                return;
+            }
+            if (IsAtControlStation || _pendingAnchor != null || _pendingCannon != null)
+                return;
+
+            _activeLadder = ladder;
+            _ladderProgress = ladder.ClosestProgress(transform.position);
+            _isClimbing.Value = true;
+            _anchorApproachStation = ladder.transform;
+            _anchorApproachStarted = Time.unscaledTime;
+            var presented = _presentationRoot != null ? _presentationRoot : transform;
+            _ladderApproachLocalPosition = ladder.transform.InverseTransformPoint(presented.position);
+            _ladderApproachLocalRotation = Quaternion.Inverse(ladder.transform.rotation) * presented.rotation;
+            ClearMovementInput();
+            _airbornePlatformMomentum = Vector3.zero;
+
+            var platform = ladder.GetComponentInParent<MovingPlatform>();
+            if (platform != null)
+                AttachToPlatform(platform);
+            else
+                _camera?.SetReferenceFrame(null);
+
+            SetOwnerPhysicsSimulation(false);
+            SnapToActiveControlStation();
+            ladder.GetLocalPose(_ladderProgress, out _, out var localRotation);
+            _camera?.BlendLookRotation(ladder.transform.rotation * localRotation, anchorHandleApproachDuration);
+        }
+
+        private void UpdateLadderInput()
+        {
+            var keyboard = Keyboard.current;
+            if (_activeLadder == null || keyboard == null)
+            {
+                LeaveLadder(false);
+                return;
+            }
+            if (keyboard.eKey.wasPressedThisFrame)
+            {
+                LeaveLadder(false);
+                return;
+            }
+            if (keyboard.spaceKey.wasPressedThisFrame &&
+                (_equipment == null || _equipment.TryUseJumpStamina()))
+            {
+                LeaveLadder(true);
+                return;
+            }
+
+            var climb = (keyboard.wKey.isPressed ? 1f : 0f) -
+                        (keyboard.sKey.isPressed ? 1f : 0f);
+            _ladderProgress = _activeLadder.MoveProgress(_ladderProgress, climb, Time.deltaTime);
+            SnapToActiveControlStation();
+            var rate = Mathf.Abs(climb) > 0.01f
+                ? Mathf.Clamp(_activeLadder.ClimbSpeed / Mathf.Max(0.1f, walkAnimationReferenceSpeed), 0.65f, 1.5f)
+                : 1f;
+            animationSync.SetLocomotion(new Vector2(0f, climb), true, 0f, false, false, 0f, rate);
+        }
+
+        private void LeaveLadder(bool jumpAway)
+        {
+            var ladder = _activeLadder;
+            if (ladder == null && !_isClimbing.Value)
+                return;
+
+            var platformVelocity = _platform != null ? _platform.GetPointVelocity(body.position) : Vector3.zero;
+            var ladderJumpSpeed = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            var jumpVelocity = ladder != null
+                ? ladder.AwayDirection * ladder.JumpAwaySpeed + Vector3.up * ladderJumpSpeed
+                : Vector3.up * ladderJumpSpeed;
+            _activeLadder = null;
+            if (IsSpawned && IsOwner)
+                _isClimbing.Value = false;
+            _anchorApproachStation = null;
+            ClearMovementInput();
+
+            if (!IsOwner || !IsSpawned || _sceneTransitioning || _health != null && _health.IsDead)
+                return;
+            SetOwnerPhysicsSimulation(true, platformVelocity);
+            if (!jumpAway || _kccMotor == null)
+                return;
+
+            _isGrounded = false;
+            _platformAnchorLocked = false;
+            _ignoreGroundUntil = Time.fixedTime + 0.12f;
+            if (_platform != null)
+            {
+                _airborneFromPlatform = true;
+                _lastPlatformContactTime = Time.fixedTime;
+                SetKccAirbornePlatformFrame(_platform);
+            }
+            _kccMotor.ForceUnground();
+            _kccMotor.BaseVelocity = platformVelocity + jumpVelocity;
+            animationSync.BeginJump(Vector3.Dot(jumpVelocity, Vector3.up));
+        }
+
         public void EnterHelm(ShipHelm helm)
         {
             if (!IsOwner || helm == null || IsAtControlStation || _pendingAnchor != null || _pendingCannon != null)
@@ -2264,6 +2545,23 @@ namespace WaveByWave.Player
 
         private bool SnapToActiveControlStation()
         {
+            if (_activeLadder != null)
+            {
+                _activeLadder.GetLocalPose(_ladderProgress, out var targetPosition, out var targetRotation);
+                var progress = anchorHandleApproachDuration > 0f
+                    ? Mathf.Clamp01((Time.unscaledTime - _anchorApproachStarted) / anchorHandleApproachDuration)
+                    : 1f;
+                var blend = Mathf.SmoothStep(0f, 1f, progress);
+                var localPosition = Vector3.Lerp(_ladderApproachLocalPosition, targetPosition, blend);
+                var localRotation = Quaternion.Slerp(_ladderApproachLocalRotation, targetRotation, blend);
+                var ladderRotation = _activeLadder.transform.rotation * localRotation;
+                SetBodyPose(_activeLadder.transform.TransformPoint(localPosition), ladderRotation);
+                _desiredBodyRotation = ladderRotation;
+                UpdatePlatformAnchorFromCurrentPose();
+                ResetPresentationPose();
+                return true;
+            }
+
             Transform station = null;
             if (_activeHelm != null)
                 station = _activeHelm.Station;
@@ -2443,6 +2741,7 @@ namespace WaveByWave.Player
             if (!IsOwner)
                 return;
 
+            LeaveLadder(false);
             ExitCustomization();
             _sceneTransitioning = true;
             StopShipControlInputsForMenu();
@@ -2554,6 +2853,7 @@ namespace WaveByWave.Player
             Quaternion platformLocalRotation)
         {
             RemoveAnyNetworkParent();
+            LeaveLadder(false);
             SetOwnerPhysicsSimulation(false);
             ResetAnchorInteraction();
 
@@ -2603,6 +2903,7 @@ namespace WaveByWave.Player
 
         public override void OnNetworkDespawn()
         {
+            _activeLadder = null;
             ExitCustomization();
             ResetAnchorInteraction();
             RestoreOwnerBodyLayers();
@@ -2613,6 +2914,10 @@ namespace WaveByWave.Player
                 _kccMotor.enabled = false;
             }
             _useKccMotor = false;
+            _waterQuery?.Dispose();
+            _waterQuery = null;
+            _isSwimming = false;
+            _isSprinting = false;
             if (bodyCollider != null)
                 bodyCollider.enabled = false;
             if (body != null)

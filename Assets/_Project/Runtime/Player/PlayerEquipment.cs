@@ -41,6 +41,11 @@ namespace WaveByWave.Player
         [SerializeField, Min(1f)] private float maximumStamina = 100f;
         [SerializeField, Min(0f)] private float staminaRecovery = 18f, blockDrainPerSecond = 7f, swingStamina = 12f;
         [SerializeField, Min(0f)] private float successfulBlockStamina = 15f;
+        [SerializeField, Min(0f)] private float sprintDrainPerSecond = 14f;
+        [SerializeField, Min(0f)] private float swimDrainPerSecond = 8f;
+        [SerializeField, Min(0f)] private float jumpStamina = 10f;
+        [SerializeField, Min(0f)] private float drowningDamagePerSecond = 12f;
+        [SerializeField, Min(0.1f)] private float drowningDamageInterval = 1f;
         [SerializeField, Min(0.1f)] private float swordRange = 2.2f, swordSwingDuration = 0.55f;
         [Tooltip("Тестовый режим: одно нажатие ПКМ переключает блок мечом или прицеливание мушкетом.")]
         [SerializeField] private bool toggleSecondaryActionForTesting;
@@ -108,6 +113,10 @@ namespace WaveByWave.Player
         private NetworkObjectReference _tetherReference;
         public NetworkObjectReference TetherReference => _tetherReference;
         private bool _blockExhausted;
+        private bool _localMovementSprinting, _localMovementSwimming;
+        private bool _serverMovementSprinting, _serverMovementSwimming;
+        private float _nextMovementStateSend;
+        private double _movementStateHeartbeat, _nextDrowningDamage;
         private double _swordHitAt;
         private float _swordDamage;
         private EquipmentMotionState _predictedMotion;
@@ -123,6 +132,7 @@ namespace WaveByWave.Player
         public Material SleeveMaterial => sleeveMaterial;
         public float Stamina => _stamina.Value;
         public float MaximumStamina => maximumStamina;
+        public bool CanJump => _stamina.Value + 0.001f >= jumpStamina;
         public bool IsBlocking => _blocking.Value;
         public bool Available => _available.Value;
         public bool IsAiming => IsOwner ? _localAim : _aiming.Value;
@@ -154,7 +164,8 @@ namespace WaveByWave.Player
             }
         }
         public static bool InputCaptured => SessionMenuPresenter.InputCaptured || EquipmentAdminPanel.InputCaptured ||
-            WaveByWave.Customization.CustomizationMenu.InputCaptured;
+            WaveByWave.Customization.CustomizationMenu.InputCaptured ||
+            WaveByWave.Generation.OceanLoadingCurtain.InputCaptured;
         public event Action<float> SuccessfulBlock;
 
         private sealed class Bullet
@@ -199,6 +210,8 @@ namespace WaveByWave.Player
         public override void OnNetworkDespawn()
         {
             if (IsServer) ResetHookServer();
+            _localMovementSprinting = _localMovementSwimming = false;
+            _serverMovementSprinting = _serverMovementSwimming = false;
             if (_combatHitbox != null) { _combatHitbox.enabled = false; Destroy(_combatHitbox.gameObject); }
             _water?.Dispose(); _water = null;
             foreach (var visual in _bulletVisuals.Values) if (visual != null) Destroy(visual.gameObject);
@@ -233,17 +246,77 @@ namespace WaveByWave.Player
                 SwordHitServer(FeetServer(out _) + Vector3.up * 1.25f, _look.Value, _swordDamage);
             }
             if (Now - _serverHeartbeat > 0.5d) StopHeldServer();
+            if (Now - _movementStateHeartbeat > 0.75d)
+                _serverMovementSprinting = _serverMovementSwimming = false;
             var dt = Mathf.Min(Time.deltaTime, 0.1f);
+            var staminaDrain = 0f;
             if (_blocking.Value)
             {
-                _stamina.Value = Mathf.Max(0f, _stamina.Value - blockDrainPerSecond * dt);
+                staminaDrain += blockDrainPerSecond;
+            }
+            if (_serverMovementSprinting) staminaDrain += sprintDrainPerSecond;
+            if (_serverMovementSwimming) staminaDrain += swimDrainPerSecond;
+            if (staminaDrain > 0f)
+            {
+                _stamina.Value = Mathf.Max(0f, _stamina.Value - staminaDrain * dt);
                 _recoverAfter = Now + 0.6d;
-                if (_stamina.Value <= 0f) { _blocking.Value = false; _blockExhausted = true; }
+                if (_blocking.Value && _stamina.Value <= 0f)
+                {
+                    _blocking.Value = false;
+                    _blockExhausted = true;
+                }
             }
             else if (Now >= _recoverAfter)
                 _stamina.Value = Mathf.Min(maximumStamina, _stamina.Value + staminaRecovery * dt);
+            if (_serverMovementSwimming && _stamina.Value <= 0f &&
+                (_health == null || !_health.IsDead) && Now >= _nextDrowningDamage)
+            {
+                _nextDrowningDamage = Now + drowningDamageInterval;
+                _health?.ApplyDamageServer(drowningDamagePerSecond * drowningDamageInterval,
+                    transform.position + Vector3.down, 0f);
+            }
+            else if (!_serverMovementSwimming || _stamina.Value > 0f)
+                _nextDrowningDamage = Now;
             SimulateBullets();
             SimulateHook();
+        }
+
+        public void SetMovementExertion(bool sprinting, bool swimming)
+        {
+            if (!IsOwner || !IsSpawned)
+                return;
+            var changed = sprinting != _localMovementSprinting || swimming != _localMovementSwimming;
+            if (!changed && Time.unscaledTime < _nextMovementStateSend)
+                return;
+            _localMovementSprinting = sprinting;
+            _localMovementSwimming = swimming;
+            _nextMovementStateSend = Time.unscaledTime + 0.25f;
+            SetMovementExertionServerRpc(sprinting, swimming);
+        }
+
+        public bool TryUseJumpStamina()
+        {
+            if (!IsOwner || !IsSpawned || !CanJump || _health != null && _health.IsDead)
+                return false;
+            SpendJumpStaminaServerRpc();
+            return true;
+        }
+
+        [ServerRpc]
+        private void SpendJumpStaminaServerRpc()
+        {
+            if (_health != null && _health.IsDead || _stamina.Value + 0.001f < jumpStamina)
+                return;
+            _stamina.Value = Mathf.Max(0f, _stamina.Value - jumpStamina);
+            _recoverAfter = Now + 0.6d;
+        }
+
+        [ServerRpc]
+        private void SetMovementExertionServerRpc(bool sprinting, bool swimming)
+        {
+            _serverMovementSprinting = sprinting && !swimming && (_health == null || !_health.IsDead);
+            _serverMovementSwimming = swimming && (_health == null || !_health.IsDead);
+            _movementStateHeartbeat = Now;
         }
         private void LateUpdate()
         {

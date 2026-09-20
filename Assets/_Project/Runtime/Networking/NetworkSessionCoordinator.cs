@@ -12,6 +12,7 @@ using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using WaveByWave.Core;
+using WaveByWave.Generation;
 using WaveByWave.Items;
 using WaveByWave.Player;
 using UdpSocket = System.Net.Sockets.Socket;
@@ -228,9 +229,13 @@ namespace WaveByWave.Networking
 
             ClearDynamicWorldItems();
             PreparePlayersForSceneTransition();
+            OceanWorldDirector.BeginOceanLoading();
             var result = networkManager.SceneManager.LoadScene(GameScenes.Ocean, LoadSceneMode.Single);
             if (result != SceneEventProgressStatus.Started)
+            {
                 CancelLocalSceneTransition();
+                OceanWorldDirector.CancelOceanLoading();
+            }
             SetStatus(result == SceneEventProgressStatus.Started
                 ? "Отправляемся в море…"
                 : $"Не удалось загрузить сцену: {result}");
@@ -561,6 +566,9 @@ namespace WaveByWave.Networking
         {
             if (networkManager == null || clientId != networkManager.LocalClientId)
                 return;
+
+            if (sceneName == GameScenes.Ocean)
+                OceanWorldDirector.BeginOceanLoading();
 
             var localPlayer = networkManager.SpawnManager.GetLocalPlayerObject();
             if (localPlayer != null && localPlayer.TryGetComponent(out NetworkPlayerController player))

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using StylizedWater3;
 using UnityEngine;
+using UnityEngine.Serialization;
 using WaveByWave.Items;
 
 namespace WaveByWave.Generation
@@ -34,17 +35,26 @@ namespace WaveByWave.Generation
         [Min(1f)] public float LootDespawnRadius = 100f;
         [Min(0.1f)] public float LootFadeDuration = 1.2f;
         public List<WeightedLootEntry> FloatingLoot = new();
-        public Vector2 IslandRadius = new(45f, 130f);
+        [Header("Предзагрузка островов")]
+        [FormerlySerializedAs("IslandRadius")]
+        [Tooltip("Кольцо, в котором первые острова строятся под загрузочной шторкой.")]
+        public Vector2 InitialIslandRadius = new(65f, 130f);
+        [Tooltip("Кольцо упреждающей генерации следующих островов. Минимум должен быть дальше дистанции показа.")]
+        public Vector2 StreamingIslandRadius = new(160f, 230f);
+        [Min(10f), Tooltip("Полностью готовый остров становится видимым только внутри этой дистанции.")]
+        public float IslandRevealRadius = 135f;
+        [Min(0.1f)] public float IslandStreamingInterval = 0.5f;
         [Range(1, 16)] public int IslandsPerShip = 5;
-        [Min(20f)] public float IslandDespawnRadius = 190f;
+        [Min(20f)] public float IslandDespawnRadius = 300f;
         [Min(2f)] public float IslandSpacing = 20f;
+        public GameObject LoadingCurtainPrefab;
 
         [Header("Геометрия острова, метры")]
         [Min(1f)] public float SmallDiameter = 5f;
         [Min(1f)] public float MediumDiameter = 10f;
         [Min(1f)] public float LargeDiameter = 15f;
         [Range(0.2f, 0.6f)] public float VoxelSize = 0.2f;
-        [Range(4, 16)] public int ChunkCells = 10;
+        [Range(8, 64)] public int ChunkCells = 32;
         [Min(0.2f)] public float SandHeight = 1.8f;
         [Min(0.5f)] public float SandDepth = 2.4f;
         [Min(0.5f)] public float NoiseScale = 2.8f;

@@ -442,6 +442,20 @@ MonoBehaviour:
   airAcceleration: 12
   maximumSlopeAngle: 65
   groundStickSpeed: 2
+  walkAnimationReferenceSpeed: 3.2
+  sprintAnimationReferenceSpeed: 8.25
+  swimSpeed: 3.5
+  swimAcceleration: 18
+  swimSurfaceDepth: 0.7
+  swimEnterDepth: 0.55
+  swimExitDepth: 0.35
+  waterHeightSharpness: 10
+  buoyancySharpness: 7
+  buoyancyAcceleration: 22
+  maximumSwimVerticalSpeed: 4
+  waterJumpSpeed: 5.5
+  waterJumpReentryDelay: 0.4
+  sprintResumeStamina: 15
   platformProbeDistance: 0.22
   clientPlatformContactTolerance: 0.04
   platformContactGrace: 0.15
@@ -496,6 +510,11 @@ MonoBehaviour:
   blockDrainPerSecond: 7
   swingStamina: 12
   successfulBlockStamina: 15
+  sprintDrainPerSecond: 14
+  swimDrainPerSecond: 8
+  jumpStamina: 10
+  drowningDamagePerSecond: 12
+  drowningDamageInterval: 1
   swordRange: 2.2
   swordSwingDuration: 0.55
   toggleSecondaryActionForTesting: 0

@@ -24,7 +24,8 @@ namespace WaveByWave.Editor
         {
             if (EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode) return;
             EditorApplication.update -= InstallWhenReady;
-            if (AssetDatabase.LoadAssetAtPath<OceanGenerationSettings>(ResourcesFolder + "/OceanGeneration.asset") == null) Install();
+            var settings = AssetDatabase.LoadAssetAtPath<OceanGenerationSettings>(ResourcesFolder + "/OceanGeneration.asset");
+            if (settings == null || settings.LoadingCurtainPrefab == null) Install();
         }
 
         [MenuItem("Tools/Wave by Wave/Create Ocean Generation Assets")]
@@ -59,6 +60,7 @@ namespace WaveByWave.Editor
                 renderer.shadowCastingMode = ShadowCastingMode.Off; renderer.receiveShadows = false;
                 return root;
             });
+            var loadingCurtainPrefab = CreateLoadingCurtainPrefab();
             var chestPrefab = CreateChestPrefab();
             var tablePath = Data + "/ChestLoot.asset";
             var table = AssetDatabase.LoadAssetAtPath<ChestLootTable>(tablePath);
@@ -132,6 +134,9 @@ namespace WaveByWave.Editor
                 // The list accepts any authored bush/tree/stone prefab; there is no runtime primitive decoration.
                 AssetDatabase.CreateAsset(settings, settingsPath);
             }
+            var settingsObject = new SerializedObject(settings);
+            settingsObject.FindProperty("LoadingCurtainPrefab").objectReferenceValue = loadingCurtainPrefab;
+            settingsObject.ApplyModifiedPropertiesWithoutUndo();
             Prefab(ResourcesFolder + "/OceanWorld.prefab", () =>
             {
                 var root = new GameObject("Ocean World"); var director = root.AddComponent<OceanWorldDirector>();
@@ -189,6 +194,49 @@ namespace WaveByWave.Editor
                 AssetDatabase.CreateAsset(mesh, Data + "/LootChestMesh.asset");
                 var root = new GameObject("Loot Chest", typeof(MeshFilter), typeof(MeshRenderer));
                 root.GetComponent<MeshFilter>().sharedMesh = mesh; root.GetComponent<MeshRenderer>().sharedMaterials = materials.ToArray();
+                return root;
+            });
+        }
+
+        private static GameObject CreateLoadingCurtainPrefab()
+        {
+            return Prefab("Assets/_Project/Prefabs/Generation/OceanLoadingCurtain.prefab", () =>
+            {
+                var root = new GameObject("Ocean Loading Curtain", typeof(RectTransform), typeof(Canvas),
+                    typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(CanvasGroup), typeof(OceanLoadingCurtain));
+                var rootRect = (RectTransform)root.transform;
+                rootRect.anchorMin = Vector2.zero; rootRect.anchorMax = Vector2.one;
+                rootRect.offsetMin = rootRect.offsetMax = Vector2.zero;
+                rootRect.localScale = Vector3.one;
+                var canvas = root.GetComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 32000;
+                root.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                root.GetComponent<CanvasScaler>().referenceResolution = new Vector2(1920f, 1080f);
+
+                var backdrop = new GameObject("Backdrop", typeof(RectTransform), typeof(Image));
+                backdrop.transform.SetParent(root.transform, false);
+                var backdropRect = (RectTransform)backdrop.transform;
+                backdropRect.anchorMin = Vector2.zero; backdropRect.anchorMax = Vector2.one;
+                backdropRect.offsetMin = backdropRect.offsetMax = Vector2.zero;
+                var backdropImage = backdrop.GetComponent<Image>();
+                backdropImage.color = new Color(0.015f, 0.02f, 0.025f, 1f);
+
+                var label = new GameObject("Progress", typeof(RectTransform), typeof(Text));
+                label.transform.SetParent(backdrop.transform, false);
+                var labelRect = (RectTransform)label.transform;
+                labelRect.anchorMin = new Vector2(0.2f, 0.35f); labelRect.anchorMax = new Vector2(0.8f, 0.65f);
+                labelRect.offsetMin = labelRect.offsetMax = Vector2.zero;
+                var text = label.GetComponent<Text>();
+                text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                text.fontSize = 32; text.alignment = TextAnchor.MiddleCenter;
+                text.color = Color.white; text.raycastTarget = false;
+                text.text = "Подготавливаем океан...";
+
+                var serialized = new SerializedObject(root.GetComponent<OceanLoadingCurtain>());
+                serialized.FindProperty("canvasGroup").objectReferenceValue = root.GetComponent<CanvasGroup>();
+                serialized.FindProperty("progressLabel").objectReferenceValue = text;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
                 return root;
             });
         }

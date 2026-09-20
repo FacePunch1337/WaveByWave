@@ -53,6 +53,7 @@ namespace WaveByWave.Generation
         private EquipmentWaterQuery _water;
         private string _scene;
         private bool _wasListening, _snapshotReady;
+        private bool _initialGenerationStarted, _loadingComplete;
         private float _nextLoot, _nextIslands, _nextRequest;
         private int _nextIslandId = 1;
         private Unity.Mathematics.Random _random;
@@ -62,7 +63,9 @@ namespace WaveByWave.Generation
         private readonly List<int> _removeIds = new();
         private readonly Queue<(ulong Client, Packet Packet)> _outgoing = new();
         private readonly Dictionary<ulong, float> _snapshotRequests = new();
+        private readonly HashSet<int> _initialIslands = new();
         private readonly RaycastHit[] _surfaceHits = new RaycastHit[64];
+        private OceanLoadingCurtain _loadingCurtain;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap() => EnsureInstance();
@@ -73,6 +76,19 @@ namespace WaveByWave.Generation
             if (prefab != null) Instantiate(prefab);
             return Instance;
         }
+        public static void BeginOceanLoading()
+        {
+            var director = EnsureInstance();
+            if (director == null) return;
+            director._loadingComplete = false;
+            director._loadingCurtain?.Show(0, 0);
+        }
+        public static void CancelOceanLoading()
+        {
+            if (Instance == null) return;
+            Instance._loadingComplete = SceneManager.GetActiveScene().name != GameScenes.Ocean;
+            Instance._loadingCurtain?.Hide();
+        }
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -82,6 +98,9 @@ namespace WaveByWave.Generation
             { Debug.LogError("Ocean generation settings/prefabs are missing.", this); enabled = false; return; }
             _water = new EquipmentWaterQuery(settings.WaterProfile);
             _random = new Unity.Mathematics.Random(unchecked((uint)settings.WorldSeed) | 1u);
+            if (settings.LoadingCurtainPrefab != null)
+                _loadingCurtain = Instantiate(settings.LoadingCurtainPrefab, transform)
+                    .GetComponent<OceanLoadingCurtain>();
             LootStressTest.ServerItemRemoved += OnItemRemoved;
         }
 
@@ -101,7 +120,10 @@ namespace WaveByWave.Generation
             if (_scene != scene || (_wasListening && !listening))
             {
                 ClearWorld(IsAuthority); _scene = scene; _snapshotReady = false; _nextRequest = 0f;
-                _nextLoot = Time.unscaledTime + 1f; _nextIslands = Time.unscaledTime + 1f;
+                _initialGenerationStarted = false; _loadingComplete = scene != GameScenes.Ocean;
+                _nextLoot = Time.unscaledTime + 1f; _nextIslands = Time.unscaledTime + 0.1f;
+                if (scene == GameScenes.Ocean) _loadingCurtain?.Show(0, 0);
+                else _loadingCurtain?.Hide();
             }
             if (!listening && _messages != null) Unbind();
             _wasListening = listening;
@@ -123,16 +145,30 @@ namespace WaveByWave.Generation
                 {
                     if (Time.unscaledTime >= _nextIslands)
                     {
-                        _nextIslands = Time.unscaledTime + 2f;
+                        _nextIslands = Time.unscaledTime + Mathf.Max(0.1f, settings.IslandStreamingInterval);
                         _ships = FindObjectsByType<NetworkShipController>(FindObjectsSortMode.None);
-                        MaintainIslands(); PruneLoot();
+                        if (!_initialGenerationStarted && _ships.Length > 0)
+                            GenerateInitialIslands();
+                        else if (_loadingComplete)
+                            MaintainIslands();
+                        PruneLoot();
                     }
-                    if (settings.GenerateOceanLoot && _ships.Length > 0 && Time.unscaledTime >= _nextLoot)
+                    if (_loadingComplete && settings.GenerateOceanLoot && _ships.Length > 0 &&
+                        Time.unscaledTime >= _nextLoot)
                     {
                         _nextLoot = Time.unscaledTime + Mathf.Max(0.1f, settings.LootInterval);
                         SpawnFloatingLoot();
                     }
                 }
+            }
+            if (scene == GameScenes.Ocean)
+            {
+                if (!IsAuthority && Time.unscaledTime >= _nextIslands)
+                {
+                    _nextIslands = Time.unscaledTime + Mathf.Max(0.1f, settings.IslandStreamingInterval);
+                    _ships = FindObjectsByType<NetworkShipController>(FindObjectsSortMode.None);
+                }
+                UpdateLoadingAndPresentation();
             }
             // Bound snapshot catch-up traffic, including deep digging histories.
             for (var i = 0; i < 64 && _outgoing.Count > 0; i++)
@@ -173,6 +209,7 @@ namespace WaveByWave.Generation
                     Seed = island.Seed, Position = island.transform.position, Scene = CurrentScene() },
                 Island = island, ScenePlaced = true, Test = true, Populate = populateChests
             });
+            island.SetPresentationVisible(true);
         }
         public void RemoveIsland(int id)
         {
@@ -181,6 +218,7 @@ namespace WaveByWave.Generation
             var chests = new List<int>(record.Markers.Keys);
             foreach (var chest in chests) LootStressTest.RemoveServerItem(chest);
             var packet = new Packet { Kind = Kind.Remove, Id = id, Scene = CurrentScene() };
+            _initialIslands.Remove(id);
             Apply(packet); Broadcast(packet);
         }
         public bool DigServer(ProceduralIsland island, Vector3 point, Vector3 normal)
@@ -283,21 +321,52 @@ namespace WaveByWave.Generation
                 if (LootStressTest.TryGetServerItem(id, out _, out _)) LootStressTest.RemoveServerItem(id);
             }
         }
+        private void GenerateInitialIslands()
+        {
+            _initialGenerationStarted = true;
+            if (!settings.GenerateIslands || _ships.Length == 0)
+                return;
+
+            var target = Mathf.Clamp(settings.IslandsPerShip, 1, 16) * _ships.Length;
+            for (var n = CountStreamingIslands(); n < target; n++)
+            {
+                if (!TryGenerateIsland(settings.InitialIslandRadius, out var id))
+                    continue;
+                _initialIslands.Add(id);
+            }
+        }
+
         private void MaintainIslands()
         {
             if (!settings.GenerateIslands || _ships.Length == 0) return;
             _removeIds.Clear();
+            var despawnRadius = Mathf.Max(settings.IslandDespawnRadius, settings.StreamingIslandRadius.y + 20f);
             foreach (var pair in _islands)
                 if (!pair.Value.Test && pair.Value.Island != null &&
-                    !NearAnyPlayerOrShip(pair.Value.Island.transform.position, settings.IslandDespawnRadius)) _removeIds.Add(pair.Key);
+                    !NearAnyPlayerOrShip(pair.Value.Island.transform.position, despawnRadius)) _removeIds.Add(pair.Key);
             foreach (var id in _removeIds) RemoveIsland(id);
-            if (_islands.Count >= Mathf.Clamp(settings.IslandsPerShip, 1, 16) * _ships.Length) return;
+            if (CountStreamingIslands() >= Mathf.Clamp(settings.IslandsPerShip, 1, 16) * _ships.Length) return;
+            TryGenerateIsland(settings.StreamingIslandRadius, out _);
+        }
+
+        private int CountStreamingIslands()
+        {
+            var count = 0;
+            foreach (var record in _islands.Values)
+                if (!record.Test && !record.ScenePlaced)
+                    count++;
+            return count;
+        }
+
+        private bool TryGenerateIsland(Vector2 generationRadius, out int id)
+        {
+            id = 0;
             var ship = _ships[_random.NextInt(_ships.Length)];
-            if (ship == null || !ship.IsSpawned) return;
-            for (var attempt = 0; attempt < 12; attempt++)
+            if (ship == null || !ship.IsSpawned) return false;
+            for (var attempt = 0; attempt < 24; attempt++)
             {
                 var size = (IslandSize)_random.NextInt(3);
-                var position = InRing(ship.transform.position, settings.IslandRadius);
+                var position = InRing(ship.transform.position, generationRadius);
                 var radius = settings.Diameter(size) * 0.5f;
                 if (!IsOpenWater(position, radius + settings.IslandSpacing * 0.5f, out var level)) continue;
                 var valid = true;
@@ -308,7 +377,59 @@ namespace WaveByWave.Generation
                     { valid = false; break; }
                 }
                 if (!valid) continue;
-                position.y = level; GenerateIsland(position, size, _random.NextUInt() | 1u, false); break;
+                position.y = level;
+                id = GenerateIsland(position, size, _random.NextUInt() | 1u, false);
+                return id != 0;
+            }
+            return false;
+        }
+
+        private void UpdateLoadingAndPresentation()
+        {
+            var ready = 0;
+            var total = 0;
+            if (IsAuthority)
+            {
+                foreach (var id in _initialIslands)
+                {
+                    if (!_islands.TryGetValue(id, out var record) || record.Island == null)
+                        continue;
+                    total++;
+                    if (record.Island.Ready && !record.Populate)
+                        ready++;
+                }
+                if (!_loadingComplete && _initialGenerationStarted && ready >= total)
+                {
+                    _loadingComplete = true;
+                    _loadingCurtain?.Hide();
+                }
+            }
+            else
+            {
+                foreach (var record in _islands.Values)
+                {
+                    if (record.ScenePlaced || record.Island == null) continue;
+                    total++;
+                    if (record.Island.Ready) ready++;
+                }
+                if (!_loadingComplete && _snapshotReady && ready >= total)
+                {
+                    _loadingComplete = true;
+                    _loadingCurtain?.Hide();
+                }
+            }
+
+            if (!_loadingComplete)
+                _loadingCurtain?.Show(ready, total);
+
+            foreach (var record in _islands.Values)
+            {
+                if (record.Island == null) continue;
+                var visible = record.ScenePlaced || _loadingComplete && record.Island.Ready &&
+                    NearAnyPlayerOrShip(record.Island.transform.position, settings.IslandRevealRadius);
+                record.Island.SetPresentationVisible(visible);
+                foreach (var marker in record.MarkerViews.Values)
+                    if (marker != null) marker.SetActive(visible);
             }
         }
         private bool NearAnyPlayerOrShip(Vector3 point, float radius)
@@ -318,6 +439,8 @@ namespace WaveByWave.Generation
             if (_manager != null && _manager.IsServer)
                 foreach (var client in _manager.ConnectedClientsList)
                     if (client.PlayerObject != null && (client.PlayerObject.transform.position - point).sqrMagnitude < squared) return true;
+            if (_manager != null && _manager.IsClient && _manager.LocalClient?.PlayerObject != null &&
+                (_manager.LocalClient.PlayerObject.transform.position - point).sqrMagnitude < squared) return true;
             return false;
         }
         private bool IsOpenWater(Vector3 position, float margin, out float level)
@@ -382,20 +505,30 @@ namespace WaveByWave.Generation
                 instance.name = $"Island {packet.Id} ({(IslandSize)packet.Size})";
                 var island = instance.GetComponent<ProceduralIsland>();
                 island.Initialize(packet.Id, (IslandSize)packet.Size, packet.Seed, settings);
+                island.SetPresentationVisible(false);
                 _islands.Add(packet.Id, new IslandRecord { Creation = packet, Island = island }); return;
             }
             if (!_islands.TryGetValue(packet.Id, out var record)) return;
             if (packet.Kind == Kind.Dig)
             { record.Island.ApplyDig(packet.Revision, packet.Position, packet.Radius); return; }
             if (packet.Kind == Kind.Remove)
-            { if (record.Island != null) Destroy(record.Island.gameObject); _islands.Remove(packet.Id); return; }
+            {
+                if (record.Island != null) Destroy(record.Island.gameObject);
+                _initialIslands.Remove(packet.Id);
+                _islands.Remove(packet.Id);
+                return;
+            }
             if (packet.Kind == Kind.Marker)
             {
                 if (record.Markers.ContainsKey(packet.ChestId)) return;
                 record.Markers[packet.ChestId] = packet;
                 if (settings.BuriedMarkerPrefab != null)
-                    record.MarkerViews[packet.ChestId] = Instantiate(settings.BuriedMarkerPrefab,
+                {
+                    var marker = Instantiate(settings.BuriedMarkerPrefab,
                         packet.Position, Quaternion.Euler(90f, 0f, 0f), record.Island.transform);
+                    marker.SetActive(record.ScenePlaced);
+                    record.MarkerViews[packet.ChestId] = marker;
+                }
             }
             if (packet.Kind == Kind.RemoveMarker)
             {
@@ -428,6 +561,7 @@ namespace WaveByWave.Generation
             foreach (var record in _islands.Values)
                 if (!record.ScenePlaced && record.Island != null) Destroy(record.Island.gameObject);
             _islands.Clear(); _floating.Clear(); _outgoing.Clear(); _snapshotRequests.Clear();
+            _initialIslands.Clear();
         }
         private void ClearForSnapshot()
         {
@@ -448,6 +582,9 @@ namespace WaveByWave.Generation
             }
             foreach (var id in _removeIds) _islands.Remove(id);
             _floating.Clear(); _outgoing.Clear(); _snapshotRequests.Clear();
+            _initialIslands.Clear();
+            _loadingComplete = false;
+            _loadingCurtain?.Show(0, 0);
         }
         private void Unbind()
         {

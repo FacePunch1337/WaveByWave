@@ -12,6 +12,7 @@ namespace WaveByWave.Player
         private PlayerEquipment _equipment;
         private NetworkPlayerController _player;
         private PlayerInventory _inventory;
+        private PlayerAnimationSync _animationSync;
         private Transform _rig, _motion, _itemPose, _item, _rightHand, _leftHand, _rightSleeve, _leftSleeve;
         private Transform _bodyVisual;
         private Animator _animator;
@@ -48,7 +49,12 @@ namespace WaveByWave.Player
         }
 
         public void Initialize(PlayerEquipment equipment, NetworkPlayerController player, PlayerInventory inventory)
-        { _equipment = equipment; _player = player; _inventory = inventory; }
+        {
+            _equipment = equipment;
+            _player = player;
+            _inventory = inventory;
+            _animationSync = GetComponent<PlayerAnimationSync>();
+        }
 
         private bool EnsureRig()
         {
@@ -91,16 +97,7 @@ namespace WaveByWave.Player
             // The owner's body is hidden only from its gameplay camera, not removed. Resolve its
             // humanoid bones too so authored grips can be previewed locally and remain correct in
             // mirrors, customization cameras and any other camera that renders LocalPlayerBody.
-            _animator = _bodyVisual != null ? _bodyVisual.GetComponentInChildren<Animator>() : null;
-            if (_animator != null && _animator.isHuman)
-            {
-                _rightUpper = _animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
-                _rightLower = _animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
-                _rightBone = _animator.GetBoneTransform(HumanBodyBones.RightHand);
-                _leftUpper = _animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-                _leftLower = _animator.GetBoneTransform(HumanBodyBones.LeftLowerArm);
-                _leftBone = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
-            }
+            RefreshHumanoidRig();
             if (_equipment.HookRopePrefab != null)
             {
                 var ropeObject = Instantiate(_equipment.HookRopePrefab, _rig, false);
@@ -110,6 +107,28 @@ namespace WaveByWave.Player
                 Debug.LogError("PlayerEquipment requires a hook rope prefab with LineRenderer.", _equipment);
             else _rope.enabled = false;
             _initialized = true; return true;
+        }
+
+        private void RefreshHumanoidRig()
+        {
+            var current = _animationSync != null ? _animationSync.CurrentAnimator : null;
+            if (current == null && _bodyVisual != null)
+                current = _bodyVisual.GetComponentInChildren<Animator>();
+            if (current == _animator)
+                return;
+
+            _animator = current;
+            _rightUpper = _rightLower = _rightBone = null;
+            _leftUpper = _leftLower = _leftBone = null;
+            if (_animator != null && _animator.isHuman)
+            {
+                _rightUpper = _animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                _rightLower = _animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
+                _rightBone = _animator.GetBoneTransform(HumanBodyBones.RightHand);
+                _leftUpper = _animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+                _leftLower = _animator.GetBoneTransform(HumanBodyBones.LeftLowerArm);
+                _leftBone = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            }
         }
         private void SetItem(ItemDefinition definition)
         {
@@ -212,6 +231,9 @@ namespace WaveByWave.Player
         private void LateUpdate()
         {
             if (_equipment == null || !_equipment.IsSpawned || !EnsureRig()) return;
+            // Customization can replace the entire pirate Animator while this view survives.
+            // Rebind before solving the arms so both locomotion and authored grip IK keep working.
+            RefreshHumanoidRig();
             _inventory.TryGetDefinition(_inventory.EquippedIndex, out var definition);
             if (_definition != definition) SetItem(definition);
             var visible = definition != null && _equipment.Available && !_player.IsAtControlStation &&

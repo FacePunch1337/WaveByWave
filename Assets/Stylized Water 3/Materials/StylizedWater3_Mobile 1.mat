@@ -12,10 +12,12 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
+  - _CAUSTICS
   - _ENVIRONMENTREFLECTIONS_OFF
   - _INTERSECTION_FOAM
   - _NORMALMAP
   - _RECEIVE_SHADOWS_OFF
+  - _REFRACTION
   - _SURFACE_FOAM_SINGLE
   - _UNLIT
   - _WAVES
@@ -36,13 +38,14 @@ Material:
   - _SURFACE_FOAM
   - _WORLDSPACEUV_ON
   - _ZCLIP_ON
+  - _ZWRITE_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
   m_CustomRenderQueue: -1
   stringTagMap: {}
   disabledShaderPasses: []
-  m_LockedProperties: 
+  m_LockedProperties: _EdgeFade _WaveFrequency
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
@@ -63,7 +66,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _CausticsTex:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 6a6111d7c04a2aa41a70e3595cc26c9c, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _DepthTex:
@@ -153,15 +156,15 @@ Material:
     - _Blend: 0
     - _BumpScale: 1
     - _CROSSPAN_INTERSECTIONOn: 1
-    - _CausticsBrightness: 4.83
+    - _CausticsBrightness: 1
     - _CausticsChromance: 1
     - _CausticsDistortion: 0.15
-    - _CausticsOn: 0
+    - _CausticsOn: 1
     - _CausticsSpeed: 0.1
     - _CausticsTiling: 0.5
     - _ColorAbsorption: 0
     - _CrossPan_IntersectionOn: 0
-    - _Cull: 2
+    - _Cull: 0
     - _Cutoff: 0.5
     - _Depth: 5.01
     - _DepthExp: 1
@@ -256,7 +259,7 @@ Material:
     - _Reflectivity: 1
     - _RefractionAmount: 0.05
     - _RefractionChromaticAberration: 1
-    - _RefractionOn: 0
+    - _RefractionOn: 1
     - _RefractionStrength: 0.267
     - _RimRize: 1
     - _RimTiling: 0.025
@@ -290,6 +293,9 @@ Material:
     - _SunReflectionStrength: 10
     - _Surface: 0
     - _TEXTURE_INTERSECTIONOn: 0
+    - _TessMax: 15
+    - _TessMin: 0
+    - _TessValue: 16
     - _Texture_IntersectionOn: 1
     - _Tiling: 0.5
     - _Translucency: 0
@@ -300,7 +306,7 @@ Material:
     - _TranslucencyStrength: 1
     - _TranslucencyStrengthDirect: 0.05
     - _UnderwaterReflectionStrength: 0.5
-    - _UnderwaterRefractionOffset: 0.2
+    - _UnderwaterRefractionOffset: 0.5
     - _UnderwaterSurfaceSmoothness: 0.8
     - _VertexColorFoam: 0
     - _VertexColorTransparency: 0
@@ -317,9 +323,9 @@ Material:
     - _WorkflowMode: 1
     - _WorldSpaceUV: 1
     - _ZClip: 1
-    - _ZWrite: 0
+    - _ZWrite: 1
     m_Colors:
-    - _BaseColor: {r: 0, g: 0.16451614, b: 0.34, a: 0.9647059}
+    - _BaseColor: {r: 0, g: 0.48235297, b: 1, a: 0.9647059}
     - _Color: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _DepthMapBounds: {r: -402.3, g: -459.43, b: 0.0012693577, a: 0}
     - _Direction: {r: 1, g: 1, b: 0, a: 0}

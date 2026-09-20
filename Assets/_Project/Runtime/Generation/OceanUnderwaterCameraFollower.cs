@@ -1,5 +1,6 @@
 using StylizedWater3;
 using StylizedWater3.UnderwaterRendering;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -15,14 +16,24 @@ namespace WaveByWave.Generation
         [SerializeField, Min(100f)] private float horizontalSize = 2000f;
         [SerializeField, Min(20f)] private float depth = 500f;
         [SerializeField, Min(3f)] private float surfacePadding = 4f;
+        [Header("Stylized Water 3 particles")]
+        [SerializeField] private GameObject lightShaftsPrefab;
+        [SerializeField] private GameObject planktonPrefab;
+        [SerializeField] private GameObject bubblesPrefab;
 
         private Camera _playerCamera;
+        private readonly List<ParticleSystem> _spawnedParticles = new();
 
-        private void Awake() => ConfigureVolume();
+        private void Awake()
+        {
+            ConfigureVolume();
+            EnsureParticleEffects();
+        }
 
         private void OnEnable()
         {
             ConfigureVolume();
+            EnsureParticleEffects();
             RenderPipelineManager.beginCameraRendering += HandleBeginCameraRendering;
         }
 
@@ -107,5 +118,35 @@ namespace WaveByWave.Generation
                 material.GetInt("_Cull") != (int)CullMode.Off)
                 material.SetInt("_Cull", (int)CullMode.Off);
         }
+
+        private void EnsureParticleEffects()
+        {
+            if (!Application.isPlaying || underwaterArea == null || _spawnedParticles.Count > 0)
+                return;
+
+            underwaterArea.particleEffects ??= new List<UnderwaterArea.ParticleEffect>();
+            AddParticleEffect(lightShaftsPrefab, true, 0f, 1f);
+            AddParticleEffect(planktonPrefab, false, 6f, 50f);
+            AddParticleEffect(bubblesPrefab, false, 0f, 2f);
+        }
+
+        private void AddParticleEffect(GameObject prefab, bool alignToSun, float minDepth, float maxDepth)
+        {
+            if (prefab == null) return;
+            var instance = Instantiate(prefab, transform);
+            instance.name = prefab.name;
+            var particles = instance.GetComponentInChildren<ParticleSystem>(true);
+            if (particles == null)
+            {
+                Destroy(instance);
+                return;
+            }
+            _spawnedParticles.Add(particles);
+            underwaterArea.particleEffects.Add(new UnderwaterArea.ParticleEffect(minDepth, maxDepth, alignToSun)
+            {
+                particleSystem = particles
+            });
+        }
+
     }
 }

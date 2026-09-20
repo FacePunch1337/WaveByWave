@@ -91,7 +91,7 @@ namespace WaveByWave.Generation
         {
             if (Instance == null) return;
             Instance._loadingComplete = SceneManager.GetActiveScene().name != GameScenes.Ocean;
-            Instance._loadingCurtain?.Hide();
+            Instance._loadingCurtain?.HideImmediate();
         }
         private void Awake()
         {
@@ -105,7 +105,20 @@ namespace WaveByWave.Generation
             if (settings.LoadingCurtainPrefab != null)
                 _loadingCurtain = Instantiate(settings.LoadingCurtainPrefab, transform)
                     .GetComponent<OceanLoadingCurtain>();
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            if (SceneManager.GetActiveScene().name == GameScenes.Port)
+                _loadingCurtain?.HideImmediate();
             LootStressTest.ServerItemRemoved += OnItemRemoved;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            // The ocean curtain belongs exclusively to the voyage transition and Ocean.
+            // A joining client can receive scene/snapshot callbacks in a different order,
+            // so loading Port must always win and clear it immediately.
+            if (scene.name != GameScenes.Port) return;
+            _loadingComplete = true;
+            _loadingCurtain?.HideImmediate();
         }
 
         private void Update()
@@ -129,7 +142,7 @@ namespace WaveByWave.Generation
                     ? Mathf.Clamp(settings.InitialIslandCount, 0, 32) : 0;
                 _nextLoot = Time.unscaledTime + 1f; _nextIslands = Time.unscaledTime + 0.1f;
                 if (scene == GameScenes.Ocean) _loadingCurtain?.Show(0, 0);
-                else _loadingCurtain?.Hide();
+                else _loadingCurtain?.HideImmediate();
             }
             if (!listening && _messages != null) Unbind();
             _wasListening = listening;
@@ -227,7 +240,7 @@ namespace WaveByWave.Generation
             _initialIslands.Remove(id);
             Apply(packet); Broadcast(packet);
         }
-        public bool DigServer(ProceduralIsland island, Vector3 point, Vector3 normal, Vector3 digDirection)
+        public bool DigServer(ProceduralIsland island, Vector3 point, Vector3 normal)
         {
             if (!IsAuthority || island == null || !_islands.TryGetValue(island.Id, out var record)) return false;
             var center = point - normal.normalized * settings.DigPenetration;
@@ -236,38 +249,24 @@ namespace WaveByWave.Generation
             var packet = new Packet { Kind = Kind.Dig, Id = island.Id, Revision = record.Digs.Count + 1,
                 Position = island.transform.InverseTransformPoint(center), Radius = settings.DigRadius, Scene = CurrentScene() };
             record.Digs.Add(packet); Apply(packet); Broadcast(packet);
-            HideMarkerHitFromAbove(record, point, normal, digDirection);
+            HideMarkerAboveDig(record, point);
             return true;
         }
 
-        private void HideMarkerHitFromAbove(IslandRecord record, Vector3 point, Vector3 normal,
-            Vector3 digDirection)
+        private void HideMarkerAboveDig(IslandRecord record, Vector3 point)
         {
-            // The decal is a pair of diagonal strokes. Match the actual visible cross rather
-            // than hiding every marker somewhere inside the shovel's circular dig radius.
-            if (normal.y < 0.35f || digDirection.sqrMagnitude < 0.0001f ||
-                digDirection.normalized.y >= -0.05f)
-                return;
+            // A marker identifies the patch of sand above a chest, rather than a physical
+            // painted stroke. Remove it on the first successful excavation below that patch,
+            // including sloped island surfaces and deeper follow-up hits.
+            var radius = settings.DigRadius + 0.1f;
             foreach (var pair in record.Markers)
             {
                 if (record.HiddenMarkers.Contains(pair.Key)) continue;
                 var markerPosition = pair.Value.Position;
-                if (Mathf.Abs(point.y - markerPosition.y) > 0.4f) continue;
-                var hit = false;
-                if (record.MarkerViews.TryGetValue(pair.Key, out var marker) && marker != null)
-                {
-                    var surfaceMarker = marker.GetComponent<BuriedChestMarker>();
-                    hit = surfaceMarker != null && surfaceMarker.ContainsStroke(point);
-                }
-                else
-                {
-                    var local = new Vector2(point.x - markerPosition.x, point.z - markerPosition.z);
-                    var edge = Mathf.Max(Mathf.Abs(local.x), Mathf.Abs(local.y));
-                    var stroke = Mathf.Min(Mathf.Abs(local.x - local.y),
-                        Mathf.Abs(local.x + local.y)) * 0.70710678f;
-                    hit = edge <= 0.515f && stroke <= 0.085f;
-                }
-                if (!hit) continue;
+                var horizontal = new Vector2(point.x - markerPosition.x, point.z - markerPosition.z);
+                var depthBelowMarker = markerPosition.y - point.y;
+                if (horizontal.sqrMagnitude > radius * radius || depthBelowMarker < -0.3f)
+                    continue;
                 var hidden = new Packet { Kind = Kind.HideMarker, Id = record.Island.Id,
                     ChestId = pair.Key, Scene = CurrentScene() };
                 Apply(hidden); Broadcast(hidden);
@@ -593,7 +592,7 @@ namespace WaveByWave.Generation
                     _initialIslands.Count >= _initialTargetCount && ready >= total)
                 {
                     _loadingComplete = true;
-                    _loadingCurtain?.Hide();
+                    _loadingCurtain?.HideImmediate();
                     FlushPendingSnapshotRequests();
                 }
             }
@@ -608,7 +607,7 @@ namespace WaveByWave.Generation
                 if (!_loadingComplete && _snapshotReady && ready >= total)
                 {
                     _loadingComplete = true;
-                    _loadingCurtain?.Hide();
+                    _loadingCurtain?.HideImmediate();
                 }
             }
 
@@ -718,7 +717,16 @@ namespace WaveByWave.Generation
                 _nextRequest = float.PositiveInfinity;
                 return;
             }
-            if (packet.Kind == Kind.Complete) { _snapshotReady = true; return; }
+            if (packet.Kind == Kind.Complete)
+            {
+                _snapshotReady = true;
+                if (SceneManager.GetActiveScene().name != GameScenes.Ocean)
+                {
+                    _loadingComplete = true;
+                    _loadingCurtain?.HideImmediate();
+                }
+                return;
+            }
             if (packet.Kind == Kind.Create)
             {
                 if (_islands.ContainsKey(packet.Id)) return;
@@ -815,8 +823,10 @@ namespace WaveByWave.Generation
             _floating.Clear(); _outgoing.Clear(); _snapshotRequests.Clear();
             _pendingSnapshotClients.Clear();
             _initialIslands.Clear(); _streamedIslandIds.Clear();
-            _loadingComplete = false;
-            _loadingCurtain?.Show(0, 0);
+            var isOcean = SceneManager.GetActiveScene().name == GameScenes.Ocean;
+            _loadingComplete = !isOcean;
+            if (isOcean) _loadingCurtain?.Show(0, 0);
+            else _loadingCurtain?.HideImmediate();
         }
         private void Unbind()
         {
@@ -825,6 +835,7 @@ namespace WaveByWave.Generation
         private void OnDestroy()
         {
             if (Instance != this) return;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
             Unbind(); ClearWorld(false); _water?.Dispose();
             LootStressTest.ServerItemRemoved -= OnItemRemoved; Instance = null;
         }

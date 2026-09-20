@@ -58,6 +58,8 @@ namespace WaveByWave.Player
         [SerializeField, Min(0.1f)] private float hookChargeDuration = 1.5f;
         [SerializeField, Min(1f)] private float hookMinimumSpeed = 8f, hookMaximumSpeed = 22f;
         [SerializeField, Min(1f)] private float hookGravity = 12f, hookReelSpeed = 8f;
+        [SerializeField, Min(1f), Tooltip("Скорость быстрого возврата крюка по воздуху на ПКМ.")]
+        private float hookRecallSpeed = 32f;
         [SerializeField, Min(1f)] private float maximumRopeLength = 45f;
         [SerializeField, Min(0.05f)] private float hookPickupRadius = 0.65f;
         [SerializeField, Min(0.1f), Tooltip("На этой горизонтальной дистанции крюк перестаёт скользить по поверхности и поднимается прямо к руке.")]
@@ -157,7 +159,9 @@ namespace WaveByWave.Player
                 if (_hookRenderFrame == Time.frameCount) return _renderedHook;
                 _hookRenderFrame = Time.frameCount;
                 var target = EvaluateHook(Now, true);
-                _renderedHook = _hook.Value.Phase == HookPhase.Reeling && _renderPhase == HookPhase.Reeling
+                var smooth = (_hook.Value.Phase == HookPhase.Reeling && _renderPhase == HookPhase.Reeling) ||
+                    (_hook.Value.Phase == HookPhase.Returning && _renderPhase == HookPhase.Returning);
+                _renderedHook = smooth
                     ? Vector3.Lerp(_renderedHook, target, 1f - Mathf.Exp(-20f * Time.unscaledDeltaTime)) : target;
                 _renderPhase = _hook.Value.Phase;
                 return _renderedHook;
@@ -369,7 +373,15 @@ namespace WaveByWave.Player
             var block = item.EquipmentKind == ItemEquipmentKind.Sword && secondaryHeld;
             var aim = item.EquipmentKind == ItemEquipmentKind.Musket && secondaryHeld;
             var reel = item.EquipmentKind == ItemEquipmentKind.Hook && _hook.Value.Phase != HookPhase.Stowed &&
-                _hook.Value.Phase != HookPhase.Flying && mouse.leftButton.isPressed;
+                _hook.Value.Phase != HookPhase.Flying && _hook.Value.Phase != HookPhase.Returning &&
+                mouse.leftButton.isPressed;
+            if (item.EquipmentKind == ItemEquipmentKind.Hook && mouse.rightButton.wasPressedThisFrame)
+            {
+                _localCharge = false;
+                _localReel = false;
+                reel = false;
+                RecallHookServerRpc(_inventory.SelectedIndex, _inventory.SelectionRevision);
+            }
             if (item.EquipmentKind == ItemEquipmentKind.Hook && _hook.Value.Phase == HookPhase.Stowed)
             {
                 if (mouse.leftButton.wasPressedThisFrame) { _localCharge = true; _localChargeStarted = Time.unscaledTime; }
@@ -500,6 +512,23 @@ namespace WaveByWave.Player
             else { _chargeStarted = -1d; _charging.Value = false; }
         }
         private bool _serverReeling;
+        [ServerRpc]
+        private void RecallHookServerRpc(int slot, uint revision)
+        {
+            if (!_inventory.ApplySelectionServer(slot, revision) || _inventory.Health <= 0f ||
+                !_inventory.TryGetDefinition(slot, out var item) ||
+                item.EquipmentKind != ItemEquipmentKind.Hook)
+                return;
+
+            RefreshSelectedServer(slot, item);
+            _serverHeartbeat = Now;
+            _charging.Value = false;
+            _chargeStarted = -1d;
+            _serverReeling = false;
+            if (_hook.Value.Phase != HookPhase.Stowed)
+                BeginHookRecallServer();
+        }
+
         private void StopHeldServer()
         { _blocking.Value = _aiming.Value = false; _charging.Value = false; _serverReeling = false; _chargeStarted = -1d; }
         [ServerRpc]
@@ -600,7 +629,7 @@ namespace WaveByWave.Player
                     {
                         if (digHit.collider.GetComponentInParent<WaveByWave.Generation.ProceduralIsland>() is { } island)
                             WaveByWave.Generation.OceanWorldDirector.Instance?.DigServer(
-                                island, digHit.point, digHit.normal, direction);
+                                island, digHit.point, digHit.normal);
                         onDig.Invoke(digHit.point); ToolEffectClientRpc(digHit.point, false);
                     }
                     PlayServer(action, 0.8f);
@@ -781,6 +810,25 @@ namespace WaveByWave.Player
                 }
                 return;
             }
+            if (state.Phase == HookPhase.Returning)
+            {
+                if (Now < _hookSampleTime + 1d / 60d) return;
+                var recallDelta = Mathf.Min(0.05f, (float)(Now - _hookSampleTime));
+                _hookSampleTime = Now;
+                var recallPrevious = _hookPosition;
+                var recalledPosition = Vector3.MoveTowards(recallPrevious, hand, hookRecallSpeed * recallDelta);
+                _hookPosition = recalledPosition;
+                _hook.Value = new EquipmentHookState
+                {
+                    Phase = HookPhase.Returning,
+                    Origin = recallPrevious,
+                    Velocity = (recalledPosition - recallPrevious) / Mathf.Max(recallDelta, 0.0001f),
+                    Started = Now
+                };
+                if ((recalledPosition - hand).sqrMagnitude < 0.01f)
+                    ResetHookServer();
+                return;
+            }
             if (state.Phase == HookPhase.Landed) _hookPosition = EvaluateHook(Now, false);
             if (Now < _hookSampleTime + 0.05d) return;
             var dt = Mathf.Min(0.1f, (float)(Now - _hookSampleTime)); _hookSampleTime = Now;
@@ -945,6 +993,42 @@ namespace WaveByWave.Player
             var angle = index * 137.50776f * Mathf.Deg2Rad;
             return new Vector3(Mathf.Cos(angle) * radius, 0.1f, Mathf.Sin(angle) * radius);
         }
+
+        private void BeginHookRecallServer()
+        {
+            var state = _hook.Value;
+            _hookPosition = EvaluateHook(Now, false);
+            ReleaseHookCargoServer(_hookPosition);
+            _hookReelVelocity = Vector3.zero;
+            _hookSampleTime = Now;
+            _hook.Value = new EquipmentHookState
+            {
+                Phase = HookPhase.Returning,
+                Origin = _hookPosition,
+                Velocity = Vector3.zero,
+                Started = Now
+            };
+        }
+
+        private void ReleaseHookCargoServer(Vector3 position)
+        {
+            for (var i = 0; i < _hookItems.Count; i++)
+            {
+                var item = _hookItems[i];
+                if (item == null || !item.IsSpawned || !item.IsTetheredTo(this)) continue;
+                item.ReleaseFromHookServer(this, position + HookCargoOffset(i), null);
+            }
+            for (var i = 0; i < _stressHookItems.Count; i++)
+            {
+                var cargoIndex = _hookItems.Count + i;
+                LootStressTest.ReleaseFromHookServer(_stressHookItems[i], this,
+                    position + HookCargoOffset(cargoIndex), Quaternion.identity);
+            }
+            _stressHookItems.Clear();
+            _hookItems.Clear();
+            _claimedThisThrow.Clear();
+        }
+
         private void ResetHookServer()
         {
             var feet = FeetServer(out var support);

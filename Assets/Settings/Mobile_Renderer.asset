@@ -72,7 +72,7 @@ MonoBehaviour:
   screenSpaceReflectionSettings:
     allow: 1
     reflectEverything: 0
-  allowDirectionalCaustics: 0
+  allowDirectionalCaustics: 1
   heightPrePassSettings:
     enable: 1
     range: 500

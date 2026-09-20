@@ -53,7 +53,7 @@ namespace WaveByWave.Player
             Started.Equals(o.Started) && Duration.Equals(o.Duration);
     }
 
-    public enum HookPhase : byte { Stowed, Flying, Landed, Reeling }
+    public enum HookPhase : byte { Stowed, Flying, Landed, Reeling, Returning }
     public struct EquipmentHookState : INetworkSerializable, IEquatable<EquipmentHookState>
     {
         public HookPhase Phase;
@@ -65,7 +65,8 @@ namespace WaveByWave.Player
         {
             var t = Mathf.Max(0f, (float)(now - Started));
             return Phase == HookPhase.Flying ? Origin + Velocity * t + Vector3.down * (0.5f * gravity * t * t) :
-                Phase == HookPhase.Reeling ? Origin + Velocity * Mathf.Min(t, 0.1f) : Origin;
+                Phase is HookPhase.Reeling or HookPhase.Returning
+                    ? Origin + Velocity * Mathf.Min(t, 0.1f) : Origin;
         }
         public void NetworkSerialize<T>(BufferSerializer<T> s) where T : IReaderWriter
         {

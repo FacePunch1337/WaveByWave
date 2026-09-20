@@ -1,0 +1,114 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &100000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 400000}
+  - component: {fileID: 650000}
+  - component: {fileID: 114000}
+  - component: {fileID: 114001}
+  m_Layer: 4
+  m_Name: Ocean Underwater Area
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &400000
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100000}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &650000
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100000}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 2000, y: 500, z: 2000}
+  m_Center: {x: 0, y: -246, z: 0}
+--- !u!114 &114000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6408098074402d04ca3f532e32c58553, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: sc.stylizedwater3.runtime::StylizedWater3.UnderwaterRendering.UnderwaterArea
+  waterMaterial: {fileID: 2100000, guid: ac035e850020fe84dae1e5dd49abb816, type: 2}
+  boxCollider: {fileID: 650000}
+  waterLevelSource: 3
+  waterLevel: 0
+  waterLevelTransform: {fileID: 0}
+  renderingOrder: 0
+  waterlineOffset: 0.1
+  waterlineThickness: 0.05
+  visualizeWaterLevel: 0
+  underwaterResources: {fileID: 11400000, guid: 185c96ef53e9cf14bbc913f624752e24, type: 2}
+  environmentAudioMixer: {fileID: 0}
+  lowPassCutoffFrequency: 800
+  shadingSettings:
+    fogDensity: 0.25
+    fogStartDistance: 0
+    fogBrightness: 1
+    colorAbsorption: 0.01
+    heightFogDensity: 2
+    heightFogStart: 0.1
+    heightFogEnd: 25
+    heightFogBrightness: 0
+    causticsBrightness: 1
+    translucencyStrength: 1
+    translucencyExponent: 1.78
+  particleEffects: []
+--- !u!114 &114001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5b4328bd9df4cebaedd6c559e768baf, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.OceanUnderwaterCameraFollower
+  underwaterArea: {fileID: 114000}
+  underwaterVolume: {fileID: 650000}
+  horizontalSize: 2000
+  depth: 500
+  surfacePadding: 4
+  lightShaftsPrefab: {fileID: 622543205247736952, guid: 403a9af4ecfc8fa4db7cf2680a4bb3cd, type: 3}
+  planktonPrefab: {fileID: 1647852601757242323, guid: 1547e00092a8c1847b40d67f29c0c299, type: 3}
+  bubblesPrefab: {fileID: 6076097788670278506, guid: 675007a481fc5cf46bbaecbb76571b8f, type: 3}

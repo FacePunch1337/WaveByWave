@@ -569,6 +569,8 @@ namespace WaveByWave.Networking
 
             if (sceneName == GameScenes.Ocean)
                 OceanWorldDirector.BeginOceanLoading();
+            else if (sceneName == GameScenes.Port)
+                OceanWorldDirector.CancelOceanLoading();
 
             var localPlayer = networkManager.SpawnManager.GetLocalPlayerObject();
             if (localPlayer != null && localPlayer.TryGetComponent(out NetworkPlayerController player))

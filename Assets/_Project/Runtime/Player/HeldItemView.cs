@@ -322,7 +322,8 @@ namespace WaveByWave.Player
                 else if (_equipment.Reloading && definition.EquipmentKind == ItemEquipmentKind.Musket)
                 { action = EquipmentAction.MusketReload; elapsed = _equipment.ReloadProgress; }
                 else if (_equipment.ChargingHook) { action = EquipmentAction.HookCharge; elapsed = _equipment.HookCharge; }
-                else if (_equipment.Hook.Phase == HookPhase.Reeling) { action = EquipmentAction.HookReel; elapsed = Time.time % 0.5f; }
+                else if (_equipment.Hook.Phase is HookPhase.Reeling or HookPhase.Returning)
+                { action = EquipmentAction.HookReel; elapsed = Time.time % 0.5f; }
                 else if (_equipment.IsAiming && definition.EquipmentKind == ItemEquipmentKind.Musket) action = EquipmentAction.MusketAim;
             }
             var clip = _equipment.Motions != null ? _equipment.Motions.Get(action) : null;

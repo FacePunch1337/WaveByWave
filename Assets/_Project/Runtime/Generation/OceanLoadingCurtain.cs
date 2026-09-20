@@ -36,6 +36,8 @@ namespace WaveByWave.Generation
             InputCaptured = false;
         }
 
+        public void HideImmediate() => ApplyImmediate(false);
+
         private void Update()
         {
             if (canvasGroup == null)

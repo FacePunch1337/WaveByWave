@@ -12,18 +12,21 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
+  - _CAUSTICS
   - _ENVIRONMENTREFLECTIONS_OFF
   - _INTERSECTION_FOAM
   - _NORMALMAP
   - _RECEIVE_SHADOWS_OFF
+  - _REFRACTION
   - _SURFACE_FOAM_SINGLE
-  - _UNLIT
+  - _TRANSLUCENCY
   - _WAVES
   m_InvalidKeywords:
   - ADVANCED_LIGHTING
   - _CROSSPAN_INTERSECTION
   - _DEPTHEXP_ON
   - _DEPTH_TEX
+  - _ENABLEDIRECTIONALCAUSTICS_ON
   - _FOAM
   - _FOAMON_ON
   - _INTERSECTIONSHARP_ON
@@ -63,7 +66,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _CausticsTex:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 6a6111d7c04a2aa41a70e3595cc26c9c, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _DepthTex:
@@ -156,7 +159,7 @@ Material:
     - _CausticsBrightness: 4.83
     - _CausticsChromance: 1
     - _CausticsDistortion: 0.15
-    - _CausticsOn: 0
+    - _CausticsOn: 1
     - _CausticsSpeed: 0.1
     - _CausticsTiling: 0.5
     - _ColorAbsorption: 0
@@ -175,7 +178,7 @@ Material:
     - _DistanceNormalsTiling: 0.25
     - _DstBlend: 0
     - _EdgeFade: 7.37
-    - _EnableDirectionalCaustics: 0
+    - _EnableDirectionalCaustics: 1
     - _EnvironmentReflections: 1
     - _EnvironmentReflectionsOn: 0
     - _FlatShadingOn: 0
@@ -222,8 +225,8 @@ Material:
     - _IntersectionStyle: 1
     - _IntersectionTiling: 0.16999984
     - _IntersectionWaveDist: 33.28
-    - _LightingMode: 0
-    - _LightingOn: 0
+    - _LightingMode: 2
+    - _LightingOn: 1
     - _Metallic: 0
     - _Metallicness: 0.1
     - _NORMALMAPOn: 1
@@ -256,7 +259,7 @@ Material:
     - _Reflectivity: 1
     - _RefractionAmount: 0.05
     - _RefractionChromaticAberration: 1
-    - _RefractionOn: 0
+    - _RefractionOn: 1
     - _RefractionStrength: 0.267
     - _RimRize: 1
     - _RimTiling: 0.025
@@ -292,15 +295,15 @@ Material:
     - _TEXTURE_INTERSECTIONOn: 0
     - _Texture_IntersectionOn: 1
     - _Tiling: 0.5
-    - _Translucency: 0
+    - _Translucency: 1
     - _TranslucencyCurvatureMask: 0
     - _TranslucencyExp: 4
-    - _TranslucencyOn: 0
+    - _TranslucencyOn: 1
     - _TranslucencyReflectionMask: 0
     - _TranslucencyStrength: 1
     - _TranslucencyStrengthDirect: 0.05
-    - _UnderwaterReflectionStrength: 0.5
-    - _UnderwaterRefractionOffset: 0.2
+    - _UnderwaterReflectionStrength: 1
+    - _UnderwaterRefractionOffset: 0.03
     - _UnderwaterSurfaceSmoothness: 0.8
     - _VertexColorFoam: 0
     - _VertexColorTransparency: 0

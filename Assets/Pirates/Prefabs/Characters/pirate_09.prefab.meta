@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 7c0884db66ec43b4d860c8d006609a9c
+timeCreated: 1523284662
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Characters/pirate_09.prefab
+  uploadId: 247603

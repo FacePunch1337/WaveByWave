@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: de5e3af0e9cf5584ca4b32b9d798ca7c
+timeCreated: 1522920433
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Clothes/Coat_03.prefab
+  uploadId: 247603

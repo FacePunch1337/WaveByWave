@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: b60fdad6c2432564689670352e25d3e4
+timeCreated: 1522918158
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Materials/Clothes/gloves_02.mat
+  uploadId: 247603

@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: be8cf39ad20cdbb4c89c260b480e987a
+timeCreated: 1522933885
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Weapons/Sword_03.prefab
+  uploadId: 247603

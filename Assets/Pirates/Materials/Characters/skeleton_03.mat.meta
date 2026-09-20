@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 9cc24e5c67ad5f44b96d742de34ad5a7
+timeCreated: 1522851913
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Materials/Characters/skeleton_03.mat
+  uploadId: 247603

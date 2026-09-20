@@ -10,6 +10,37 @@ namespace WaveByWave.Player
         void ReceiveEquipmentHitServer(float damage, Vector3 attackerPosition, bool canBlock = true);
     }
 
+    public static class EquipmentDamageReceiverUtility
+    {
+        public static bool TryGet(Collider collider, out IEquipmentDamageReceiver receiver,
+            out MonoBehaviour behaviour)
+        {
+            receiver = null;
+            behaviour = null;
+            if (collider == null)
+                return false;
+
+            var components = collider.GetComponentsInParent<MonoBehaviour>(true);
+            // PlayerEquipment owns directional blocking, so it gets first refusal over the
+            // NetworkHealth component living on the same player object.
+            foreach (var component in components)
+                if (component is PlayerEquipment playerEquipment)
+                {
+                    receiver = playerEquipment;
+                    behaviour = playerEquipment;
+                    return true;
+                }
+            foreach (var component in components)
+                if (component is IEquipmentDamageReceiver candidate)
+                {
+                    receiver = candidate;
+                    behaviour = component;
+                    return true;
+                }
+            return false;
+        }
+    }
+
     public struct EquipmentMotionState : INetworkSerializable, IEquatable<EquipmentMotionState>
     {
         public EquipmentAction Action;

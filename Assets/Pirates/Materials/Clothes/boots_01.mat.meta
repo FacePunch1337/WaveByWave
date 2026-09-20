@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: b659ea25ebaefc14cbb7b296fd721b4c
+timeCreated: 1522918158
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Materials/Clothes/boots_01.mat
+  uploadId: 247603

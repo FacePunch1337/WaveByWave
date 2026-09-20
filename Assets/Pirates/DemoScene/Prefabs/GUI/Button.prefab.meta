@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: fd22926a07aec934f81bb20899df4707
+timeCreated: 1524212249
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/DemoScene/Prefabs/GUI/Button.prefab
+  uploadId: 247603

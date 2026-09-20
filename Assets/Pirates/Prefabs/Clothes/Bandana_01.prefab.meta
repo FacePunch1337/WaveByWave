@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: d52b5de537f04b2478e532e3137521f7
+timeCreated: 1522920248
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Clothes/Bandana_01.prefab
+  uploadId: 247603

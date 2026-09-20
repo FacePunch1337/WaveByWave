@@ -5,6 +5,7 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
+using WaveByWave.Combat;
 using WaveByWave.Items;
 using WaveByWave.Ships;
 using WaveByWave.UI;
@@ -21,7 +22,7 @@ namespace WaveByWave.Player
     [Serializable] public sealed class BucketWaterEvent : UnityEvent<Vector3, float> { }
 
     [DefaultExecutionOrder(9600)]
-    [RequireComponent(typeof(PlayerInventory), typeof(NetworkPlayerController))]
+    [RequireComponent(typeof(PlayerInventory), typeof(NetworkPlayerController), typeof(NetworkHealth))]
     public sealed class PlayerEquipment : NetworkBehaviour, IEquipmentDamageReceiver
     {
         [SerializeField] private EquipmentMotionSet motions;
@@ -34,6 +35,8 @@ namespace WaveByWave.Player
         [SerializeField, Min(0f)] private float staminaRecovery = 18f, blockDrainPerSecond = 7f, swingStamina = 12f;
         [SerializeField, Min(0f)] private float successfulBlockStamina = 15f;
         [SerializeField, Min(0.1f)] private float swordRange = 2.2f, swordSwingDuration = 0.55f;
+        [Tooltip("Тестовый режим: одно нажатие ПКМ переключает блок мечом или прицеливание мушкетом.")]
+        [SerializeField] private bool toggleSecondaryActionForTesting;
         [Header("Мушкет")]
         [SerializeField, Min(1f)] private float bulletSpeed = 95f, bulletGravity = 9.81f;
         [SerializeField, Min(0.1f)] private float reloadDuration = 2.5f;
@@ -71,12 +74,14 @@ namespace WaveByWave.Player
         private readonly Dictionary<int, EquipmentProjectileVisual> _bulletVisuals = new();
         private NetworkPlayerController _player;
         private PlayerInventory _inventory;
+        private NetworkHealth _health;
         private HeldItemView _view;
         private EquipmentWaterQuery _water;
         private CapsuleCollider _combatHitbox;
         private double _cooldown, _recoverAfter, _inputHeartbeat, _serverHeartbeat, _chargeStarted = -1d;
         private double _hookSampleTime;
         private bool _localBlock, _localAim, _localReel, _localCharge, _sentCharge;
+        private bool _secondaryActionLatched;
         private float _localChargeStarted;
         private int _localSlot = -1, _serverSlot = -1, _nextBullet;
         private ItemDefinition _serverItem;
@@ -148,6 +153,7 @@ namespace WaveByWave.Player
         {
             _player = GetComponent<NetworkPlayerController>();
             _inventory = GetComponent<PlayerInventory>();
+            _health = GetComponent<NetworkHealth>();
         }
         public override void OnNetworkSpawn()
         {
@@ -243,6 +249,8 @@ namespace WaveByWave.Player
             {
                 if (_localSlot != _inventory.SelectedIndex || _localItem != item || _localBlock || _localAim || _localReel || _localCharge)
                 {
+                    if (_localSlot != _inventory.SelectedIndex || _localItem != item || !enabledInput)
+                        _secondaryActionLatched = false;
                     _localSlot = _inventory.SelectedIndex;
                     _localItem = item;
                     _predictedMotion = default;
@@ -260,8 +268,15 @@ namespace WaveByWave.Player
                 }
                 return;
             }
-            var block = item.EquipmentKind == ItemEquipmentKind.Sword && mouse.rightButton.isPressed;
-            var aim = item.EquipmentKind == ItemEquipmentKind.Musket && mouse.rightButton.isPressed;
+            var hasSecondaryAction = item.EquipmentKind == ItemEquipmentKind.Sword ||
+                                     item.EquipmentKind == ItemEquipmentKind.Musket;
+            if (toggleSecondaryActionForTesting && hasSecondaryAction && mouse.rightButton.wasPressedThisFrame)
+                _secondaryActionLatched = !_secondaryActionLatched;
+            if (!toggleSecondaryActionForTesting)
+                _secondaryActionLatched = false;
+            var secondaryHeld = toggleSecondaryActionForTesting ? _secondaryActionLatched : mouse.rightButton.isPressed;
+            var block = item.EquipmentKind == ItemEquipmentKind.Sword && secondaryHeld;
+            var aim = item.EquipmentKind == ItemEquipmentKind.Musket && secondaryHeld;
             var reel = item.EquipmentKind == ItemEquipmentKind.Hook && _hook.Value.Phase != HookPhase.Stowed &&
                 _hook.Value.Phase != HookPhase.Flying && mouse.leftButton.isPressed;
             if (item.EquipmentKind == ItemEquipmentKind.Hook && _hook.Value.Phase == HookPhase.Stowed)
@@ -515,7 +530,8 @@ namespace WaveByWave.Player
         public void ReceiveEquipmentHitServer(float damage, Vector3 attackerPosition, bool canBlock = true)
         {
             if (!IsServer || !Finite(damage) || damage <= 0f) return;
-            if (!canBlock || !TryBlockHitServer(damage, attackerPosition)) _inventory.ApplyDamageServer(damage);
+            if (!canBlock || !TryBlockHitServer(damage, attackerPosition))
+                _health?.ApplyDamageServer(damage, attackerPosition);
         }
         private void SwordHitServer(Vector3 origin, Vector3 direction, float damage)
         {
@@ -527,12 +543,10 @@ namespace WaveByWave.Player
                 if (target.GetComponentInParent<NetworkPlayerController>() == _player) continue;
                 var toward = target.ClosestPoint(origin + direction * swordRange * 0.7f) - origin;
                 if (toward.sqrMagnitude > swordRange * swordRange || Vector3.Dot(toward.normalized, direction) < 0.35f) continue;
-                foreach (var component in target.GetComponentsInParent<MonoBehaviour>())
-                {
-                    if (component is not IEquipmentDamageReceiver receiver || !_swordTargets.Add(component)) continue;
-                    if (!HasSolidBetween(origin, target.bounds.center, target))
-                        receiver.ReceiveEquipmentHitServer(damage, origin);
-                }
+                if (!EquipmentDamageReceiverUtility.TryGet(target, out var receiver, out var component) ||
+                    !_swordTargets.Add(component)) continue;
+                if (!HasSolidBetween(origin, target.bounds.center, target))
+                    receiver.ReceiveEquipmentHitServer(damage, origin);
             }
         }
         private bool TryBucketSource(Vector3 origin, Vector3 direction, out IBucketWaterSource source, out Vector3 point)
@@ -593,9 +607,8 @@ namespace WaveByWave.Player
                         water = water && (!solid || waterFraction < solidFraction);
                         var point = water ? waterPoint : solid ? hit.point : to;
                         if (solid && !water)
-                            foreach (var component in hit.collider.GetComponentsInParent<MonoBehaviour>())
-                                if (component is IEquipmentDamageReceiver receiver)
-                                { receiver.ReceiveEquipmentHitServer(b.Damage, b.Origin, false); break; }
+                            if (EquipmentDamageReceiverUtility.TryGet(hit.collider, out var receiver, out _))
+                                receiver.ReceiveEquipmentHitServer(b.Damage, b.Origin, false);
                         BulletImpactClientRpc(b.Id, point, water ? Vector3.up : solid ? hit.normal : Vector3.up,
                             water, solid || water, b.Simulated + step * (water ? waterFraction : solid ? solidFraction : 1f));
                         finished = true; break;

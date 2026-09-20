@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 15e4d907d5a25b24c985ad900998c36e
+timeCreated: 1523008299
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Clothes/Hook_Left.prefab
+  uploadId: 247603

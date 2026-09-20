@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 4431ad3227728b440b4ddae5370e8bdc
+timeCreated: 1522920199
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Clothes/Hat_skull_02.prefab
+  uploadId: 247603

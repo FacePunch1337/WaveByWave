@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: d148f392e11e7114d94266255b78c8cc
+timeCreated: 1523008064
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Clothes/Wooden_Leg_Left.prefab
+  uploadId: 247603

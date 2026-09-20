@@ -6,6 +6,7 @@ using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using WaveByWave.Combat;
 using WaveByWave.Items;
 using WaveByWave.Networking;
 using WaveByWave.Ships;
@@ -135,6 +136,7 @@ namespace WaveByWave.Player
         private Quaternion _ownerWorldPresentationRotationOffset = Quaternion.identity;
         private PhysicsMaterial _motorPhysicsMaterial;
         private bool _useKccMotor;
+        private NetworkHealth _health;
 
         // The ordinary OwnerNetworkTransform remains responsible for movement replication.
         // This small parallel state keeps presentation relative to the supporting platform,
@@ -180,6 +182,7 @@ namespace WaveByWave.Player
             _kccMotor ??= GetComponent<KinematicCharacterMotor>();
             animationSync ??= GetComponent<PlayerAnimationSync>();
             inventory ??= GetComponent<PlayerInventory>();
+            _health = GetComponent<NetworkHealth>();
             _networkTransform = GetComponent<OwnerNetworkTransform>();
             cameraTarget ??= transform;
             firstPersonHiddenRoot ??= transform.Find("Visual");
@@ -333,6 +336,12 @@ namespace WaveByWave.Player
             _interactionInputBlockedThisFrame = true;
             if (!IsOwner || !IsSpawned)
                 return;
+
+            if (_health != null && _health.IsDead)
+            {
+                ClearMovementInput();
+                return;
+            }
 
             if (Keyboard.current == null)
             {
@@ -592,6 +601,40 @@ namespace WaveByWave.Player
                 _moveInput.magnitude * (speed / Mathf.Max(0.01f, moveSpeed)),
                 _isGrounded,
                 Vector3.Dot(currentVelocity, characterUp));
+        }
+
+        public void ApplyDamageKnockback(Vector3 velocityChange)
+        {
+            if (!IsOwner || !_useKccMotor || _kccMotor == null || _health != null && _health.IsDead)
+                return;
+            if (velocityChange.sqrMagnitude < 0.0001f)
+                return;
+            _kccMotor.ForceUnground();
+            _kccMotor.BaseVelocity += velocityChange;
+            _isGrounded = false;
+            _platform = null;
+            _airborneFromPlatform = true;
+        }
+
+        public void SetDamageAliveState(bool alive)
+        {
+            if (!IsOwner || !IsSpawned)
+                return;
+            ClearMovementInput();
+            if (!alive)
+            {
+                StopShipControlInputsForMenu();
+                ResetAnchorInteraction();
+                _activeHelm = null;
+                _activeSailControl = null;
+                _activeMastControl = null;
+                _platform = null;
+                _airborneFromPlatform = false;
+                SetOwnerPhysicsSimulation(false);
+                ResetPresentationPose();
+            }
+            else if (!_sceneTransitioning)
+                SetOwnerPhysicsSimulation(true);
         }
 
         public void PostGroundingUpdate(float deltaTime)

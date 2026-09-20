@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: cbd3867c7dcd0104484a1b434b8272c5
+timeCreated: 1522920896
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Clothes/Boot_Left_04.prefab
+  uploadId: 247603

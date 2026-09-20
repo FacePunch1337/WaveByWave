@@ -1,0 +1,20 @@
+fileFormatVersion: 2
+guid: 3b03a3cc07af9d748a989be48e91dc03
+timeCreated: 1524651631
+licenseType: Store
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/DemoScene/Scripts/Character/ItemsConfiguration.cs
+  uploadId: 247603

@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 681173d5a8486714d8d654c9fd3e0145
+timeCreated: 1523269798
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Characters/skeleton_05.prefab
+  uploadId: 247603

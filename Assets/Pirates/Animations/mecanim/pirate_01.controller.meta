@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 5cdf3a0068ca67c4eb865e114906f523
+timeCreated: 1522848820
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Animations/mecanim/pirate_01.controller
+  uploadId: 247603

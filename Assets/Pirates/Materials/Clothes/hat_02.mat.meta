@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 832934d632b60064a87575829e2c31e5
+timeCreated: 1522919518
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Materials/Clothes/hat_02.mat
+  uploadId: 247603

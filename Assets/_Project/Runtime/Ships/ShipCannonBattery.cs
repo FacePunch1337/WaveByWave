@@ -315,7 +315,8 @@ namespace WaveByWave.Ships
                     var player = overlap.GetComponentInParent<NetworkPlayerController>();
                     if (player != null && player.OwnerClientId == ball.Shooter) continue;
                     overlap.GetComponentInParent<ShipCannonBattery>()?.ApplyDamageServer(ball.Damage);
-                    overlap.GetComponentInParent<PlayerInventory>()?.ApplyDamageServer(ball.Damage);
+                    if (EquipmentDamageReceiverUtility.TryGet(overlap, out var receiver, out _))
+                        receiver.ReceiveEquipmentHitServer(ball.Damage, ball.Origin, false);
                     ImpactClientRpc(ball.Id, overlap.ClosestPoint(ball.Origin), -ball.Velocity.normalized,
                         false, true, ball.Started);
                     return true;
@@ -364,7 +365,8 @@ namespace WaveByWave.Ships
                 if (collider != null && !water)
                 {
                     collider.GetComponentInParent<ShipCannonBattery>()?.ApplyDamageServer(ball.Damage);
-                    collider.GetComponentInParent<PlayerInventory>()?.ApplyDamageServer(ball.Damage);
+                    if (EquipmentDamageReceiverUtility.TryGet(collider, out var receiver, out _))
+                        receiver.ReceiveEquipmentHitServer(ball.Damage, ball.Previous, false);
                 }
                 var previousAge = (ball.SampleIndex - 1) * CollisionSampleStep;
                 var impactTime = ball.Started + previousAge + (age - previousAge) * fraction;

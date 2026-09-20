@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: c2868d41159bf434f9c7e14202b2c599
+timeCreated: 1522920463
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Clothes/Eye_patch.prefab
+  uploadId: 247603

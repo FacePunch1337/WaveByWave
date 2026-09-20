@@ -3,6 +3,7 @@ using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using WaveByWave.Combat;
 using WaveByWave.Items;
 using WaveByWave.Ships;
 
@@ -19,7 +20,6 @@ namespace WaveByWave.Player
             "cutlass", "musket", "hook", "bucket", "shovel", "cannonball", "plank", "food"
         };
         [SerializeField] private int[] startingItemAmounts = { 1, 1, 1, 1, 1, 20, 5, 5 };
-        private readonly NetworkVariable<float> _health = new(100f);
         private readonly NetworkVariable<int> _equippedSlot = new();
 
         private NetworkList<InventorySlotState> _slots;
@@ -27,6 +27,7 @@ namespace WaveByWave.Player
         private int _serverSelectedIndex;
         private uint _selectionRevision;
         private uint _serverSelectionRevision;
+        private NetworkHealth _health;
 
         public event Action Changed;
         public int Capacity => capacity;
@@ -36,11 +37,13 @@ namespace WaveByWave.Player
         public uint SelectionRevision => _selectionRevision;
         public ItemCatalog Catalog => catalog;
         public int Count => _slots?.Count ?? 0;
-        public float Health => _health.Value;
+        public float Health => _health != null ? _health.CurrentHealth : 0f;
+        public float MaximumHealth => _health != null ? _health.MaximumHealth : 100f;
 
         private void Awake()
         {
             _slots = new NetworkList<InventorySlotState>();
+            _health = GetComponent<NetworkHealth>();
         }
 
         public override void OnNetworkSpawn()
@@ -150,8 +153,13 @@ namespace WaveByWave.Player
 
         public void ApplyDamageServer(float amount)
         {
-            if (IsServer && !float.IsNaN(amount) && !float.IsInfinity(amount))
-                _health.Value = Mathf.Max(0f, _health.Value - Mathf.Max(0f, amount));
+            ApplyDamageServer(amount, transform.position - transform.forward);
+        }
+
+        public void ApplyDamageServer(float amount, Vector3 sourcePosition)
+        {
+            if (IsServer && _health != null)
+                _health.ApplyDamageServer(amount, sourcePosition);
         }
 
         [ServerRpc]
@@ -168,8 +176,9 @@ namespace WaveByWave.Player
                 return;
             if (definition.Category == ItemCategory.Supply && definition.SupplyKind == SupplyKind.Food)
             {
-                if (_health.Value < 100f && TryConsumeServer(selectedIndex, 1, out _))
-                    _health.Value = Mathf.Min(100f, _health.Value + definition.Potency);
+                if (_health != null && _health.CurrentHealth < _health.MaximumHealth &&
+                    TryConsumeServer(selectedIndex, 1, out _))
+                    _health.HealServer(definition.Potency);
                 return;
             }
             var controller = player.GetComponent<NetworkPlayerController>();

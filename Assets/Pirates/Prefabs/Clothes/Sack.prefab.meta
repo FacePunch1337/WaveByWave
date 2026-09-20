@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 8cba5020dae077c449b63261543b9aae
+timeCreated: 1522920489
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Clothes/Sack.prefab
+  uploadId: 247603

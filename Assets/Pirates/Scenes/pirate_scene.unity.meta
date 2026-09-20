@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: d92548bc456544741ab2bf69b5e0f3a2
+timeCreated: 1522848866
+licenseType: Store
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Scenes/pirate_scene.unity
+  uploadId: 247603

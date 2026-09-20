@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 08e3318eec5b2154d9b5cfc6f4622121
+timeCreated: 1522919518
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Materials/Parrots/parrot_02.mat
+  uploadId: 247603

@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 9882b80119942c74ebfa60fe3f10c66d
+timeCreated: 1522919678
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Clothes/Hat_01.prefab
+  uploadId: 247603

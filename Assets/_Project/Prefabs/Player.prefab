@@ -175,6 +175,7 @@ GameObject:
   - component: {fileID: 6238248586613136058}
   - component: {fileID: 5343483037834142729}
   - component: {fileID: 9300074000}
+  - component: {fileID: 9300074001}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -489,6 +490,7 @@ MonoBehaviour:
   successfulBlockStamina: 15
   swordRange: 2.2
   swordSwingDuration: 0.55
+  toggleSecondaryActionForTesting: 0
   bulletSpeed: 95
   bulletGravity: 9.81
   reloadDuration: 2.5
@@ -515,6 +517,27 @@ MonoBehaviour:
   hitLayers:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &9300074001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3701689364900276936}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c91c335b19f141c49a47e26c09dd6151, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Combat.NetworkHealth
+  ShowTopMostFoldoutHeaderGroup: 1
+  maximumHealth: 100
+  respawnDelay: 3
+  respawnAfterDeath: 1
+  knockbackSpeed: 7
+  knockbackLift: 2.5
+  flashDuration: 0.12
+  visualRoot: {fileID: 5745219096532022790}
+  worldBarHeight: 2.15
 --- !u!1 &5659961861333063538
 GameObject:
   m_ObjectHideFlags: 0

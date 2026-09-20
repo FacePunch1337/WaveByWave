@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 87cdf0c1cb0eca84695c174fb4ee757f
+timeCreated: 1523015482
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Hair/NPC_Hair_003_06.prefab
+  uploadId: 247603

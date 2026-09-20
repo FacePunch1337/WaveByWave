@@ -48,6 +48,13 @@ namespace WaveByWave.Networking
 
         private void OnClientConnected(ulong clientId) => StartCoroutine(PlaceClientWhenReady(clientId));
 
+        public void RespawnPlayerServer(NetworkPlayerController player)
+        {
+            if (player == null || _manager == null || !_manager.IsServer || !player.IsSpawned)
+                return;
+            StartCoroutine(PlaceClientWhenReady(player.OwnerClientId));
+        }
+
         private void OnLoadComplete(ulong clientId, string sceneName, LoadSceneMode loadSceneMode)
         {
             if (sceneName == gameObject.scene.name)

@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 6b1976d7487e21745bd6f44572abc7b1
+timeCreated: 1522851886
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Materials/Characters/pirat_02.mat
+  uploadId: 247603

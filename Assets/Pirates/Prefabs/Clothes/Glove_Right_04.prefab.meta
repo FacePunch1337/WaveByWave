@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 0db34079e371d4b4b8a4d06f13f46226
+timeCreated: 1522932960
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 116307
+  packageName: Animated Lowpoly Pirates
+  packageVersion: 1.1
+  assetPath: Assets/Pirates/Prefabs/Clothes/Glove_Right_04.prefab
+  uploadId: 247603

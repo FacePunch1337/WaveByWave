@@ -219,7 +219,7 @@ namespace WaveByWave.Customization
             current.name = prefabs[index - 1].name;
             current.transform.localPosition = new Vector3(-0.005f, 0f, 0f);
             current.transform.localRotation = new Quaternion(-0.5f, 0.5f, 0.5f, 0.5f);
-            current.transform.localScale = Vector3.one * 1.7f;
+            current.transform.localScale = Vector3.one;
             // The source pack authors all head-slot attachments in Blender axes. Hair
             // has one more corrected child, while hats and bandanas render on the root.
             if (current.GetComponent<Renderer>() != null)
@@ -238,7 +238,7 @@ namespace WaveByWave.Customization
             current.name = prefabs[index - 1].name;
             current.transform.localPosition = Vector3.zero;
             current.transform.localRotation = Quaternion.identity;
-            current.transform.localScale = Vector3.one * 1.7f;
+            current.transform.localScale = Vector3.one;
             DisablePhysics(current);
             RetargetSkinnedMeshes(current);
         }

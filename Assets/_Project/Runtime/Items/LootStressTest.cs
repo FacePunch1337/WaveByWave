@@ -273,14 +273,30 @@ namespace WaveByWave.Items
         public void OnUpdate(ref SystemState state)
         {
             var ecb = new EntityCommandBuffer(Allocator.Temp);
+            var hasInitial = false;
+            var initial = default(LootStressCommand);
+            var deltas = new NativeList<LootStressDeltaCommand>(Allocator.Temp);
             foreach (var (command, entity) in SystemAPI.Query<RefRO<LootStressCommand>>()
                          .WithAll<ReceiveRpcCommandRequest>().WithEntityAccess())
-            { LootStressPresentation.Apply(state.World, command.ValueRO); ecb.DestroyEntity(entity); }
+            {
+                initial = command.ValueRO;
+                hasInitial = true;
+                ecb.DestroyEntity(entity);
+            }
             foreach (var (delta, entity) in SystemAPI.Query<RefRO<LootStressDeltaCommand>>()
                          .WithAll<ReceiveRpcCommandRequest>().WithEntityAccess())
-            { LootStressPresentation.ApplyDelta(delta.ValueRO); ecb.DestroyEntity(entity); }
+            {
+                deltas.Add(delta.ValueRO);
+                ecb.DestroyEntity(entity);
+            }
             ecb.Playback(state.EntityManager);
             ecb.Dispose();
+
+            // RenderMeshUtility performs structural changes. Apply presentation only after
+            // every SystemAPI query has been fully disposed and its receive entities removed.
+            if (hasInitial) LootStressPresentation.Apply(state.World, initial);
+            for (var i = 0; i < deltas.Length; i++) LootStressPresentation.ApplyDelta(deltas[i]);
+            deltas.Dispose();
             LootStressPresentation.UpdateDynamicItems();
         }
     }

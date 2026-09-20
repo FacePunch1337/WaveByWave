@@ -637,7 +637,8 @@ namespace WaveByWave.Editor
             ocean.name = "Infinite Ocean (Stylized Water 3)";
             ocean.transform.position = Vector3.zero;
 
-            var waterMaterial = AssetDatabase.LoadAssetAtPath<Material>(
+            var oceanFollow = ocean.GetComponent<OceanFollowBehaviour>();
+            var waterMaterial = oceanFollow != null ? oceanFollow.material : AssetDatabase.LoadAssetAtPath<Material>(
                 "Assets/Stylized Water 3/Materials/StylizedWater3_Ocean.mat");
             CreateUnderwaterArea(waterMaterial);
 
@@ -712,11 +713,19 @@ namespace WaveByWave.Editor
             var area = areaObject.AddComponent<UnderwaterArea>();
             area.waterMaterial = waterMaterial;
             area.boxCollider = box;
-            area.waterLevelSource = UnderwaterArea.WaterLevelSource.FixedValue;
+            area.waterLevelSource = UnderwaterArea.WaterLevelSource.Ocean;
             area.waterLevel = 0f;
             area.underwaterResources = AssetDatabase.LoadAssetAtPath<UnderwaterResources>(
                 "Assets/Stylized Water 3/Runtime/Underwater/UnderwaterResources.asset");
             area.shadingSettings = new UnderwaterArea.ShadingSettings();
+            var followerType = Type.GetType(
+                "WaveByWave.Generation.OceanUnderwaterCameraFollower, WaveByWave.Runtime");
+            if (followerType != null)
+            {
+                var follower = areaObject.AddComponent(followerType);
+                SetObjectReference(follower, "underwaterArea", area);
+                SetObjectReference(follower, "underwaterVolume", box);
+            }
         }
 
         private static void ConfigureWaterRenderer()

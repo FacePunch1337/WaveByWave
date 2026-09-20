@@ -27,7 +27,7 @@
 - `Assets/_Project/Data/Ocean/ChestLoot.asset` — отдельная таблица для каждого `Tier`, веса предметов, число выпадений, количество предметов в выпадении, длительность удержания E, тряски, сила разлёта и префаб исчезновения. Лимит одного открытия: до 24 выпадений и 48 отдельных предметов, чтобы ошибочная настройка не подвесила сервер.
 - `Assets/_Project/Data/Ocean/Item_chest_0.asset` … `Item_chest_4.asset` — пять предметов-сундуков. Поле `Rarity` задаёт и тир таблицы, и цвет редкости. Для новой таблицы можно создать собственный `Chest Loot Table` и назначить в поле `Chest Loot` предмета.
 - `Assets/_Project/Prefabs/Items/LootChest.prefab` — заменяемая модель сундука: один MeshFilter/MeshRenderer. Стандартную ротацию на земле менять в `Resting Euler Angles` соответствующего ItemDefinition.
-- `Assets/_Project/Prefabs/Generation/BuriedChestCross.prefab` и материал `BuriedCross.mat` — размер, цвет и толщина красной проецируемой отметки. Нужны Depth Texture у камеры и Copy Depth Mode = After Opaques у URP Renderer; в обоих профилях проекта это уже настроено.
+- `Assets/_Project/Prefabs/Generation/BuriedChestCross.prefab` — размер и толщина красной отметки, `BuriedCross.mat` — её цвет. Компонент `BuriedChestMarker` строит один X-меш непосредственно по поверхности острова, поэтому отметка не окрашивает лежащие рядом предметы и декор.
 - `Assets/_Project/Resources/ChestHoldProgress.prefab` — внешний вид полоски открытия в существующей подсказке предмета.
 
 Визуальные объекты и эффекты берутся из этих префабов. Генерируется только непосредственно изменяемая геометрия острова. Меню `Tools / Wave by Wave / Create Ocean Generation Assets` восстанавливает отсутствующие стартовые ассеты, не перезаписывая существующие настройки и модели.

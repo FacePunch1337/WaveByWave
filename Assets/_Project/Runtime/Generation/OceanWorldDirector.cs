@@ -18,7 +18,7 @@ namespace WaveByWave.Generation
     public sealed class OceanWorldDirector : MonoBehaviour
     {
         private const string Channel = "WaveByWave.Ocean.v1";
-        private enum Kind : byte { Request, Create, Dig, Remove, Marker, RemoveMarker, Reset, Complete }
+        private enum Kind : byte { Request, Create, Dig, Remove, Marker, RemoveMarker, Reset, Complete, HideMarker }
         private struct Packet : INetworkSerializable
         {
             public Kind Kind;
@@ -42,6 +42,7 @@ namespace WaveByWave.Generation
             public readonly List<Packet> Digs = new();
             public readonly Dictionary<int, Packet> Markers = new();
             public readonly Dictionary<int, GameObject> MarkerViews = new();
+            public readonly HashSet<int> HiddenMarkers = new();
             public bool Populate, Populated, Test, ScenePlaced;
         }
         public static OceanWorldDirector Instance { get; private set; }
@@ -54,6 +55,7 @@ namespace WaveByWave.Generation
         private string _scene;
         private bool _wasListening, _snapshotReady;
         private bool _initialGenerationStarted, _loadingComplete;
+        private int _initialTargetCount;
         private float _nextLoot, _nextIslands, _nextRequest;
         private int _nextIslandId = 1;
         private Unity.Mathematics.Random _random;
@@ -63,7 +65,9 @@ namespace WaveByWave.Generation
         private readonly List<int> _removeIds = new();
         private readonly Queue<(ulong Client, Packet Packet)> _outgoing = new();
         private readonly Dictionary<ulong, float> _snapshotRequests = new();
+        private readonly HashSet<ulong> _pendingSnapshotClients = new();
         private readonly HashSet<int> _initialIslands = new();
+        private readonly List<Vector3> _initialPlayerCenters = new();
         private readonly RaycastHit[] _surfaceHits = new RaycastHit[64];
         private OceanLoadingCurtain _loadingCurtain;
 
@@ -121,6 +125,8 @@ namespace WaveByWave.Generation
             {
                 ClearWorld(IsAuthority); _scene = scene; _snapshotReady = false; _nextRequest = 0f;
                 _initialGenerationStarted = false; _loadingComplete = scene != GameScenes.Ocean;
+                _initialTargetCount = scene == GameScenes.Ocean && settings.GenerateIslands
+                    ? Mathf.Clamp(settings.InitialIslandCount, 0, 32) : 0;
                 _nextLoot = Time.unscaledTime + 1f; _nextIslands = Time.unscaledTime + 0.1f;
                 if (scene == GameScenes.Ocean) _loadingCurtain?.Show(0, 0);
                 else _loadingCurtain?.Hide();
@@ -147,9 +153,9 @@ namespace WaveByWave.Generation
                     {
                         _nextIslands = Time.unscaledTime + Mathf.Max(0.1f, settings.IslandStreamingInterval);
                         _ships = FindObjectsByType<NetworkShipController>(FindObjectsSortMode.None);
-                        if (!_initialGenerationStarted && _ships.Length > 0)
+                        if (!_loadingComplete)
                             GenerateInitialIslands();
-                        else if (_loadingComplete)
+                        else
                             MaintainIslands();
                         PruneLoot();
                     }
@@ -221,7 +227,7 @@ namespace WaveByWave.Generation
             _initialIslands.Remove(id);
             Apply(packet); Broadcast(packet);
         }
-        public bool DigServer(ProceduralIsland island, Vector3 point, Vector3 normal)
+        public bool DigServer(ProceduralIsland island, Vector3 point, Vector3 normal, Vector3 digDirection)
         {
             if (!IsAuthority || island == null || !_islands.TryGetValue(island.Id, out var record)) return false;
             var center = point - normal.normalized * settings.DigPenetration;
@@ -229,7 +235,44 @@ namespace WaveByWave.Generation
             if (density.y >= density.x || density.x < -settings.DigRadius) return false;
             var packet = new Packet { Kind = Kind.Dig, Id = island.Id, Revision = record.Digs.Count + 1,
                 Position = island.transform.InverseTransformPoint(center), Radius = settings.DigRadius, Scene = CurrentScene() };
-            record.Digs.Add(packet); Apply(packet); Broadcast(packet); return true;
+            record.Digs.Add(packet); Apply(packet); Broadcast(packet);
+            HideMarkerHitFromAbove(record, point, normal, digDirection);
+            return true;
+        }
+
+        private void HideMarkerHitFromAbove(IslandRecord record, Vector3 point, Vector3 normal,
+            Vector3 digDirection)
+        {
+            // The decal is a pair of diagonal strokes. Match the actual visible cross rather
+            // than hiding every marker somewhere inside the shovel's circular dig radius.
+            if (normal.y < 0.35f || digDirection.sqrMagnitude < 0.0001f ||
+                digDirection.normalized.y >= -0.05f)
+                return;
+            foreach (var pair in record.Markers)
+            {
+                if (record.HiddenMarkers.Contains(pair.Key)) continue;
+                var markerPosition = pair.Value.Position;
+                if (Mathf.Abs(point.y - markerPosition.y) > 0.4f) continue;
+                var hit = false;
+                if (record.MarkerViews.TryGetValue(pair.Key, out var marker) && marker != null)
+                {
+                    var surfaceMarker = marker.GetComponent<BuriedChestMarker>();
+                    hit = surfaceMarker != null && surfaceMarker.ContainsStroke(point);
+                }
+                else
+                {
+                    var local = new Vector2(point.x - markerPosition.x, point.z - markerPosition.z);
+                    var edge = Mathf.Max(Mathf.Abs(local.x), Mathf.Abs(local.y));
+                    var stroke = Mathf.Min(Mathf.Abs(local.x - local.y),
+                        Mathf.Abs(local.x + local.y)) * 0.70710678f;
+                    hit = edge <= 0.515f && stroke <= 0.085f;
+                }
+                if (!hit) continue;
+                var hidden = new Packet { Kind = Kind.HideMarker, Id = record.Island.Id,
+                    ChestId = pair.Key, Scene = CurrentScene() };
+                Apply(hidden); Broadcast(hidden);
+                return;
+            }
         }
         public bool IsChestExposed(int islandId, Vector3 position)
         {
@@ -323,17 +366,48 @@ namespace WaveByWave.Generation
         }
         private void GenerateInitialIslands()
         {
-            _initialGenerationStarted = true;
-            if (!settings.GenerateIslands || _ships.Length == 0)
+            _initialTargetCount = settings.GenerateIslands
+                ? Mathf.Clamp(settings.InitialIslandCount, 0, 32) : 0;
+            if (_initialTargetCount == 0)
+            {
+                _initialGenerationStarted = true;
+                return;
+            }
+            if (_ships.Length == 0 || !CollectInitialPlayerCenters())
                 return;
 
-            var target = Mathf.Clamp(settings.IslandsPerShip, 1, 16) * _ships.Length;
-            for (var n = CountStreamingIslands(); n < target; n++)
+            _initialGenerationStarted = true;
+            var missing = _initialTargetCount - _initialIslands.Count;
+            for (var n = 0; n < missing; n++)
             {
-                if (!TryGenerateIsland(settings.InitialIslandRadius, out var id))
+                var center = _initialPlayerCenters[(_initialIslands.Count + n) % _initialPlayerCenters.Count];
+                if (!TryGenerateIslandAt(center, settings.InitialIslandRadius, out var id))
                     continue;
                 _initialIslands.Add(id);
             }
+        }
+
+        private bool CollectInitialPlayerCenters()
+        {
+            _initialPlayerCenters.Clear();
+            if (_manager == null || !_manager.IsServer)
+                return false;
+            foreach (var client in _manager.ConnectedClientsList)
+            {
+                var player = client.PlayerObject;
+                if (player == null) continue;
+                var position = player.transform.position;
+                var nearOceanShip = false;
+                foreach (var ship in _ships)
+                {
+                    if (ship == null || !ship.IsSpawned ||
+                        (ship.transform.position - position).sqrMagnitude > 100f * 100f) continue;
+                    nearOceanShip = true;
+                    break;
+                }
+                if (nearOceanShip) _initialPlayerCenters.Add(position);
+            }
+            return _initialPlayerCenters.Count > 0;
         }
 
         private void MaintainIslands()
@@ -346,7 +420,7 @@ namespace WaveByWave.Generation
                     !NearAnyPlayerOrShip(pair.Value.Island.transform.position, despawnRadius)) _removeIds.Add(pair.Key);
             foreach (var id in _removeIds) RemoveIsland(id);
             if (CountStreamingIslands() >= Mathf.Clamp(settings.IslandsPerShip, 1, 16) * _ships.Length) return;
-            TryGenerateIsland(settings.StreamingIslandRadius, out _);
+            TryGenerateIslandAroundShip(settings.StreamingIslandRadius, out _);
         }
 
         private int CountStreamingIslands()
@@ -358,15 +432,21 @@ namespace WaveByWave.Generation
             return count;
         }
 
-        private bool TryGenerateIsland(Vector2 generationRadius, out int id)
+        private bool TryGenerateIslandAroundShip(Vector2 generationRadius, out int id)
         {
             id = 0;
             var ship = _ships[_random.NextInt(_ships.Length)];
             if (ship == null || !ship.IsSpawned) return false;
+            return TryGenerateIslandAt(ship.transform.position, generationRadius, out id);
+        }
+
+        private bool TryGenerateIslandAt(Vector3 center, Vector2 generationRadius, out int id)
+        {
+            id = 0;
             for (var attempt = 0; attempt < 24; attempt++)
             {
                 var size = (IslandSize)_random.NextInt(3);
-                var position = InRing(ship.transform.position, generationRadius);
+                var position = InRing(center, generationRadius);
                 var radius = settings.Diameter(size) * 0.5f;
                 if (!IsOpenWater(position, radius + settings.IslandSpacing * 0.5f, out var level)) continue;
                 var valid = true;
@@ -390,18 +470,20 @@ namespace WaveByWave.Generation
             var total = 0;
             if (IsAuthority)
             {
+                total = _initialTargetCount;
                 foreach (var id in _initialIslands)
                 {
                     if (!_islands.TryGetValue(id, out var record) || record.Island == null)
                         continue;
-                    total++;
                     if (record.Island.Ready && !record.Populate)
                         ready++;
                 }
-                if (!_loadingComplete && _initialGenerationStarted && ready >= total)
+                if (!_loadingComplete && _initialGenerationStarted &&
+                    _initialIslands.Count >= _initialTargetCount && ready >= total)
                 {
                     _loadingComplete = true;
                     _loadingCurtain?.Hide();
+                    FlushPendingSnapshotRequests();
                 }
             }
             else
@@ -425,7 +507,10 @@ namespace WaveByWave.Generation
             foreach (var record in _islands.Values)
             {
                 if (record.Island == null) continue;
-                var visible = record.ScenePlaced || _loadingComplete && record.Island.Ready &&
+                // Ready becomes false briefly while a dig remesh is in flight. Once an
+                // island has completed its initial build it must remain presented so its
+                // existing render mesh and collider stay continuous during that rebuild.
+                var visible = record.ScenePlaced || _loadingComplete && record.Island.InitialBuildComplete &&
                     NearAnyPlayerOrShip(record.Island.transform.position, settings.IslandRevealRadius);
                 record.Island.SetPresentationVisible(visible);
                 foreach (var marker in record.MarkerViews.Values)
@@ -459,8 +544,11 @@ namespace WaveByWave.Generation
         }
         private Vector3 InRing(Vector3 center, Vector2 radius)
         {
-            var min = Mathf.Max(1f, radius.x); var max = Mathf.Max(min + 1f, radius.y);
-            var distance = Mathf.Sqrt(_random.NextFloat(min * min, max * max));
+            var min = Mathf.Max(1f, Mathf.Min(radius.x, radius.y));
+            var max = Mathf.Max(min, Mathf.Max(radius.x, radius.y));
+            var distance = max - min <= 0.001f
+                ? min
+                : Mathf.Sqrt(_random.NextFloat(min * min, max * max));
             var angle = _random.NextFloat(0f, Mathf.PI * 2f);
             return center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * distance;
         }
@@ -473,19 +561,41 @@ namespace WaveByWave.Generation
             if (_manager.IsServer)
             {
                 if (packet.Kind != Kind.Request || !_manager.ConnectedClients.ContainsKey(sender)) return;
+                if (SceneManager.GetActiveScene().name == GameScenes.Ocean && !_loadingComplete)
+                {
+                    _pendingSnapshotClients.Add(sender);
+                    return;
+                }
                 if (_snapshotRequests.TryGetValue(sender, out var previous) && Time.unscaledTime - previous < 2f) return;
                 _snapshotRequests[sender] = Time.unscaledTime;
-                Queue(sender, new Packet { Kind = Kind.Reset, Scene = CurrentScene() });
-                foreach (var record in _islands.Values)
-                {
-                    if (!record.ScenePlaced) Queue(sender, record.Creation);
-                    foreach (var dig in record.Digs) Queue(sender, dig);
-                    foreach (var marker in record.Markers.Values) Queue(sender, marker);
-                }
-                Queue(sender, new Packet { Kind = Kind.Complete, Scene = CurrentScene() });
+                QueueSnapshot(sender);
                 return;
             }
             if (sender == NetworkManager.ServerClientId) Apply(packet);
+        }
+        private void QueueSnapshot(ulong client)
+        {
+            Queue(client, new Packet { Kind = Kind.Reset, Scene = CurrentScene() });
+            foreach (var record in _islands.Values)
+            {
+                if (!record.ScenePlaced) Queue(client, record.Creation);
+                foreach (var dig in record.Digs) Queue(client, dig);
+                foreach (var marker in record.Markers.Values)
+                    if (!record.HiddenMarkers.Contains(marker.ChestId)) Queue(client, marker);
+            }
+            Queue(client, new Packet { Kind = Kind.Complete, Scene = CurrentScene() });
+        }
+        private void FlushPendingSnapshotRequests()
+        {
+            if (_manager == null || !_manager.IsServer || _pendingSnapshotClients.Count == 0)
+                return;
+            foreach (var client in _pendingSnapshotClients)
+            {
+                if (!_manager.ConnectedClients.ContainsKey(client)) continue;
+                _snapshotRequests[client] = Time.unscaledTime;
+                QueueSnapshot(client);
+            }
+            _pendingSnapshotClients.Clear();
         }
         private void Apply(Packet packet)
         {
@@ -522,10 +632,12 @@ namespace WaveByWave.Generation
             {
                 if (record.Markers.ContainsKey(packet.ChestId)) return;
                 record.Markers[packet.ChestId] = packet;
+                if (record.HiddenMarkers.Contains(packet.ChestId)) return;
                 if (settings.BuriedMarkerPrefab != null)
                 {
                     var marker = Instantiate(settings.BuriedMarkerPrefab,
-                        packet.Position, Quaternion.Euler(90f, 0f, 0f), record.Island.transform);
+                        packet.Position, record.Island.transform.rotation, record.Island.transform);
+                    marker.GetComponent<BuriedChestMarker>()?.Configure(record.Island);
                     marker.SetActive(record.ScenePlaced);
                     record.MarkerViews[packet.ChestId] = marker;
                 }
@@ -533,6 +645,13 @@ namespace WaveByWave.Generation
             if (packet.Kind == Kind.RemoveMarker)
             {
                 record.Markers.Remove(packet.ChestId);
+                record.HiddenMarkers.Remove(packet.ChestId);
+                if (record.MarkerViews.Remove(packet.ChestId, out var marker) && marker != null) Destroy(marker);
+            }
+            if (packet.Kind == Kind.HideMarker)
+            {
+                if (!record.Markers.ContainsKey(packet.ChestId)) return;
+                record.HiddenMarkers.Add(packet.ChestId);
                 if (record.MarkerViews.Remove(packet.ChestId, out var marker) && marker != null) Destroy(marker);
             }
         }
@@ -561,6 +680,7 @@ namespace WaveByWave.Generation
             foreach (var record in _islands.Values)
                 if (!record.ScenePlaced && record.Island != null) Destroy(record.Island.gameObject);
             _islands.Clear(); _floating.Clear(); _outgoing.Clear(); _snapshotRequests.Clear();
+            _pendingSnapshotClients.Clear();
             _initialIslands.Clear();
         }
         private void ClearForSnapshot()
@@ -575,13 +695,14 @@ namespace WaveByWave.Generation
                     _removeIds.Add(pair.Key);
                     continue;
                 }
-                record.Digs.Clear(); record.Markers.Clear();
+                record.Digs.Clear(); record.Markers.Clear(); record.HiddenMarkers.Clear();
                 foreach (var marker in record.MarkerViews.Values)
                     if (marker != null) Destroy(marker);
                 record.MarkerViews.Clear();
             }
             foreach (var id in _removeIds) _islands.Remove(id);
             _floating.Clear(); _outgoing.Clear(); _snapshotRequests.Clear();
+            _pendingSnapshotClients.Clear();
             _initialIslands.Clear();
             _loadingComplete = false;
             _loadingCurtain?.Show(0, 0);

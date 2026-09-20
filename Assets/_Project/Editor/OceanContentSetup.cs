@@ -53,9 +53,8 @@ namespace WaveByWave.Editor
             });
             var markerPrefab = Prefab(Prefabs + "/BuriedChestCross.prefab", () =>
             {
-                var root = GameObject.CreatePrimitive(PrimitiveType.Cube); root.name = "Buried Chest Cross Decal";
-                Object.DestroyImmediate(root.GetComponent<Collider>());
-                root.transform.localScale = new Vector3(1.1f, 1.1f, 7f);
+                var root = new GameObject("Buried Chest Cross", typeof(MeshFilter),
+                    typeof(MeshRenderer), typeof(BuriedChestMarker));
                 var renderer = root.GetComponent<MeshRenderer>(); renderer.sharedMaterial = cross;
                 renderer.shadowCastingMode = ShadowCastingMode.Off; renderer.receiveShadows = false;
                 return root;

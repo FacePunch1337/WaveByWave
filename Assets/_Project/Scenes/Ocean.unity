@@ -1155,6 +1155,7 @@ GameObject:
   - component: {fileID: 1135397473}
   - component: {fileID: 1135397472}
   - component: {fileID: 1135397471}
+  - component: {fileID: 1135397474}
   m_Layer: 4
   m_Name: Ocean Underwater Area
   m_TagString: Untagged
@@ -1174,9 +1175,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6408098074402d04ca3f532e32c58553, type: 3}
   m_Name: 
   m_EditorClassIdentifier: sc.stylizedwater3.runtime::StylizedWater3.UnderwaterRendering.UnderwaterArea
-  waterMaterial: {fileID: 2100000, guid: d9bee4d86b9f55b46a4288109fb2b181, type: 2}
+  waterMaterial: {fileID: 2100000, guid: ac035e850020fe84dae1e5dd49abb816, type: 2}
   boxCollider: {fileID: 1135397472}
-  waterLevelSource: 0
+  waterLevelSource: 3
   waterLevel: 0
   waterLevelTransform: {fileID: 0}
   renderingOrder: 0
@@ -1218,8 +1219,24 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1000, y: 500, z: 1000}
+  m_Size: {x: 2000, y: 500, z: 2000}
   m_Center: {x: 0, y: -247, z: 0}
+--- !u!114 &1135397474
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1135397470}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5b4328bd9df4cebaedd6c559e768baf, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.OceanUnderwaterCameraFollower
+  underwaterArea: {fileID: 1135397471}
+  underwaterVolume: {fileID: 1135397472}
+  horizontalSize: 2000
+  depth: 500
 --- !u!4 &1135397473
 Transform:
   m_ObjectHideFlags: 0

@@ -2074,7 +2074,17 @@ namespace WaveByWave.Player
             if (keyboard.spaceKey.wasPressedThisFrame &&
                 (_equipment == null || _equipment.TryUseJumpStamina()))
             {
-                LeaveLadder(true);
+                var forwardInput = (keyboard.wKey.isPressed ? 1f : 0f) -
+                                   (keyboard.sKey.isPressed ? 1f : 0f);
+                var sideInput = (keyboard.dKey.isPressed ? 1f : 0f) -
+                                (keyboard.aKey.isPressed ? 1f : 0f);
+                var view = _camera != null ? _camera.transform : transform;
+                var viewForward = Vector3.ProjectOnPlane(view.forward, Vector3.up).normalized;
+                var viewRight = Vector3.ProjectOnPlane(view.right, Vector3.up).normalized;
+                var jumpDirection = viewForward * forwardInput + viewRight * sideInput;
+                if (jumpDirection.sqrMagnitude > 0.0001f)
+                    jumpDirection.Normalize();
+                LeaveLadder(true, jumpDirection);
                 return;
             }
 
@@ -2088,7 +2098,7 @@ namespace WaveByWave.Player
             animationSync.SetLocomotion(new Vector2(0f, climb), true, 0f, false, false, 0f, rate);
         }
 
-        private void LeaveLadder(bool jumpAway)
+        private void LeaveLadder(bool jumpAway, Vector3 requestedDirection = default)
         {
             var ladder = _activeLadder;
             if (ladder == null && !_isClimbing.Value)
@@ -2096,8 +2106,11 @@ namespace WaveByWave.Player
 
             var platformVelocity = _platform != null ? _platform.GetPointVelocity(body.position) : Vector3.zero;
             var ladderJumpSpeed = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            var horizontalDirection = requestedDirection.sqrMagnitude > 0.0001f
+                ? Vector3.ProjectOnPlane(requestedDirection, Vector3.up).normalized
+                : ladder != null ? ladder.AwayDirection : Vector3.zero;
             var jumpVelocity = ladder != null
-                ? ladder.AwayDirection * ladder.JumpAwaySpeed + Vector3.up * ladderJumpSpeed
+                ? horizontalDirection * ladder.JumpAwaySpeed + Vector3.up * ladderJumpSpeed
                 : Vector3.up * ladderJumpSpeed;
             _activeLadder = null;
             if (IsSpawned && IsOwner)

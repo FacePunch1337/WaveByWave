@@ -54,11 +54,12 @@ MonoBehaviour:
     Weight: 1
     MinimumAmount: 1
     MaximumAmount: 1
-  InitialIslandRadius: {x: 500, y: 500}
+  InitialIslandRadius: {x: 200, y: 200}
+  InitialIslandCount: 1
   StreamingIslandRadius: {x: 500, y: 500}
-  IslandRevealRadius: 500
-  IslandStreamingInterval: 0.1
-  IslandsPerShip: 4
+  IslandRevealRadius: 400
+  IslandStreamingInterval: 1
+  IslandsPerShip: 3
   IslandDespawnRadius: 1000
   IslandSpacing: 20
   LoadingCurtainPrefab: {fileID: 6158068724119337578, guid: 4a746500186db7e48a0546af0c93a5b8, type: 3}
@@ -69,7 +70,7 @@ MonoBehaviour:
   ChunkCells: 32
   SandHeight: 1.8
   SandDepth: 2.4
-  NoiseScale: 2.8
+  NoiseScale: 5
   ShoreIrregularity: 0.22
   GroundMaterial: {fileID: 2100000, guid: 8b3a34dd68c7dc244ba45307acec5e8c, type: 2}
   IslandPrefab: {fileID: 29148112575775440, guid: fb82a6ce75c74264da2ed76ef944c0c7, type: 3}

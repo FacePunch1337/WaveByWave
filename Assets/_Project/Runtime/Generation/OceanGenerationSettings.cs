@@ -39,12 +39,15 @@ namespace WaveByWave.Generation
         [FormerlySerializedAs("IslandRadius")]
         [Tooltip("Кольцо, в котором первые острова строятся под загрузочной шторкой.")]
         public Vector2 InitialIslandRadius = new(65f, 130f);
+        [Range(0, 32), Tooltip("Точное общее количество островов, которое должно быть полностью создано вокруг игроков до снятия загрузочной шторки.")]
+        public int InitialIslandCount = 4;
         [Tooltip("Кольцо упреждающей генерации следующих островов. Минимум должен быть дальше дистанции показа.")]
         public Vector2 StreamingIslandRadius = new(160f, 230f);
         [Min(10f), Tooltip("Полностью готовый остров становится видимым только внутри этой дистанции.")]
         public float IslandRevealRadius = 135f;
         [Min(0.1f)] public float IslandStreamingInterval = 0.5f;
-        [Range(1, 16)] public int IslandsPerShip = 5;
+        [Range(1, 16), Tooltip("Количество островов, поддерживаемое стримингом на корабль уже после стартовой загрузки.")]
+        public int IslandsPerShip = 5;
         [Min(20f)] public float IslandDespawnRadius = 300f;
         [Min(2f)] public float IslandSpacing = 20f;
         public GameObject LoadingCurtainPrefab;

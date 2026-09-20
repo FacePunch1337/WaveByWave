@@ -5,6 +5,7 @@ using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
+using WaveByWave.Collision;
 
 namespace WaveByWave.Generation
 {
@@ -24,6 +25,7 @@ namespace WaveByWave.Generation
         public uint Seed { get; private set; }
         public bool GeometryReady => _initialized && !_meshing && _dirty.Count == 0;
         public bool Ready => GeometryReady && _decorated && _hasCompletedInitialBuild;
+        public bool InitialBuildComplete => _hasCompletedInitialBuild;
         public int LastDigRevision { get; private set; }
         public float Diameter => _parameters.Diameter;
         public float BedrockDepth => _parameters.SandDepth;
@@ -32,6 +34,7 @@ namespace WaveByWave.Generation
         private NativeArray<float2> _density;
         private JobHandle _job;
         private bool _initialized, _meshing, _decorated, _hasCompletedInitialBuild, _presentationRequested;
+        private bool _staticCollisionDirty;
         private IslandMeshJob _meshJob;
         private int _activeChunk;
         private readonly List<Chunk> _chunks = new();
@@ -147,12 +150,18 @@ namespace WaveByWave.Generation
                 _hasCompletedInitialBuild = true;
                 ApplyPresentationVisibility();
             }
+            if (GeometryReady && _staticCollisionDirty)
+            {
+                _staticCollisionDirty = false;
+                KinematicShipCollision.InvalidateAllStaticObstacles();
+            }
         }
 
         private void FinishMesh()
         {
             _job.Complete();
             var chunk = _chunks[_activeChunk];
+            var isInitialBuild = !_hasCompletedInitialBuild;
             if (_meshJob.Vertices.Length > 0 || chunk.Mesh != null)
             {
                 if (chunk.Mesh == null)
@@ -164,28 +173,42 @@ namespace WaveByWave.Generation
                     chunk.Filter = go.GetComponent<MeshFilter>(); chunk.Collider = go.GetComponent<MeshCollider>();
                     chunk.Renderer = go.GetComponent<MeshRenderer>();
                     chunk.Renderer.sharedMaterial = Settings.GroundMaterial;
-                    chunk.Mesh = new Mesh { name = $"Island {Id} chunk", indexFormat = IndexFormat.UInt32 };
-                    chunk.Mesh.MarkDynamic(); chunk.Filter.sharedMesh = chunk.Mesh;
                 }
-                chunk.Collider.enabled = false;
-                chunk.Collider.sharedMesh = null;
-                chunk.Mesh.Clear();
+                var previousMesh = chunk.Mesh;
+                Mesh replacementMesh = null;
                 if (_meshJob.Vertices.Length > 0)
                 {
-                    chunk.Mesh.SetVertices(_meshJob.Vertices.AsArray());
-                    chunk.Mesh.SetNormals(_meshJob.Normals.AsArray());
-                    chunk.Mesh.SetColors(_meshJob.Colors.AsArray());
+                    replacementMesh = new Mesh
+                    {
+                        name = $"Island {Id} chunk",
+                        indexFormat = IndexFormat.UInt32
+                    };
+                    replacementMesh.MarkDynamic();
+                    replacementMesh.SetVertices(_meshJob.Vertices.AsArray());
+                    replacementMesh.SetNormals(_meshJob.Normals.AsArray());
+                    replacementMesh.SetColors(_meshJob.Colors.AsArray());
                     var indices = new int[_meshJob.Vertices.Length];
                     for (var n = 0; n < indices.Length; n++) indices[n] = n;
-                    chunk.Mesh.SetIndices(indices, MeshTopology.Triangles, 0);
-                    chunk.Mesh.RecalculateBounds();
-                    chunk.Collider.sharedMesh = chunk.Mesh;
+                    replacementMesh.SetIndices(indices, MeshTopology.Triangles, 0);
+                    replacementMesh.RecalculateBounds();
                 }
+
+                // Keep the previous visual and PhysX shape alive until the complete
+                // replacement is ready. Clearing the live mesh made the island vanish
+                // for a frame and let players (and ships) fall through while digging.
+                chunk.Mesh = replacementMesh;
+                chunk.Filter.sharedMesh = replacementMesh;
+                chunk.Collider.sharedMesh = replacementMesh;
+                var hasGeometry = replacementMesh != null;
                 if (chunk.Renderer != null)
                     chunk.Renderer.enabled = _hasCompletedInitialBuild && _presentationRequested &&
-                                             _meshJob.Vertices.Length > 0;
+                                             hasGeometry;
                 chunk.Collider.enabled = _hasCompletedInitialBuild && _presentationRequested &&
-                                         _meshJob.Vertices.Length > 0;
+                                         hasGeometry;
+                if (previousMesh != null)
+                    Destroy(previousMesh);
+                if (isInitialBuild)
+                    _staticCollisionDirty = true;
             }
             _meshJob.Vertices.Dispose(); _meshJob.Normals.Dispose(); _meshJob.Colors.Dispose();
             _meshing = false;
@@ -227,6 +250,7 @@ namespace WaveByWave.Generation
                 return;
             _presentationRequested = visible;
             ApplyPresentationVisibility();
+            KinematicShipCollision.InvalidateAllStaticObstacles();
         }
 
         private void ApplyPresentationVisibility()
@@ -336,6 +360,7 @@ namespace WaveByWave.Generation
 
         private void OnDestroy()
         {
+            KinematicShipCollision.InvalidateAllStaticObstacles();
             _job.Complete();
             if (_meshing) { _meshJob.Vertices.Dispose(); _meshJob.Normals.Dispose(); _meshJob.Colors.Dispose(); }
             if (_density.IsCreated) _density.Dispose();

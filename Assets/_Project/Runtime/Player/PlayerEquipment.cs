@@ -599,7 +599,8 @@ namespace WaveByWave.Player
                     if (SegmentHit(origin, end, 0.02f, null, out var digHit, out _))
                     {
                         if (digHit.collider.GetComponentInParent<WaveByWave.Generation.ProceduralIsland>() is { } island)
-                            WaveByWave.Generation.OceanWorldDirector.Instance?.DigServer(island, digHit.point, digHit.normal);
+                            WaveByWave.Generation.OceanWorldDirector.Instance?.DigServer(
+                                island, digHit.point, digHit.normal, direction);
                         onDig.Invoke(digHit.point); ToolEffectClientRpc(digHit.point, false);
                     }
                     PlayServer(action, 0.8f);

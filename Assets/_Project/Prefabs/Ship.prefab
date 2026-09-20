@@ -51380,8 +51380,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 557465bcc30240ce88ebc5cb1d3d534f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Collision.KinematicShipCollision
-  solidGeometry: []
-  solverIterations: 24
+  solidGeometry:
+  - {fileID: 2043352821857508026}
+  - {fileID: 7514967113274862166}
+  solverIterations: 8
   restitution: 0.05
   contactFriction: 0.025
   maximumRecoveryStep: 0.15

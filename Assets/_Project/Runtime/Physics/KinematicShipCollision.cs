@@ -29,7 +29,8 @@ namespace WaveByWave.Collision
     {
         [Tooltip("Solid model meshes. Empty uses the ship's visible meshes, excluding sails, flags and interaction markers.")]
         [SerializeField] private MeshFilter[] solidGeometry = Array.Empty<MeshFilter>();
-        [SerializeField, Range(8, 32)] private int solverIterations = 24;
+        [Tooltip("Maximum contact constraints solved in one physics tick. Six planes are cached, so eight passes cover a closed corner without repeatedly querying the same surface.")]
+        [SerializeField, Range(4, 16)] private int solverIterations = 8;
         [SerializeField, Range(0f, 0.3f)] private float restitution = 0.05f;
         [SerializeField, Range(0f, 0.5f)] private float contactFriction = 0.025f;
         [SerializeField, Min(0.01f)] private float maximumRecoveryStep = 0.15f;
@@ -161,6 +162,13 @@ namespace WaveByWave.Collision
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode) => _sceneChanged = true;
         private void OnSceneUnloaded(Scene scene) => _sceneChanged = true;
 
+        public static void InvalidateAllStaticObstacles()
+        {
+            foreach (var collision in FindObjectsByType<KinematicShipCollision>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                collision._sceneChanged = true;
+        }
+
         // Call after spawning, moving, enabling or removing static scenery at runtime.
         // The ordinary ocean scene is built once when the authoritative ship spawns.
         public void RefreshStaticObstacles()
@@ -227,7 +235,7 @@ namespace WaveByWave.Collision
             var normal = Vector3.zero;
             var point = position;
             var blocked = false;
-            for (var iteration = 0; iteration < Mathf.Clamp(solverIterations, 8, 32); iteration++)
+            for (var iteration = 0; iteration < Mathf.Clamp(solverIterations, 4, 16); iteration++)
             {
                 var move = velocity * stepTime;
                 var angularTravel = angularVelocity * stepTime;
@@ -293,13 +301,22 @@ namespace WaveByWave.Collision
                     velocity += mobility * ((allowedDistance + 0.0002f - clearance) /
                         (stepTime * normalWeight));
                 }
+
+                // A direct bow impact commonly removes the whole requested motion
+                // on the first constraint. Re-querying the same voxel surface up to
+                // the iteration limit only burns CPU while the ship remains still.
+                var remainingLinearTravel = velocity * stepTime;
+                var remainingAngularTravel = angularVelocity * stepTime;
+                if (remainingLinearTravel.sqrMagnitude +
+                    remainingAngularTravel.sqrMagnitude * _radius * _radius < 0.00000001f)
+                    return new Motion(position, rotation, true, normal, point, velocity, angularVelocity);
             }
 
             // A crowded corner may need more constraints than the main pass can
             // solve. Return a verified smaller step instead of storing a nonzero
             // velocity while holding the mover's pose. Never apply an unchecked
             // final displacement when the iteration limit is reached.
-            for (var attempt = 0; attempt < 8; attempt++)
+            for (var attempt = 0; attempt < 4; attempt++)
             {
                 var move = velocity * stepTime;
                 var angularTravel = angularVelocity * stepTime;

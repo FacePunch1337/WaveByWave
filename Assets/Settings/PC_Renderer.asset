@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1c6e585d9d2317e438a403bbb1965d5e, type: 3}
   m_Name: StylizedWater3.StylizedWaterRenderFeature
   m_EditorClassIdentifier: sc.stylizedwater3.runtime::StylizedWater3.StylizedWaterRenderFeature
-  m_Active: 1
+  m_Active: 0
   transparencyRefraction: 0
   screenSpaceReflectionSettings:
     allow: 1

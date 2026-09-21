@@ -11,6 +11,7 @@ namespace WaveByWave.Items
         public bool HasSupport;
         public bool OnWater;
         public NetworkObjectReference Support;
+        public ulong SurfaceId;
         public Vector3 Start;
         public Vector3 End;
         public Vector3 ArcUp;
@@ -33,6 +34,7 @@ namespace WaveByWave.Items
             serializer.SerializeValue(ref HasSupport);
             serializer.SerializeValue(ref OnWater);
             serializer.SerializeValue(ref Support);
+            serializer.SerializeValue(ref SurfaceId);
             serializer.SerializeValue(ref Start);
             serializer.SerializeValue(ref End);
             serializer.SerializeValue(ref ArcUp);
@@ -45,7 +47,7 @@ namespace WaveByWave.Items
         }
 
         public bool Equals(WorldItemPlacement other) => Initialized == other.Initialized &&
-            HasSupport == other.HasSupport && OnWater == other.OnWater && Support.Equals(other.Support) && Start.Equals(other.Start) &&
+            HasSupport == other.HasSupport && OnWater == other.OnWater && SurfaceId == other.SurfaceId && Support.Equals(other.Support) && Start.Equals(other.Start) &&
             End.Equals(other.End) && ArcUp.Equals(other.ArcUp) && Rotation.Equals(other.Rotation) &&
             FallbackPosition.Equals(other.FallbackPosition) && FallbackRotation.Equals(other.FallbackRotation) &&
             Started.Equals(other.Started) && Duration.Equals(other.Duration) && ArcHeight.Equals(other.ArcHeight);

@@ -20,8 +20,16 @@ namespace WaveByWave.Enemies
         private EnemyShipDefinition _definition;
         private float _flashUntil;
         private bool _dead;
+        private bool _flashActive;
+        private static readonly int DamageFlashId = Shader.PropertyToID("_EnemyDamageFlash");
+        private Vector3 _simulationPosition;
+        private Quaternion _simulationRotation;
+        private bool _hasSimulationPose;
 
         public int ShipId { get; private set; }
+        public Matrix4x4 SimulationFrame => _hasSimulationPose
+            ? Matrix4x4.TRS(_simulationPosition, _simulationRotation, transform.lossyScale)
+            : transform.localToWorldMatrix;
 
         public void ConfigurePrefabReferences(
             Rigidbody configuredBody,
@@ -53,15 +61,27 @@ namespace WaveByWave.Enemies
             DotsEnemyRuntime.Instance?.RegisterSurface(transform);
         }
 
-        public void SetPose(Vector3 position, Quaternion rotation)
+        public void SetSimulationPose(Vector3 position, Quaternion rotation)
         {
+            _simulationPosition = position;
+            _simulationRotation = rotation;
+            _hasSimulationPose = true;
+        }
+
+        private void FixedUpdate() => RestoreSimulationPose();
+
+        internal void RestoreSimulationPose()
+        {
+            if (!_hasSimulationPose) return;
             if (body != null)
             {
-                body.position = position;
-                body.rotation = rotation;
+                body.position = _simulationPosition;
+                body.rotation = _simulationRotation;
             }
-            else transform.SetPositionAndRotation(position, rotation);
+            transform.SetPositionAndRotation(_simulationPosition, _simulationRotation);
         }
+
+        public void SetPose(Vector3 position, Quaternion rotation) => transform.SetPositionAndRotation(position, rotation);
 
         public void SetHealth(float health, uint hitRevision)
         {
@@ -70,35 +90,40 @@ namespace WaveByWave.Enemies
             if (dead != _dead)
             {
                 _dead = dead;
-                foreach (var collider in hullColliders)
-                    if (collider != null) collider.enabled = !dead;
+                if (hullColliders != null)
+                    foreach (var collider in hullColliders)
+                        if (collider != null) collider.enabled = !dead;
                 if (dead && _definition != null && _definition.DeathEffectPrefab != null)
                     Object.Instantiate(_definition.DeathEffectPrefab, transform.position, Quaternion.identity);
             }
         }
 
-        private void LateUpdate()
+        internal void UpdateDamageFlash()
         {
-            _properties ??= new MaterialPropertyBlock();
-            var flash = Time.unscaledTime < _flashUntil ? 1f : 0f;
+            var active = Time.unscaledTime < _flashUntil;
+            if (_flashActive == active) return;
+            _flashActive = active;
+            var flash = active ? 1f : 0f;
+            if (damageRenderers == null) return;
             foreach (var renderer in damageRenderers)
             {
-                if (renderer == null) continue;
+                if (renderer == null || renderer.sharedMaterial == null ||
+                    !renderer.sharedMaterial.HasProperty(DamageFlashId)) continue;
                 renderer.GetPropertyBlock(_properties);
-                if (renderer.sharedMaterial != null && renderer.sharedMaterial.HasProperty("_EnemyDamageFlash"))
-                    _properties.SetFloat("_EnemyDamageFlash", flash);
+                _properties.SetFloat(DamageFlashId, flash);
                 renderer.SetPropertyBlock(_properties);
             }
         }
 
-        public IReadOnlyList<Vector3> GetCrewLocalPositions(int requestedCount)
+        public IReadOnlyList<Vector3> GetCrewLocalPositions(int requestedCount, EnemyShipDefinition definition = null)
         {
             var positions = new List<Vector3>(Mathf.Max(0, requestedCount));
             if (crewSlots != null)
                 for (var i = 0; i < requestedCount && i < crewSlots.Length; i++)
                     if (crewSlots[i] != null) positions.Add(transform.InverseTransformPoint(crewSlots[i].transform.position));
-            var half = _definition != null ? _definition.CollisionHalfExtents : new Vector3(3, 1.5f, 7);
-            var center = _definition != null ? _definition.CollisionCenter : new Vector3(0, 1, 0);
+            definition ??= _definition;
+            var half = definition != null ? definition.CollisionHalfExtents : new Vector3(3, 1.5f, 7);
+            var center = definition != null ? definition.CollisionCenter : new Vector3(0, 1, 0);
             while (positions.Count < requestedCount)
             {
                 var index = positions.Count;

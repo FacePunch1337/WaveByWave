@@ -23,7 +23,7 @@ namespace WaveByWave.Player
         private Slider _shipCountSlider, _shipRadiusSlider;
         private Text _shipLabel, _shipRadiusLabel;
         private int _shipSpawnCount = 12;
-        private float _shipSpawnRadius = 350f;
+        private float _shipSpawnRadius = 600f;
         public void Initialize(PlayerInventory inventory) => _inventory = inventory;
         private void Update()
         {
@@ -173,7 +173,7 @@ namespace WaveByWave.Player
             _shipLabel.fontSize = 17;
             _shipCountSlider = CreateSlider(_panel.transform, new Vector2(0, -12), 1, 1000, _shipSpawnCount, true);
             _shipCountSlider.onValueChanged.AddListener(value => _shipSpawnCount = Mathf.RoundToInt(value));
-            _shipRadiusLabel = Label(_panel.transform, "Радиус кораблей: 350 м", new Vector2(0, -50),
+            _shipRadiusLabel = Label(_panel.transform, "Радиус кораблей: 600 м", new Vector2(0, -50),
                 new Vector2(570, 28), Color.white);
             _shipRadiusLabel.fontSize = 17;
             _shipRadiusSlider = CreateSlider(_panel.transform, new Vector2(0, -80), 35, 1000,

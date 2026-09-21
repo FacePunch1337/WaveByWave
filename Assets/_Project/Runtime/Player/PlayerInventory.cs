@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using WaveByWave.Combat;
 using WaveByWave.Items;
+using WaveByWave.Enemies;
 using WaveByWave.Ships;
 
 namespace WaveByWave.Player
@@ -303,8 +304,9 @@ namespace WaveByWave.Player
 
         private bool CanReachChest(Vector3 position)
         {
-            if ((position - transform.position).sqrMagnitude > 16f) return false;
-            var from = transform.position + Vector3.up * 1.3f;
+            var feet = ServerInteractionPosition();
+            if ((position - feet).sqrMagnitude > 16f) return false;
+            var from = feet + Vector3.up * 1.3f;
             var delta = position + Vector3.up * 0.2f - from;
             var hits = UnityEngine.Physics.RaycastNonAlloc(from, delta.normalized, _chestLineHits,
                 Mathf.Max(0f, delta.magnitude - 0.3f), ~0, QueryTriggerInteraction.Ignore);
@@ -320,7 +322,7 @@ namespace WaveByWave.Player
             if (!NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var client) ||
                 client.PlayerObject == null || client.PlayerObject != NetworkObject ||
                 !LootStressTest.TryGetServerItem(id, out var definition, out var position) ||
-                Vector3.Distance(transform.position, position) > 4f ||
+                Vector3.Distance(ServerInteractionPosition(), position) > 4f ||
                 (definition.IsChest && !CanReachChest(position)) || !TryStoreSingleServer(definition)) return;
             LootStressTest.RemoveServerItem(id);
         }
@@ -370,12 +372,16 @@ namespace WaveByWave.Player
             }
             else
             {
-                if (Vector3.Distance(transform.position, position) > 3f) return false;
-                position = transform.position;
+                var feet = ServerInteractionPosition();
+                if (Vector3.Distance(feet, position) > 3f) return false;
+                position = feet;
                 direction.Normalize();
             }
             return true;
         }
+
+        private Vector3 ServerInteractionPosition() => TryGetComponent<NetworkPlayerController>(out var controller)
+            ? DotsEnemyRuntime.Feet(controller) : transform.position;
 
         private bool SpawnDropServer(FixedString64Bytes itemId, Vector3 position, Vector3 direction, NetworkObject support)
         {
@@ -414,8 +420,9 @@ namespace WaveByWave.Player
             }
             else
             {
-                if (Vector3.Distance(playerObject.transform.position, position) > 3f) return;
-                position = playerObject.transform.position;
+                var feet = ServerInteractionPosition();
+                if (Vector3.Distance(feet, position) > 3f) return;
+                position = feet;
             }
 
             var slot = _slots[selectedIndex];
@@ -439,11 +446,14 @@ namespace WaveByWave.Player
             var playerObject = client.PlayerObject;
             if (playerObject == null || playerObject != NetworkObject)
                 return;
-            var playerPosition = transform.position;
+            var playerPosition = ServerInteractionPosition();
             var controller = playerObject.GetComponent<NetworkPlayerController>();
+            if (controller != null && controller.TryGetEnemyShipPositionOnServer(out var enemyPosition))
+                playerPosition = enemyPosition;
             if (controller != null && item.SupportingObject != null &&
                 controller.TryGetPositionOnPlatform(item.SupportingObject, out var platformPosition))
-                playerPosition = platformPosition;
+                playerPosition = WorldItem.GetPhysicsFrame(item.SupportingObject).MultiplyPoint3x4(
+                    item.SupportingObject.transform.InverseTransformPoint(platformPosition));
             if (Vector3.Distance(playerPosition, item.GetServerPosition()) > 4f)
                 return;
 

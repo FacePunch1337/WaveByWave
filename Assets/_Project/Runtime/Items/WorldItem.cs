@@ -3,6 +3,7 @@ using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using WaveByWave.Player;
+using WaveByWave.Enemies;
 
 namespace WaveByWave.Items
 {
@@ -105,11 +106,23 @@ namespace WaveByWave.Items
 
         private NetworkObject ResolveSupport()
         {
-            if (!_placement.Value.HasSupport) return null;
+            if (!_placement.Value.HasSupport || _placement.Value.SurfaceId != 0) return null;
             if (_support != null && _support.IsSpawned) return _support;
             if (!_placement.Value.Support.TryGet(out _support, NetworkManager)) return null;
             _supportMotion = _support.GetComponent<PlatformNetworkTransform>();
             return _support;
+        }
+
+        private bool TryGetSupportFrame(bool physics, out Matrix4x4 frame)
+        {
+            frame = Matrix4x4.identity;
+            if (_placement.Value.SurfaceId != 0)
+                return DotsEnemyRuntime.Instance != null && DotsEnemyRuntime.Instance.TryGetSurfaceFrame(
+                    _placement.Value.SurfaceId, physics, out frame);
+            var support = ResolveSupport();
+            if (support == null) return false;
+            frame = physics ? GetPhysicsFrame(support) : support.transform.localToWorldMatrix;
+            return true;
         }
 
         private void ApplyPresentationPose()
@@ -125,12 +138,12 @@ namespace WaveByWave.Items
             if (_tether.Value.Active && !IsServer) return;
             var state = _placement.Value;
             if (!state.Initialized) return;
-            var support = ResolveSupport();
+            var hasSupport = TryGetSupportFrame(false, out var supportFrame);
             var now = !IsServer && _supportMotion != null
                 ? _supportMotion.PresentationServerTime : NetworkManager.ServerTime.Time;
-            if (support != null)
-                SetPose(support.transform.TransformPoint(state.Evaluate(now)),
-                    support.transform.rotation * state.Rotation);
+            if (hasSupport)
+                SetPose(supportFrame.MultiplyPoint3x4(state.Evaluate(now)),
+                    supportFrame.rotation * state.Rotation);
             else if (state.HasSupport)
                 SetPose(state.FallbackPosition, state.FallbackRotation);
             else if (state.OnWater && now >= state.Started + state.Duration &&
@@ -172,7 +185,7 @@ namespace WaveByWave.Items
             if (TryResolveTether(out var hook)) return hook.ServerHookPosition + _tether.Value.Offset;
             var state = _placement.Value;
             if (!state.Initialized) return transform.position;
-            var support = ResolveSupport();
+            var hasSupport = TryGetSupportFrame(true, out var supportFrame);
             var position = state.Evaluate(NetworkManager.ServerTime.Time);
             if (state.OnWater && NetworkManager.ServerTime.Time >= state.Started + state.Duration &&
                 TryWaterSurface(state.End, out var waterHeight, out var waterNormal))
@@ -181,7 +194,7 @@ namespace WaveByWave.Items
                 position = state.End;
                 position.y = waterHeight + GetSurfaceClearance(rotation, waterNormal) + 0.005f;
             }
-            return support != null ? support.transform.TransformPoint(position)
+            return hasSupport ? supportFrame.MultiplyPoint3x4(position)
                 : state.HasSupport ? state.FallbackPosition : position;
         }
 
@@ -276,6 +289,12 @@ namespace WaveByWave.Items
             var support = !onWater && found ? hit.collider.GetComponentInParent<NetworkObject>() : preferredSupport;
             if (onWater) support = null;
             if (support != null && !support.IsSpawned) support = null;
+            var surfaceId = 0UL;
+            if (support == null && !onWater && found)
+            {
+                var enemyShip = hit.collider.GetComponentInParent<EnemyShipView>();
+                if (enemyShip != null) surfaceId = DotsEnemyRuntime.ShipSurfaceKey(enemyShip.ShipId);
+            }
             var rotationUp = onWater ? Vector3.up : normal;
             var facing = Vector3.ProjectOnPlane(forward, rotationUp).normalized;
             if (facing.sqrMagnitude < 0.01f) facing = Vector3.Cross(rotationUp, Vector3.right).normalized;
@@ -296,18 +315,22 @@ namespace WaveByWave.Items
             var decorativeArc = throwArcHeight * Mathf.Clamp01(1f - Mathf.Abs(Vector3.Dot(aim, up)) * 2f);
             var state = new WorldItemPlacement
             {
-                Initialized = true, HasSupport = support != null, OnWater = onWater,
+                Initialized = true, HasSupport = support != null || surfaceId != 0, OnWater = onWater,
                 Support = support != null ? new NetworkObjectReference(support) : default,
+                SurfaceId = surfaceId,
                 Start = start, End = end, ArcUp = up, Rotation = rotation,
                 FallbackPosition = end, FallbackRotation = rotation,
                 Started = Unity.Netcode.NetworkManager.Singleton.ServerTime.Time,
                 Duration = flightDuration,
                 ArcHeight = thrown ? decorativeArc + gravityArc : 0f
             };
-            if (support != null)
+            var placementFrame = GetPhysicsFrame(support);
+            if (surfaceId != 0 && DotsEnemyRuntime.Instance != null)
+                DotsEnemyRuntime.Instance.TryGetSurfaceFrame(surfaceId, true, out placementFrame);
+            if (state.HasSupport)
             {
-                var inverse = GetPhysicsFrame(support).inverse;
-                var supportRotation = GetPhysicsRotation(support);
+                var inverse = placementFrame.inverse;
+                var supportRotation = placementFrame.rotation;
                 state.Start = inverse.MultiplyPoint3x4(start);
                 state.End = inverse.MultiplyPoint3x4(end);
                 state.ArcUp = inverse.MultiplyVector(up);
@@ -329,13 +352,16 @@ namespace WaveByWave.Items
         public static Matrix4x4 GetPhysicsFrame(NetworkObject support)
         {
             if (support == null) return Matrix4x4.identity;
+            if (support.TryGetComponent<MovingPlatform>(out var platform) && platform.UsesKccMover)
+                return Matrix4x4.TRS(platform.KccMover.TransientPosition,
+                    platform.KccMover.TransientRotation, support.transform.lossyScale);
             return support.TryGetComponent<Rigidbody>(out var body)
                 ? Matrix4x4.TRS(body.position, body.rotation, support.transform.lossyScale)
                 : support.transform.localToWorldMatrix;
         }
 
         private static Quaternion GetPhysicsRotation(NetworkObject support) =>
-            support.TryGetComponent<Rigidbody>(out var body) ? body.rotation : support.transform.rotation;
+            GetPhysicsFrame(support).rotation;
 
         private bool TryFindSurface(Vector3 target, Vector3 up, out RaycastHit result)
         {

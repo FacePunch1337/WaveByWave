@@ -57,6 +57,12 @@ MonoBehaviour:
   MaximumShips: 1000
   SpawnsPerFrame: 2
   TargetSearchRadius: 350
+  SimulationRate: 20
+  DistantSimulationRate: 5
+  DetailedSimulationDistance: 100
+  PhysicsViewDistance: 100
+  ViewCreationsPerFrame: 2
+  InstanceDistantShips: 1
   CrewCount: 4
   CrewCombatType: 0
   SinkDuration: 8

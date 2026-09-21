@@ -52,6 +52,7 @@ namespace WaveByWave.Enemies
         private readonly List<PlayerTarget> _players = new();
         private readonly Dictionary<int, Entity> _byId = new();
         private readonly Dictionary<ulong, Transform> _surfaces = new();
+        private readonly HashSet<int> _crewGroups = new();
         private readonly List<Entity> _remove = new();
         private readonly List<Probe> _probes = new();
         private readonly RaycastHit[] _hits = new RaycastHit[48];
@@ -140,6 +141,7 @@ namespace WaveByWave.Enemies
                 _serverWorld = world;
                 _enemies = world.EntityManager.CreateEntityQuery(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
                 _byId.Clear();
+                _crewGroups.Clear();
             }
             return true;
         }
@@ -213,6 +215,7 @@ namespace WaveByWave.Enemies
         public static Vector3 Feet(NetworkPlayerController player)
         {
             if (player == null) return Vector3.zero;
+            if (player.TryGetEnemyShipPositionOnServer(out var enemyPosition)) return enemyPosition;
             var ship = player.GetSupportingShipOnServer();
             if (ship != null && player.TryGetPositionOnPlatform(ship.NetworkObject, out var position))
                 return WorldItem.GetPhysicsFrame(ship.NetworkObject)
@@ -335,7 +338,10 @@ namespace WaveByWave.Enemies
             if (brain.Target < 0 || brain.Target >= _players.Count || now < brain.NextAttack) return;
             var range = state.CombatType == EnemyCombatType.Melee ? Catalog.MeleeRange : Catalog.RangedMaximumRange;
             if (brain.TargetDistance > range || !CanSee(state.Position, Feet(_players[brain.Target].Player))) return;
-            state.Rotation = quaternion.LookRotationSafe(brain.Direction, math.up());
+            var attackUp = TryGetSurfaceFrame(state.SupportId, true, out var attackFrame)
+                ? (float3)(attackFrame.rotation * Vector3.up) : math.up();
+            state.Rotation = quaternion.LookRotationSafe(
+                brain.Direction - attackUp * math.dot(brain.Direction, attackUp), attackUp);
             UpdateLocal(ref state);
             SetAnimation(ref state, Catalog.AttackAnimation(state.CombatType), Catalog.Duration(Catalog.AttackAnimation(state.CombatType)));
             brain.Attacking = 1;
@@ -409,6 +415,10 @@ namespace WaveByWave.Enemies
                 var displacement = (movement + brain.Knockback) * dt;
                 brain.Knockback *= math.exp(-7f * dt);
                 manager.SetComponentData(entity, brain);
+                // Idle passengers already have an exact local pose. Re-projecting them onto
+                // last frame's rendered collider introduces drift and wastes surface probes.
+                if (state.SupportId != 0 && math.lengthsq(displacement) < 0.000001f) continue;
+                if (IsShipSurface(state.SupportId) && ResolveSurface(state.SupportId) == null) continue;
                 Vector3 from = state.Position;
                 var to = from + (Vector3)displacement;
                 var index = _probes.Count;
@@ -445,7 +455,8 @@ namespace WaveByWave.Enemies
                     state.Position = ground.point;
                     moved = math.distancesq(previous.xz, state.Position.xz) > 0.000001f;
                     if (math.lengthsq(brain.Direction) > 0.01f && state.StunUntil <= now && brain.Attacking == 0)
-                        state.Rotation = math.slerp(state.Rotation, quaternion.LookRotationSafe(brain.Direction, math.up()),
+                        state.Rotation = math.slerp(state.Rotation, quaternion.LookRotationSafe(
+                            (float3)Vector3.ProjectOnPlane(brain.Direction, ground.normal), ground.normal),
                             1 - math.exp(-12 * probe.DeltaTime));
                     AttachSurface(ref state, ground.collider);
                 }
@@ -529,6 +540,7 @@ namespace WaveByWave.Enemies
         }
         internal static ulong SceneSurfaceKey(Transform root)
         {
+            if (root.TryGetComponent<EnemyShipView>(out var ship)) return ShipSurfaceKey(ship.ShipId);
             var anchor = root.GetComponent<EnemySurfaceAnchor>();
             var key = anchor != null ? anchor.Key : null;
             if (string.IsNullOrEmpty(key))
@@ -545,24 +557,42 @@ namespace WaveByWave.Enemies
             _surfaces[SceneSurfaceKey(root)] = root;
         }
 
+        public static ulong ShipSurfaceKey(int id) => (3UL << 62) | (uint)id;
+        public static bool IsShipSurface(ulong key) => (key >> 62) == 3;
+
+        public bool TryGetSurfaceFrame(ulong key, bool physics, out Matrix4x4 frame)
+        {
+            frame = Matrix4x4.identity;
+            if (key == 0) return false;
+            if (IsShipSurface(key))
+            {
+                var id = unchecked((int)(uint)key);
+                return physics && DotsEnemyShipRuntime.Instance != null && DotsEnemyShipRuntime.Instance.CanSimulate
+                    ? DotsEnemyShipRuntime.Instance.TryGetPhysicsFrame(id, out frame)
+                    : DotsEnemyShipPresentation.TryGetFrame(id, out frame);
+            }
+            var root = ResolveSurface(key);
+            if (root == null) return false;
+            frame = physics ? PhysicsFrame(root) : root.localToWorldMatrix;
+            return true;
+        }
+
         public static int CrewGroupForShip(int shipId) => -1000000 - Mathf.Max(0, shipId);
 
-        public bool SpawnCrewOnSurface(int shipId, Transform support, IReadOnlyList<Vector3> localPositions,
+        public bool SpawnCrewOnShip(int shipId, IReadOnlyList<Vector3> localPositions,
             EnemyCombatType combatType, uint seed)
         {
-            if (!CanSimulate || support == null || localPositions == null || localPositions.Count == 0 ||
+            if (!CanSimulate || localPositions == null || localPositions.Count == 0 ||
                 !AttachServer() || Catalog == null || !Catalog.IsBaked) return false;
             var group = CrewGroupForShip(shipId);
+            if (_crewGroups.Contains(group)) return true;
+            if (_byId.Count + localPositions.Count > Catalog.MaximumEnemies) return false;
             var manager = _serverWorld.EntityManager;
-            using (var existing = _enemies.ToEntityArray(Allocator.Temp))
-                foreach (var entity in existing)
-                    if (manager.GetComponentData<DotsEnemyBrain>(entity).SpawnGroup == group) return true;
             using var prefabQuery = manager.CreateEntityQuery(typeof(DotsEnemyPrefab));
             if (prefabQuery.IsEmptyIgnoreFilter) return false;
             var prefab = prefabQuery.GetSingleton<DotsEnemyPrefab>().Value;
-            var surface = SceneSurfaceKey(support);
-            _surfaces[surface] = support;
-            var frame = PhysicsFrame(support);
+            var surface = ShipSurfaceKey(shipId);
+            if (!TryGetSurfaceFrame(surface, true, out var frame)) return false;
             var random = new Random(seed | 1u);
             var now = Now;
             foreach (var localPosition in localPositions)
@@ -601,11 +631,13 @@ namespace WaveByWave.Enemies
                 });
                 _byId.Add(state.Id, entity);
             }
+            _crewGroups.Add(group);
             return true;
         }
 
         public void DespawnGroup(int group)
         {
+            _crewGroups.Remove(group);
             if (!AttachServer()) return;
             var manager = _serverWorld.EntityManager;
             using var entities = _enemies.ToEntityArray(Allocator.Temp);
@@ -621,6 +653,7 @@ namespace WaveByWave.Enemies
         public Transform ResolveSurface(ulong key)
         {
             if (key == 0) return null;
+            if (IsShipSurface(key)) return DotsEnemyShipPresentation.GetView(unchecked((int)(uint)key))?.transform;
             if (_surfaces.TryGetValue(key, out var cached) && cached != null) return cached;
             if ((key & (1UL << 63)) == 0)
             {
@@ -645,6 +678,7 @@ namespace WaveByWave.Enemies
         }
         public static Matrix4x4 PhysicsFrame(Transform root)
         {
+            if (root.TryGetComponent<EnemyShipView>(out var ship)) return ship.SimulationFrame;
             var obj = root.GetComponent<NetworkObject>();
             if (obj != null) return WorldItem.GetPhysicsFrame(obj);
             if (root.TryGetComponent<MovingPlatform>(out var platform) && platform.UsesKccMover)
@@ -655,17 +689,14 @@ namespace WaveByWave.Enemies
         }
         private void UpdateLocal(ref DotsEnemyState state)
         {
-            var root = ResolveSurface(state.SupportId);
-            if (root == null) { state.LocalPosition = state.Position; state.LocalRotation = state.Rotation; return; }
-            var frame = PhysicsFrame(root);
+            if (!TryGetSurfaceFrame(state.SupportId, true, out var frame))
+            { state.LocalPosition = state.Position; state.LocalRotation = state.Rotation; return; }
             state.LocalPosition = frame.inverse.MultiplyPoint3x4(state.Position);
             state.LocalRotation = Quaternion.Inverse(frame.rotation) * (Quaternion)state.Rotation;
         }
         private void Carry(ref DotsEnemyState state)
         {
-            var root = ResolveSurface(state.SupportId);
-            if (root == null) return;
-            var frame = PhysicsFrame(root);
+            if (!TryGetSurfaceFrame(state.SupportId, true, out var frame)) return;
             state.Position = frame.MultiplyPoint3x4(state.LocalPosition);
             state.Rotation = frame.rotation * (Quaternion)state.LocalRotation;
         }
@@ -739,7 +770,7 @@ namespace WaveByWave.Enemies
         private void ClearServer()
         {
             if (_serverWorld != null && _serverWorld.IsCreated) _serverWorld.EntityManager.DestroyEntity(_enemies);
-            _byId.Clear(); _spawns.Clear(); StressCount = 0;
+            _byId.Clear(); _crewGroups.Clear(); _spawns.Clear(); StressCount = 0;
         }
         private void DisposeProbes()
         {

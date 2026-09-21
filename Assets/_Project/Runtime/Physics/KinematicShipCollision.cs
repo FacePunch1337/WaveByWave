@@ -56,6 +56,7 @@ namespace WaveByWave.Collision
 
         public bool IsReady => _hullNodes.IsCreated && _hasWorld;
         public Vector3 HullHalfSize { get; private set; } = Vector3.one;
+        public float HullRadius => _radius;
 
         private struct HullNode
         {

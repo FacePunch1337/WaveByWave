@@ -9,12 +9,29 @@ using UnityEngine.SceneManagement;
 using WaveByWave.Combat;
 using WaveByWave.Customization;
 using WaveByWave.Items;
+using WaveByWave.Enemies;
 using WaveByWave.Networking;
 using WaveByWave.Ships;
 using WaveByWave.UI;
 
 namespace WaveByWave.Player
 {
+    // Ship identity and its local pose arrive atomically, including on late join.
+    public struct EnemyShipPassengerPose : INetworkSerializable, System.IEquatable<EnemyShipPassengerPose>
+    {
+        public int ShipId;
+        public Vector3 Position;
+        public Quaternion Rotation;
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+        {
+            serializer.SerializeValue(ref ShipId);
+            serializer.SerializeValue(ref Position);
+            serializer.SerializeValue(ref Rotation);
+        }
+        public bool Equals(EnemyShipPassengerPose other) => ShipId == other.ShipId &&
+            Position.Equals(other.Position) && Rotation.Equals(other.Rotation);
+    }
+
     [DefaultExecutionOrder(9000)]
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider), typeof(NetworkObject))]
     [RequireComponent(typeof(OwnerNetworkTransform), typeof(NetworkRigidbody))]
@@ -92,9 +109,19 @@ namespace WaveByWave.Player
         private bool _isGrounded;
         private Vector3 _groundNormal = Vector3.up;
         private Quaternion _desiredBodyRotation = Quaternion.identity;
+        private Transform _desiredRotationFrame;
+        private Quaternion _desiredLocalBodyRotation = Quaternion.identity;
         private Vector3 _airbornePlatformMomentum;
         private float _ignoreGroundUntil;
         private MovingPlatform _platform;
+        private EnemyShipView _enemyShip;
+        private Matrix4x4 _enemyPhysicsFrame;
+        private Vector3 _enemyLocalPosition, _enemyPreviousLocalPosition, _enemyPointVelocity;
+        private Quaternion _enemyLocalRotation = Quaternion.identity, _enemyPreviousLocalRotation = Quaternion.identity;
+        private bool _enemyPoseInitialized;
+        private int _remoteEnemyShipId;
+        private readonly NetworkVariable<EnemyShipPassengerPose> _enemyPassengerPose = new(
+            default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
         private bool _airborneFromPlatform;
         private Vector3 _platformLocalAnchor;
         private bool _platformAnchorLocked;
@@ -218,6 +245,9 @@ namespace WaveByWave.Player
                 return;
 
             _desiredBodyRotation = rotation;
+            _desiredRotationFrame = _platform != null ? _platform.transform : _enemyShip != null ? _enemyShip.transform : null;
+            _desiredLocalBodyRotation = _desiredRotationFrame != null
+                ? Quaternion.Inverse(_desiredRotationFrame.rotation) * rotation : rotation;
         }
 
         private void Awake()
@@ -595,6 +625,17 @@ namespace WaveByWave.Player
 
         public void BeforeCharacterUpdate(float deltaTime)
         {
+            if (!_useKccMotor || !IsOwner || _sceneTransitioning || _enemyShip == null ||
+                !_enemyPoseInitialized || !_isGrounded) return;
+            var next = DotsEnemyRuntime.PhysicsFrame(_enemyShip.transform);
+            var previousPoint = _enemyPhysicsFrame.MultiplyPoint3x4(_enemyLocalPosition);
+            var nextPoint = next.MultiplyPoint3x4(_enemyLocalPosition);
+            _enemyPointVelocity = (nextPoint - previousPoint) / Mathf.Max(deltaTime, 0.0001f);
+            // BeforeCharacterUpdate runs before KCC copies the Transform into its transient
+            // state. Update that input pose, otherwise a transient-only change is overwritten.
+            _kccMotor.SetPositionAndRotation(nextPoint, next.rotation * _enemyLocalRotation, false);
+            _kccMotor.BaseVelocity = next.rotation * Quaternion.Inverse(_enemyPhysicsFrame.rotation) * _kccMotor.BaseVelocity;
+            _enemyPhysicsFrame = next;
         }
 
         public void UpdateRotation(ref Quaternion currentRotation, float deltaTime)
@@ -603,6 +644,14 @@ namespace WaveByWave.Player
                 return;
 
             currentRotation = _desiredBodyRotation;
+            if (_platform != null && _platform.UsesKccMover)
+                currentRotation = _platform.KccMover.TransientRotation *
+                    (_desiredRotationFrame == _platform.transform ? _desiredLocalBodyRotation :
+                        Quaternion.Inverse(_platform.transform.rotation) * _desiredBodyRotation);
+            else if (_enemyShip != null)
+                currentRotation = DotsEnemyRuntime.PhysicsFrame(_enemyShip.transform).rotation *
+                    (_desiredRotationFrame == _enemyShip.transform ? _desiredLocalBodyRotation :
+                        Quaternion.Inverse(_enemyShip.transform.rotation) * _desiredBodyRotation);
         }
 
         public void UpdateVelocity(ref Vector3 currentVelocity, float deltaTime)
@@ -665,6 +714,11 @@ namespace WaveByWave.Player
                     var jumpSpeed = Mathf.Sqrt(jumpHeight * -2f * gravity);
                     currentVelocity = Vector3.ProjectOnPlane(currentVelocity, characterUp) +
                                       characterUp * jumpSpeed;
+                    if (_enemyShip != null)
+                    {
+                        currentVelocity += _enemyPointVelocity;
+                        _airbornePlatformMomentum = _enemyPointVelocity;
+                    }
                     _isGrounded = false;
                     if (_platform != null)
                     {
@@ -843,6 +897,27 @@ namespace WaveByWave.Player
             var previousPlatform = _platform;
             _isGrounded = _kccMotor.GroundingStatus.IsStableOnGround;
 
+            var enemyShip = _isGrounded && _kccMotor.GroundingStatus.GroundCollider != null
+                ? _kccMotor.GroundingStatus.GroundCollider.GetComponentInParent<EnemyShipView>() : null;
+            if (enemyShip != null)
+            {
+                if (_enemyShip != enemyShip)
+                {
+                    ClearPlatformReference();
+                    _enemyShip = enemyShip;
+                    _enemyPoseInitialized = false;
+                    _enemyPhysicsFrame = DotsEnemyRuntime.PhysicsFrame(enemyShip.transform);
+                    _camera?.SetReferenceFrame(enemyShip.transform);
+                }
+                return;
+            }
+            if (_enemyShip != null)
+            {
+                _enemyShip = null;
+                _enemyPoseInitialized = false;
+                _camera?.SetReferenceFrame(null);
+            }
+
             MovingPlatform supportingPlatform = null;
             if (_isGrounded && _kccMotor.GroundingStatus.GroundCollider != null)
                 MovingPlatform.TryResolve(
@@ -891,6 +966,25 @@ namespace WaveByWave.Player
         {
             if (!_useKccMotor || !IsOwner || _sceneTransitioning)
                 return;
+
+            if (_enemyShip != null && _isGrounded && !_kccMotor.MustUnground())
+            {
+                var frame = DotsEnemyRuntime.PhysicsFrame(_enemyShip.transform);
+                var position = frame.inverse.MultiplyPoint3x4(_kccMotor.TransientPosition);
+                var rotation = Quaternion.Inverse(frame.rotation) * _kccMotor.TransientRotation;
+                if (_enemyPoseInitialized && _moveInput.sqrMagnitude <= 0.0001f)
+                {
+                    position = _enemyLocalPosition;
+                    _kccMotor.SetTransientPosition(frame.MultiplyPoint3x4(position));
+                }
+                _enemyPreviousLocalPosition = _enemyPoseInitialized ? _enemyLocalPosition : position;
+                _enemyPreviousLocalRotation = _enemyPoseInitialized ? _enemyLocalRotation : rotation;
+                _enemyLocalPosition = position;
+                _enemyLocalRotation = rotation;
+                _enemyPhysicsFrame = frame;
+                _enemyPoseInitialized = true;
+                return;
+            }
 
             if (_platform == null || !_platform.UsesKccMover ||
                 (!_isGrounded && !_airborneFromPlatform))
@@ -952,13 +1046,7 @@ namespace WaveByWave.Player
         private static Quaternion GetPlatformRelativeCharacterRotation(
             Quaternion platformRotation, Quaternion characterRotation)
         {
-            var localForward = Quaternion.Inverse(platformRotation) *
-                               (characterRotation * Vector3.forward);
-            localForward = Vector3.ProjectOnPlane(localForward, Vector3.up);
-            if (localForward.sqrMagnitude < 0.0001f)
-                localForward = Vector3.forward;
-
-            return Quaternion.LookRotation(localForward.normalized, Vector3.up);
+            return Quaternion.Inverse(platformRotation) * characterRotation;
         }
 
         private static Vector3 GetPlatformLocalPoint(MovingPlatform platform, Vector3 worldPoint)
@@ -1311,6 +1399,8 @@ namespace WaveByWave.Player
 
         private void ResetClientPlatformFrame()
         {
+            if (_enemyShip != null && !_isGrounded)
+            { _enemyShip = null; _enemyPoseInitialized = false; _camera?.SetReferenceFrame(null); }
             _clientPlatformPoseInitialized = false;
             _kccPresentationPlatform = null;
             _usingClientPlatformRelativeVelocity = false;
@@ -1433,6 +1523,12 @@ namespace WaveByWave.Player
 
         private void ClearPlatformReference()
         {
+            if (_enemyShip != null)
+            {
+                _enemyShip = null;
+                _enemyPoseInitialized = false;
+                _camera?.SetReferenceFrame(null);
+            }
             // Also clear a stale KCC override when the bookkeeping was already reset by
             // placement/despawn code. Leaving the override alive would keep carrying the
             // character with an old ship while the gameplay state says it is world-relative.
@@ -1454,6 +1550,15 @@ namespace WaveByWave.Player
         {
             if (!IsOwner || !IsSpawned)
                 return;
+
+            if (_enemyShip != null && _isGrounded && _enemyPoseInitialized)
+            {
+                _hasReplicatedPlatform.Value = false;
+                _enemyPassengerPose.Value = new EnemyShipPassengerPose { ShipId = _enemyShip.ShipId,
+                    Position = _enemyLocalPosition, Rotation = _enemyLocalRotation };
+                return;
+            }
+            _enemyPassengerPose.Value = default;
 
             var hasContinuousAirborneFrame = _platform != null && _airborneFromPlatform &&
                                              (_useKccMotor ||
@@ -1514,6 +1619,16 @@ namespace WaveByWave.Player
             return platformObject.GetComponent<NetworkShipController>();
         }
 
+        public bool TryGetEnemyShipPositionOnServer(out Vector3 position)
+        {
+            position = default;
+            var pose = _enemyPassengerPose.Value;
+            if (pose.ShipId == 0 || DotsEnemyShipRuntime.Instance == null ||
+                !DotsEnemyShipRuntime.Instance.TryGetPhysicsFrame(pose.ShipId, out var frame)) return false;
+            position = frame.MultiplyPoint3x4(pose.Position);
+            return true;
+        }
+
         public void GetItemDropPose(out Vector3 position, out Vector3 forward, out NetworkObject platformObject)
         {
             var source = _presentationRoot != null ? _presentationRoot : transform;
@@ -1526,6 +1641,30 @@ namespace WaveByWave.Player
 
         private void ApplyRemotePlatformPose()
         {
+            var enemyPose = _enemyPassengerPose.Value;
+            if (enemyPose.ShipId != 0 && DotsEnemyShipPresentation.TryGetFrame(enemyPose.ShipId, out var enemyFrame))
+            {
+                if (!_remotePlatformPoseInitialized || _remoteEnemyShipId != enemyPose.ShipId)
+                {
+                    _remotePlatformLocalPosition = enemyPose.Position;
+                    _remotePlatformLocalRotation = enemyPose.Rotation;
+                }
+                else
+                {
+                    _remotePlatformLocalPosition = Vector3.Lerp(_remotePlatformLocalPosition, enemyPose.Position,
+                        1f - Mathf.Exp(-remotePlatformPositionSharpness * Time.deltaTime));
+                    _remotePlatformLocalRotation = Quaternion.Slerp(_remotePlatformLocalRotation, enemyPose.Rotation,
+                        1f - Mathf.Exp(-remotePlatformRotationSharpness * Time.deltaTime));
+                }
+                _remoteEnemyShipId = enemyPose.ShipId;
+                _remotePlatformObject = null;
+                _remotePlatformPoseInitialized = true;
+                _remoteWorldPresentationActive = false;
+                _presentationRoot.SetPositionAndRotation(enemyFrame.MultiplyPoint3x4(_remotePlatformLocalPosition),
+                    enemyFrame.rotation * _remotePlatformLocalRotation);
+                return;
+            }
+            _remoteEnemyShipId = 0;
             if (!_hasReplicatedPlatform.Value ||
                 !_replicatedPlatform.Value.TryGet(out var platformObject, NetworkManager) ||
                 platformObject == null || !platformObject.IsSpawned ||
@@ -1672,7 +1811,14 @@ namespace WaveByWave.Player
                     // Display local walking/jumping in the ship's snapshot render frame.
                     // The motor root retains KCC collision simulation and world
                     // interpolation; only the camera/visual child is rebased.
-                    if (_platform != null && _platform.UsesInterpolatedNetworkMotion &&
+                    if (_enemyShip != null && _enemyPoseInitialized && _isGrounded)
+                    {
+                        var fraction = Mathf.Clamp01((Time.time - Time.fixedTime) / Mathf.Max(Time.fixedDeltaTime, 0.0001f));
+                        _presentationRoot.SetPositionAndRotation(_enemyShip.transform.TransformPoint(
+                            Vector3.Lerp(_enemyPreviousLocalPosition, _enemyLocalPosition, fraction)),
+                            _enemyShip.transform.rotation * Quaternion.Slerp(_enemyPreviousLocalRotation, _enemyLocalRotation, fraction));
+                    }
+                    else if (_platform != null && _platform.UsesKccMover &&
                         _clientPlatformPoseInitialized && (_isGrounded || _airborneFromPlatform))
                         ApplyOwnerPlatformPresentation();
                     else
@@ -1728,7 +1874,7 @@ namespace WaveByWave.Player
             Vector3 targetPosition;
             Quaternion targetRotation;
 
-            if (_platform.UsesInterpolatedNetworkMotion &&
+            if ((_platform.UsesKccMover || _platform.UsesInterpolatedNetworkMotion) &&
                 TryGetClientPlatformPresentationPose(out var localPosition, out var localRotation))
             {
                 // The local walk is interpolated in ship space, then composed with the ship's
@@ -2754,6 +2900,10 @@ namespace WaveByWave.Player
             if (!IsOwner)
                 return;
 
+            _enemyShip = null;
+            _enemyPoseInitialized = false;
+            _enemyPassengerPose.Value = default;
+
             LeaveLadder(false);
             ExitCustomization();
             _sceneTransitioning = true;
@@ -2870,6 +3020,10 @@ namespace WaveByWave.Player
             SetOwnerPhysicsSimulation(false);
             ResetAnchorInteraction();
 
+            _enemyShip = null;
+            _enemyPoseInitialized = false;
+            _enemyPassengerPose.Value = default;
+
             _activeHelm = null;
             _activeSailControl = null;
             _activeMastControl = null;
@@ -2916,6 +3070,9 @@ namespace WaveByWave.Player
 
         public override void OnNetworkDespawn()
         {
+            _enemyShip = null;
+            _enemyPoseInitialized = false;
+            _remoteEnemyShipId = 0;
             _activeLadder = null;
             ExitCustomization();
             ResetAnchorInteraction();

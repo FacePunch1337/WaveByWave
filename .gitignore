@@ -44,6 +44,8 @@
 ExportedObj/
 .consulo/
 *.csproj
+!Tools/ShipFleetChecks/ShipFleetChecks.csproj
+/Tools/ShipFleetChecks/obj/
 *.unityproj
 *.sln
 *.slnx

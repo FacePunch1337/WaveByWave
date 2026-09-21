@@ -147,8 +147,8 @@ namespace WaveByWave.Enemies
                 {
                     view.Hit = state.HitRevision; view.FlashUntil = Time.unscaledTime + _catalog.DamageFlashDuration;
                 }
-                var surface = runtime.ResolveSurface(state.SupportId);
-                var support = surface != null ? state.SupportId : 0;
+                var hasSurface = runtime.TryGetSurfaceFrame(state.SupportId, false, out var surfaceFrame);
+                var support = hasSurface ? state.SupportId : 0;
                 var position = support != 0 ? state.LocalPosition : state.Position;
                 var rotation = support != 0 ? state.LocalRotation : state.Rotation;
                 if (view.Support != support || math.distancesq(view.Position, position) > 25)
@@ -158,7 +158,7 @@ namespace WaveByWave.Enemies
                 view.Support = support;
                 var matrix = float4x4.TRS(view.Position, view.Rotation, new float3(_catalog.VisualScale));
                 // Smooth only support-local motion. Never smooth the ship's rendered matrix.
-                if (surface != null) matrix = math.mul((float4x4)surface.localToWorldMatrix, matrix);
+                if (hasSurface) matrix = math.mul((float4x4)surfaceFrame, matrix);
                 var clipIndex = state.Animation == EnemyAnimationState.Stunned ? 0 : (int)state.Animation;
                 var clips = _catalog.BakedParts[0].Clips;
                 var clip = clips[Mathf.Clamp(clipIndex, 0, clips.Length - 1)];

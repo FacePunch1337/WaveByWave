@@ -66,6 +66,15 @@ namespace WaveByWave.Enemies
         [Range(1, 32)] public int SpawnsPerFrame = 2;
         [Min(10f)] public float TargetSearchRadius = 350f;
 
+        [Header("Fleet performance")]
+        [Range(5, 60)] public int SimulationRate = 20;
+        [Range(1, 20)] public int DistantSimulationRate = 5;
+        [Min(30f)] public float DetailedSimulationDistance = 100f;
+        [Min(30f)] public float PhysicsViewDistance = 100f;
+        [Range(1, 32)] public int ViewCreationsPerFrame = 2;
+        [Tooltip("Render distant hulls in instanced batches using the authored prefab meshes.")]
+        public bool InstanceDistantShips = true;
+
         [Header("Skeleton crew")]
         [Range(0, 64)] public int CrewCount = 8;
         public EnemyCombatType CrewCombatType = EnemyCombatType.Random;

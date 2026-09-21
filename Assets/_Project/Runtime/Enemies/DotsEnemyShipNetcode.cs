@@ -155,6 +155,7 @@ namespace WaveByWave.Enemies
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateAfter(typeof(EnemyShipGhostRegistrationSystem))]
+    [UpdateBefore(typeof(EnemyServerSystem))]
     public partial class EnemyShipServerSystem : SystemBase
     {
         private EntityQuery _query;
@@ -171,7 +172,8 @@ namespace WaveByWave.Enemies
         public void Steer(NativeArray<EnemyShipTarget> targets, EnemyShipDefinition definition)
         {
             using var bodies = _query.ToComponentDataArray<DotsEnemyShipState>(Allocator.TempJob);
-            var cellSize = math.max(0.1f, definition.AvoidanceRadius);
+            var cellSize = math.max(definition.AvoidanceRadius, 2f *
+                (definition.CollisionHalfExtents.magnitude + definition.CollisionCenter.magnitude + definition.CollisionSkin) + 2f);
             using var grid = new NativeParallelMultiHashMap<int, int>(math.max(1, bodies.Length), Allocator.TempJob);
             for (var i = 0; i < bodies.Length; i++)
             {
@@ -189,7 +191,7 @@ namespace WaveByWave.Enemies
                 RangeBand = definition.RangeCorrectionBand,
                 OrbitWeight = definition.OrbitWeight,
                 RangeWeight = definition.RangeCorrectionWeight,
-                AvoidanceRadius = definition.AvoidanceRadius,
+                AvoidanceRadius = cellSize,
                 AvoidanceStrength = definition.AvoidanceStrength
             }.ScheduleParallel(Dependency);
             Dependency.Complete();

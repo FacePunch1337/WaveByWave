@@ -412,6 +412,24 @@ namespace WaveByWave.Ships
                 _linearVelocity = resolved.Velocity;
                 _angularVelocity = resolved.AngularVelocity;
 
+                // The triangle query world contains static scenery only. Fleet contacts
+                // use the same authoritative spatial index as the enemy hulls, including
+                // distant ships whose presentation has no GameObject colliders.
+                var fleet = WaveByWave.Enemies.DotsEnemyShipRuntime.Instance;
+                if (fleet != null && fleet.CanSimulate)
+                {
+                    var wanted = position - _collisionStartPosition;
+                    var accepted = fleet.LimitPlayerMotion(_collisionStartPosition, wanted,
+                        _geometryCollision.HullRadius);
+                    if ((accepted - wanted).sqrMagnitude > 0.000001f)
+                    {
+                        position = _collisionStartPosition + accepted;
+                        var normal = Vector3.ProjectOnPlane(accepted - wanted, Vector3.up).normalized;
+                        var intoContact = Vector3.Dot(_linearVelocity, normal);
+                        if (intoContact < 0) _linearVelocity -= normal * intoContact;
+                    }
+                }
+
                 var tilt = Quaternion.FromToRotation(Vector3.up, rotation * Vector3.up);
                 var yawForward = Quaternion.Inverse(tilt) * (rotation * Vector3.forward);
                 _heading = Mathf.Repeat(Mathf.Atan2(yawForward.x, yawForward.z) * Mathf.Rad2Deg, 360f);

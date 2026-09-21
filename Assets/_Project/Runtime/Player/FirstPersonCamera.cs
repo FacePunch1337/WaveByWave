@@ -109,16 +109,11 @@ namespace WaveByWave.Player
             if (characterBody != null && (_player == null || !_player.IsAtControlStation))
             {
                 var frameRotation = referenceFrame != null ? referenceFrame.rotation : Quaternion.identity;
-                var forward = frameRotation * Quaternion.Euler(0f, _yaw, 0f) * Vector3.forward;
-                forward = Vector3.ProjectOnPlane(forward, Vector3.up);
-                if (forward.sqrMagnitude > 0.0001f)
-                {
-                    var bodyRotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
-                    if (_player != null)
-                        _player.SetDesiredBodyRotation(bodyRotation);
-                    else
-                        characterBody.rotation = bodyRotation;
-                }
+                var bodyRotation = frameRotation * Quaternion.Euler(0f, _yaw, 0f);
+                if (_player != null)
+                    _player.SetDesiredBodyRotation(bodyRotation);
+                else
+                    characterBody.rotation = bodyRotation;
             }
         }
 

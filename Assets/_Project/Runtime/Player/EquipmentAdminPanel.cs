@@ -15,6 +15,11 @@ namespace WaveByWave.Player
         private Text _stressCountLabel, _stressRadiusLabel;
         private int _requestedStressCount, _appliedStressCount = -1;
         private float _requestedStressRadius = 15f, _appliedStressRadius = -1f, _stressApplyAt;
+        private Slider _enemySlider;
+        private Text _enemyLabel;
+        private int _enemyTarget;
+        private bool _enemyDirty;
+        private float _enemyApplyAt, _enemyRadius = 15f;
         public void Initialize(PlayerInventory inventory) => _inventory = inventory;
         private void Update()
         {
@@ -39,6 +44,17 @@ namespace WaveByWave.Player
                 }
                 _stressApplyAt = applied ? float.PositiveInfinity : Time.unscaledTime + 1f;
             }
+            if (InputCaptured && _enemyDirty && Time.unscaledTime >= _enemyApplyAt)
+            {
+                var runtime = WaveByWave.Enemies.DotsEnemyRuntime.EnsureInstance();
+                _enemyDirty = runtime == null || !runtime.SetStressTarget(_enemyTarget, _inventory.transform.position, _enemyRadius);
+                _enemyApplyAt = Time.unscaledTime + 1f;
+            }
+            if (InputCaptured && _enemyLabel != null)
+            {
+                var runtime = WaveByWave.Enemies.DotsEnemyRuntime.Instance;
+                _enemyLabel.text = $"Скелеты: {runtime?.StressCount ?? 0} • цель {_enemyTarget} / 3000";
+            }
         }
         private void Build()
         {
@@ -53,7 +69,7 @@ namespace WaveByWave.Player
             _panel.transform.SetParent(_canvas.transform, false);
             var rect = _panel.GetComponent<RectTransform>(); rect.anchorMin = rect.anchorMax = Vector2.one * 0.5f;
             rect.sizeDelta = new Vector2(660f, 840f); _panel.GetComponent<Image>().color = new Color(0.035f, 0.055f, 0.075f, 0.98f);
-            Label(_panel.transform, "Админ-панель предметов • F2", new Vector2(0, 390), new Vector2(610, 40), Color.white);
+            Label(_panel.transform, "Админ-панель • F2", new Vector2(0, 390), new Vector2(610, 40), Color.white);
 
             Label(_panel.transform, "DOTS / Steam нагрузочный тест", new Vector2(0, 345), new Vector2(600, 32),
                 new Color(0.4f, 0.85f, 1f));
@@ -81,8 +97,9 @@ namespace WaveByWave.Player
 
             var scrollObject = new GameObject("Catalog", typeof(RectTransform), typeof(Image), typeof(Mask), typeof(ScrollRect));
             scrollObject.transform.SetParent(_panel.transform, false);
-            var scrollRect = scrollObject.GetComponent<RectTransform>(); scrollRect.sizeDelta = new Vector2(590f, 430f);
-            scrollRect.anchoredPosition = new Vector2(0f, -45f);
+            var scrollRect = scrollObject.GetComponent<RectTransform>();
+            scrollRect.sizeDelta = new Vector2(590f, 330f);
+            scrollRect.anchoredPosition = new Vector2(0f, -170f);
             scrollObject.GetComponent<Image>().color = new Color(0, 0, 0, 0.1f);
             scrollObject.GetComponent<Mask>().showMaskGraphic = false;
             var contentObject = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
@@ -124,6 +141,23 @@ namespace WaveByWave.Player
             clear.GetComponent<Button>().targetGraphic = clear.GetComponent<Image>();
             clear.GetComponent<Button>().onClick.AddListener(() => _stressCountSlider.value = 0f);
             Label(clear.transform, "Очистить тест", Vector2.zero, new Vector2(180, 30), Color.white);
+            _enemyLabel = Label(_panel.transform, "Скелеты: 0 / 3000", new Vector2(0, 160), new Vector2(570, 28),
+                new Color(1f, 0.8f, 0.35f));
+            _enemyLabel.fontSize = 17;
+            _enemySlider = CreateSlider(_panel.transform, new Vector2(0, 130), 0, 3000, 0, true);
+            _enemySlider.onValueChanged.AddListener(value =>
+            {
+                _enemyTarget = Mathf.RoundToInt(value); _enemyDirty = true; _enemyApplyAt = Time.unscaledTime + 0.2f;
+            });
+            var enemyRadiusLabel = Label(_panel.transform, "Радиус скелетов: 15 м", new Vector2(0, 90),
+                new Vector2(570, 28), Color.white);
+            enemyRadiusLabel.fontSize = 17;
+            var enemyRadius = CreateSlider(_panel.transform, new Vector2(0, 58), 5, 80, 15, false);
+            enemyRadius.onValueChanged.AddListener(value =>
+            {
+                _enemyRadius = value; enemyRadiusLabel.text = $"Радиус скелетов: {value:0.0} м";
+            });
+            clear.GetComponent<Button>().onClick.AddListener(() => { if (_enemySlider != null) _enemySlider.value = 0; });
         }
 
         private void ScheduleStressApply() => _stressApplyAt = Time.unscaledTime + 0.12f;

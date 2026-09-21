@@ -6,6 +6,7 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
 using WaveByWave.Collision;
+using WaveByWave.Enemies;
 
 namespace WaveByWave.Generation
 {
@@ -36,12 +37,23 @@ namespace WaveByWave.Generation
         private JobHandle _job;
         private bool _initialized, _meshing, _decorated, _hasCompletedInitialBuild, _presentationRequested;
         private bool _staticCollisionDirty;
+        private bool _enemySpawnPointsCreated;
         private IslandMeshJob _meshJob;
         private int _activeChunk;
         private readonly List<Chunk> _chunks = new();
         private readonly Queue<int> _dirty = new();
         private readonly HashSet<int> _queued = new();
         private readonly List<Transform> _decorations = new();
+        private readonly HashSet<Collider> _decorationColliders = new();
+
+        public bool IsDecorationCollider(Collider collider) => _decorationColliders.Contains(collider);
+
+        private void RegisterDecoration(Transform decoration)
+        {
+            _decorations.Add(decoration);
+            foreach (var collider in decoration.GetComponentsInChildren<Collider>(true))
+                _decorationColliders.Add(collider);
+        }
 
         public static IslandFieldParameters CreateParameters(IslandSize size, OceanGenerationSettings settings)
         {
@@ -103,7 +115,7 @@ namespace WaveByWave.Generation
                 }
             if (decorationRoot != null)
                 for (var i = 0; i < decorationRoot.childCount; i++)
-                    _decorations.Add(decorationRoot.GetChild(i));
+                    RegisterDecoration(decorationRoot.GetChild(i));
         }
 
         private void BeginInitialize(int id, IslandSize size, uint seed, OceanGenerationSettings settings)
@@ -398,10 +410,87 @@ namespace WaveByWave.Generation
                     var instance = Instantiate(entry.Prefab, point, rotation, transform);
                     instance.transform.localScale *= scale;
                     instance.SetActive(_hasCompletedInitialBuild && _presentationRequested);
-                    _decorations.Add(instance.transform);
+                    RegisterDecoration(instance.transform);
                     break;
                 }
             }
+        }
+
+        // Called by the authoritative director after the real chunk colliders become available.
+        public void EnsureEnemySpawnPoints()
+        {
+            if (_enemySpawnPointsCreated || !GeometryReady || !ShipCollisionActive ||
+                Settings == null || !Settings.GenerateEnemySpawnPoints) return;
+            var runtime = DotsEnemyRuntime.Instance;
+            if (runtime == null || !runtime.CanSimulate) return;
+            _enemySpawnPointsCreated = true;
+            var prefabs = new List<EnemySpawnPoint>();
+            if (Settings.EnemySpawnPointPrefabs != null)
+                foreach (var prefab in Settings.EnemySpawnPointPrefabs)
+                    if (prefab != null) prefabs.Add(prefab);
+            if (prefabs.Count == 0) return;
+
+            // An independent stream keeps locations stable when trees/chests change.
+            var random = new Unity.Mathematics.Random((Seed ^ 0xA7C53D91u) | 1u);
+            var range = Settings.EnemySpawnPointCount(Size);
+            var minimum = Mathf.Clamp(Mathf.Min(range.x, range.y), 0, 32);
+            var maximum = Mathf.Clamp(Mathf.Max(range.x, range.y), minimum, 32);
+            var count = random.NextInt(minimum, maximum + 1);
+            if (count == 0) return;
+            var placed = new List<Vector3>(count);
+            var root = new GameObject("Island Enemy Spawn Points");
+            root.SetActive(false); // Configure instances before their OnEnable registers them.
+            root.transform.SetParent(transform, false);
+            var spacing = Mathf.Max(0, Settings.EnemySpawnPointSpacing);
+            for (var i = 0; i < count; i++)
+            {
+                var prefab = prefabs[random.NextInt(prefabs.Count)];
+                for (var attempt = 0; attempt < 48; attempt++)
+                {
+                    var xz = random.NextFloat2(-Diameter * 0.48f, Diameter * 0.48f);
+                    if (!TryMeshSurface(xz.x, xz.y, out var hit) ||
+                        hit.point.y < transform.position.y + Settings.EnemySpawnPointMinimumHeightAboveWater ||
+                        Vector3.Angle(hit.normal, Vector3.up) > Settings.EnemySpawnPointMaximumSlope) continue;
+                    var crowded = false;
+                    foreach (var position in placed)
+                        if ((position - hit.point).sqrMagnitude < spacing * spacing) { crowded = true; break; }
+                    if (crowded) continue;
+                    var point = Instantiate(prefab, hit.point,
+                        Quaternion.Euler(0, random.NextFloat(0, 360), 0) * prefab.transform.localRotation, root.transform);
+                    point.name = $"{prefab.name} {i + 1}";
+                    point.Mode = EnemySpawnMode.WhenPlayerEntersRadius;
+                    point.OwnerIsland = this;
+                    if (point.Seed == 0) point.Seed = random.NextInt(1, int.MaxValue);
+                    point.enabled = true;
+                    point.gameObject.SetActive(true);
+                    placed.Add(hit.point);
+                    break;
+                }
+            }
+            root.SetActive(true);
+            if (placed.Count < count)
+                Debug.LogWarning($"[Island {Id}] Placed {placed.Count}/{count} enemy spawn points: insufficient dry ground at the configured slope/spacing.", this);
+        }
+
+        private bool TryMeshSurface(float x, float z, out RaycastHit result)
+        {
+            result = default;
+            var top = transform.TransformPoint(new Vector3(x, Settings.SandHeight + 1f, z));
+            var bottom = transform.TransformPoint(new Vector3(x, _parameters.Origin.y - 1f, z));
+            var ray = new Ray(top, bottom - top);
+            var distance = Vector3.Distance(top, bottom);
+            var nearest = distance;
+            foreach (var chunk in _chunks)
+            {
+                var collider = chunk.Collider;
+                if (collider == null || !collider.enabled || collider.sharedMesh == null ||
+                    !collider.bounds.IntersectRay(ray, out var boundsDistance) || boundsDistance > nearest) continue;
+                // Raycast this island's actual mesh, never nearby ships, props or an approximate height field.
+                if (!collider.Raycast(ray, out var hit, nearest)) continue;
+                nearest = hit.distance;
+                result = hit;
+            }
+            return result.collider != null;
         }
 
         private void OnDestroy()

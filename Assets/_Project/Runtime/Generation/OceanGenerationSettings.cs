@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using StylizedWater3;
 using UnityEngine;
 using UnityEngine.Serialization;
+using WaveByWave.Enemies;
 using WaveByWave.Items;
 
 namespace WaveByWave.Generation
@@ -71,6 +72,17 @@ namespace WaveByWave.Generation
         public GameObject ChunkPrefab;
         public List<IslandDecoration> Decorations = new();
 
+        [Header("Точки появления скелетов на островах")]
+        public bool GenerateEnemySpawnPoints = true;
+        [Tooltip("Пул префабов с EnemySpawnPoint, например SkeletonSpawn_OnPlayerRadius. Выбирается случайный вариант; активация всегда по входу игрока в радиус.")]
+        public List<EnemySpawnPoint> EnemySpawnPointPrefabs = new();
+        public Vector2Int EnemySpawnPointCountSmall = new(1, 2);
+        public Vector2Int EnemySpawnPointCountMedium = new(2, 4);
+        public Vector2Int EnemySpawnPointCountLarge = new(3, 6);
+        [Min(0f)] public float EnemySpawnPointSpacing = 3f;
+        [Range(0f, 60f)] public float EnemySpawnPointMaximumSlope = 35f;
+        [Min(0f)] public float EnemySpawnPointMinimumHeightAboveWater = 0.25f;
+
         [Header("Копание")]
         [Range(0.3f, 1.5f)] public float DigRadius = 0.65f;
         [Range(0.05f, 0.5f)] public float DigPenetration = 0.22f;
@@ -93,5 +105,8 @@ namespace WaveByWave.Generation
 
         public float Diameter(IslandSize size) => size switch
         { IslandSize.Small => SmallDiameter, IslandSize.Medium => MediumDiameter, _ => LargeDiameter };
+
+        public Vector2Int EnemySpawnPointCount(IslandSize size) => size switch
+        { IslandSize.Small => EnemySpawnPointCountSmall, IslandSize.Medium => EnemySpawnPointCountMedium, _ => EnemySpawnPointCountLarge };
     }
 }

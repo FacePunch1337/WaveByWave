@@ -16,6 +16,8 @@ namespace WaveByWave.Generation
         public int Seed = 24681357;
         [Tooltip("Создавать на этом острове зарытые сетевые сундуки. Для острова в Port выключено по умолчанию.")]
         public bool SpawnChests;
+        [Tooltip("Генерировать точки скелетов из Settings во время игры. Для безопасного острова Port оставьте выключенным.")]
+        public bool SpawnEnemyPoints;
         [Tooltip("Уникальный отрицательный id. Если разместите второй Scene Island, назначьте ему другой id.")]
         public int NetworkIslandId = -10001;
 

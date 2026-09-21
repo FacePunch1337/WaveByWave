@@ -90,6 +90,15 @@ MonoBehaviour:
     MinimumHeightAboveWater: 0.25
     Spacing: 1.4
     AlignToSurface: 0
+  GenerateEnemySpawnPoints: 1
+  EnemySpawnPointPrefabs:
+  - {fileID: 7781738345221626232, guid: 839d93365f4604242988f79aea861bf7, type: 3}
+  EnemySpawnPointCountSmall: {x: 1, y: 1}
+  EnemySpawnPointCountMedium: {x: 1, y: 2}
+  EnemySpawnPointCountLarge: {x: 1, y: 3}
+  EnemySpawnPointSpacing: 3
+  EnemySpawnPointMaximumSlope: 35
+  EnemySpawnPointMinimumHeightAboveWater: 0.25
   DigRadius: 0.65
   DigPenetration: 0.22
   DigSmoothing: 0.45

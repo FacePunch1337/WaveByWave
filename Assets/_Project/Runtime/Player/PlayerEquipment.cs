@@ -671,6 +671,7 @@ namespace WaveByWave.Player
         }
         private void SwordHitServer(Vector3 origin, Vector3 direction, float damage)
         {
+            WaveByWave.Enemies.DotsEnemyRuntime.Instance?.Melee(origin, direction, swordRange, damage);
             var count = Physics.OverlapSphereNonAlloc(origin, swordRange, _targets, hitLayers, QueryTriggerInteraction.Collide);
             _swordTargets.Clear();
             for (var i = 0; i < count; i++)
@@ -743,6 +744,17 @@ namespace WaveByWave.Player
                     var from = b.Evaluate(b.Simulated, bulletGravity); var to = b.Evaluate(next, bulletGravity);
                     var solid = SegmentHit(from, to, bulletRadius, null, out var hit, out var solidFraction, true);
                     var water = _water.Crossing(from, to, out var waterPoint, out var waterFraction);
+                    var enemies = WaveByWave.Enemies.DotsEnemyRuntime.Instance;
+                    if (enemies != null && enemies.RayHit(from, to, bulletRadius, out var enemyId, out var enemyFraction) &&
+                        (!solid || enemyFraction < solidFraction) && (!water || enemyFraction < waterFraction))
+                    {
+                        var enemyPoint = Vector3.Lerp(from, to, enemyFraction);
+                        enemies.Damage(enemyId, b.Damage, b.Origin);
+                        BulletImpactClientRpc(b.Id, enemyPoint, (from - to).normalized, false, true,
+                            b.Simulated + step * enemyFraction);
+                        finished = true;
+                        break;
+                    }
                     if (solid || water || next - b.Started >= bulletLifetime)
                     {
                         water = water && (!solid || waterFraction < solidFraction);

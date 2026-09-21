@@ -623,6 +623,9 @@ namespace WaveByWave.Generation
                 var visible = record.ScenePlaced || _loadingComplete && record.Island.InitialBuildComplete &&
                     NearAnyPlayerOrShip(record.Island.transform.position, settings.IslandRevealRadius);
                 record.Island.SetPresentationVisible(visible);
+                if (visible && _manager != null && _manager.IsServer &&
+                    (!record.ScenePlaced || record.Island.TryGetComponent<SceneIsland>(out var sceneIsland) && sceneIsland.SpawnEnemyPoints))
+                    record.Island.EnsureEnemySpawnPoints();
                 foreach (var marker in record.MarkerViews.Values)
                     if (marker != null) marker.SetActive(visible);
             }

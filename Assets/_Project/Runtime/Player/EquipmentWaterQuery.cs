@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using StylizedWater3;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace WaveByWave.Player
@@ -10,6 +12,44 @@ namespace WaveByWave.Player
         private readonly HeightQuerySystem.Interface _water = new()
         { method = HeightQuerySystem.Interface.Method.CPU, autoFind = true };
         private readonly HeightQuerySystem.Sampler _samples = new();
+        private struct WaveMaterialState
+        {
+            public int Frame, Layers;
+            public bool Enabled;
+            public float Speed, Frequency, Height;
+            public float2 Direction;
+        }
+        private static readonly Dictionary<Material, WaveMaterialState> MaterialStates = new();
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetMaterialStates() => MaterialStates.Clear();
+
+        private void ComputeSamples(float level)
+        {
+            var profile = _water.waveProfile;
+            if (profile == null) return;
+            var material = _water.waterObject.material;
+            if (!MaterialStates.TryGetValue(material, out var state) || state.Frame != Time.frameCount)
+            {
+                state.Frame = Time.frameCount;
+                state.Enabled = material.IsKeywordEnabled(ShaderParams.Keywords.Waves);
+                if (state.Enabled)
+                {
+                    var direction = material.GetVector(ShaderParams.Properties._Direction);
+                    state.Direction = new float2(direction.x, direction.y);
+                    state.Speed = material.GetFloat(ShaderParams.Properties._Speed) *
+                        material.GetFloat(ShaderParams.Properties._WaveSpeed);
+                    state.Frequency = material.GetFloat(ShaderParams.Properties._WaveFrequency);
+                    state.Layers = material.GetInt(ShaderParams.Properties._WaveMaxLayers);
+                    state.Height = material.GetFloat(ShaderParams.Properties._WaveHeight);
+                }
+                MaterialStates[material] = state;
+            }
+            if (!state.Enabled) return;
+            // Let the asset apply its internal floating-origin offset and clock.
+            Gerstner.ComputeHeight(profile, _samples, level, state.Speed, state.Frequency,
+                state.Direction, new float3(1f, state.Height, 1f), state.Layers);
+        }
         public EquipmentWaterQuery(WaveProfile profile)
         { _water.waveProfile = profile; _samples.SetSampleCount(4, true); }
         public bool TryWaterLevel(Vector3 point, out float level)
@@ -25,7 +65,7 @@ namespace WaveByWave.Player
             _samples.positions[0] = _samples.positions[1] = point;
             height = _water.GetWaterLevel();
             _samples.heightValues[0] = _samples.heightValues[1] = height;
-            if (_water.waveProfile != null) Gerstner.ComputeHeight(_samples, _water);
+            ComputeSamples(height);
             height = _samples.heightValues[0];
             return true;
         }
@@ -43,7 +83,7 @@ namespace WaveByWave.Player
             _samples.positions[3] = point + Vector3.forward * halfZ;
             var level = _water.GetWaterLevel();
             for (var i = 0; i < 4; i++) _samples.heightValues[i] = level;
-            if (_water.waveProfile != null) Gerstner.ComputeHeight(_samples, _water);
+            ComputeSamples(level);
             height = (_samples.heightValues[0] + _samples.heightValues[1] +
                 _samples.heightValues[2] + _samples.heightValues[3]) * 0.25f;
             normal = HeightQuerySystem.DeriveNormal(_samples.heightValues[0], _samples.heightValues[1],
@@ -57,7 +97,7 @@ namespace WaveByWave.Player
             _samples.positions[0] = from; _samples.positions[1] = to;
             var level = _water.GetWaterLevel();
             _samples.heightValues[0] = _samples.heightValues[1] = level;
-            if (_water.waveProfile != null) Gerstner.ComputeHeight(_samples, _water);
+            ComputeSamples(level);
             var a = _samples.heightValues[0]; var b = _samples.heightValues[1];
             var above = from.y - a;
             var below = to.y - b;

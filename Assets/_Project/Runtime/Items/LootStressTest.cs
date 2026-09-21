@@ -232,6 +232,18 @@ namespace WaveByWave.Items
             return definition != null;
         }
 
+        // Streaming only needs location/ownership, not the exact current wave height.
+        // Avoid hundreds of synchronous wave and prefab-bounds queries on every prune tick.
+        internal static bool TryGetStreamingPosition(int id, out Vector3 position)
+        {
+            position = default;
+            if (!ServerItems.TryGetValue(id, out var item) || item.Hook != null || item.OpeningAt > 0d)
+                return false;
+            if (item.Support != null) UpdateSupportedPose(item);
+            position = item.Support != null ? item.RestPosition : item.Position;
+            return true;
+        }
+
         public static bool RemoveServerItem(int id)
         {
             if (!ServerItems.Remove(id) || ClientServerBootstrap.ServerWorld is not { IsCreated: true } world)
@@ -753,12 +765,17 @@ namespace WaveByWave.Items
     [DefaultExecutionOrder(9800)]
     internal sealed class LootStressPresentationDriver : MonoBehaviour
     {
-        private void LateUpdate() => LootStressPresentation.UpdateDynamicItems();
+        private void LateUpdate()
+        {
+            LootStressPresentation.UpdateDynamicItems();
+        }
         private void OnDestroy() => LootStressPresentation.DriverDestroyed(this);
     }
 
     internal static partial class LootStressPresentation
     {
+        private static readonly Unity.Profiling.ProfilerMarker UpdateMarker = new("WaveByWave.Loot.Presentation");
+        private static readonly Unity.Profiling.ProfilerMarker WaterMarker = new("WaveByWave.Loot.WaterSamples");
         private sealed class Variant
         {
             public Mesh Mesh;
@@ -776,7 +793,7 @@ namespace WaveByWave.Items
             public ItemDefinition Definition;
             public Variant Variant;
             public readonly List<Entity> Entities = new();
-            public Entity BeamEntity;
+            public DotsLootRarityEffect RarityEffect;
             public Vector3 Position;
             public Quaternion Rotation;
             public Vector3 SpawnPosition;
@@ -797,7 +814,6 @@ namespace WaveByWave.Items
             public float ArcHeight;
             public ulong HookOwner = ulong.MaxValue;
             public Vector3 HookOffset;
-            public GameObject Effect;
             public DotsWorldItemPresentation DynamicPresentation;
             public int IslandId;
             public float FadeDuration;
@@ -815,7 +831,6 @@ namespace WaveByWave.Items
         }
 
         private static readonly Dictionary<int, ClientItem> Items = new(LootStressTest.MaximumCount);
-        private static readonly List<Material> RuntimeMaterials = new(5);
         private static readonly List<ClientItem> WaterItems = new(LootStressTest.MaximumCount);
         private static readonly List<LootStressDeltaCommand> PendingDeltas = new();
         private static ItemCatalog _catalog;
@@ -823,7 +838,6 @@ namespace WaveByWave.Items
         private static EquipmentWaterQuery _water;
         private static World _world;
         private static LootStressCommand? _pending;
-        private static float _nextEffectRefresh;
         private static int _waterCursor;
         private static string _activeScene;
         private static uint _appliedSeed;
@@ -890,9 +904,7 @@ namespace WaveByWave.Items
             var variants = BuildVariants(catalogIndices);
             if (variants.Count == 0) return;
             var materials = new List<Material>();
-            var beamMesh = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
-            var glowMaterials = BuildGlowMaterials();
-            var meshes = new Mesh[variants.Count + (beamMesh != null && glowMaterials.Length > 0 ? 1 : 0)];
+            var meshes = new Mesh[variants.Count];
             var materialStart = new int[variants.Count];
             for (var i = 0; i < variants.Count; i++)
             {
@@ -900,17 +912,10 @@ namespace WaveByWave.Items
                 materialStart[i] = materials.Count;
                 materials.AddRange(variants[i].Materials);
             }
-            var beamMeshIndex = -1;
-            var beamMaterialStart = materials.Count;
-            if (beamMesh != null && glowMaterials.Length > 0)
-            {
-                beamMeshIndex = variants.Count;
-                meshes[beamMeshIndex] = beamMesh;
-                materials.AddRange(glowMaterials);
-            }
             var renderArray = new RenderMeshArray(materials.ToArray(), meshes);
             var description = new RenderMeshDescription(ShadowCastingMode.On, true,
-                MotionVectorGenerationMode.Camera, 0, uint.MaxValue, LightProbeUsage.BlendProbes);
+                MotionVectorGenerationMode.Camera, LootSilhouetteRenderFeature.ItemLayer,
+                uint.MaxValue, LightProbeUsage.BlendProbes);
             var random = new Unity.Mathematics.Random(command.Seed == 0 ? 1u : command.Seed);
             for (var id = 0; id < command.Count; id++)
             {
@@ -941,22 +946,13 @@ namespace WaveByWave.Items
                 var subMeshes = Mathf.Min(variant.Mesh.subMeshCount, variant.Materials.Length);
                 for (ushort sub = 0; sub < subMeshes; sub++)
                 {
-                    var entity = world.EntityManager.CreateEntity(typeof(LocalTransform), typeof(LootStressEntity));
+                    var entity = world.EntityManager.CreateEntity(typeof(LocalToWorld), typeof(LootStressEntity));
                     RenderMeshUtility.AddComponents(entity, world.EntityManager, description, renderArray,
                         MaterialMeshInfo.FromRenderMeshArrayIndices(materialStart[variantIndex] + sub, variantIndex, sub));
-                    world.EntityManager.AddComponentData(entity, new PostTransformMatrix());
                     item.Entities.Add(entity);
                 }
-                if (beamMeshIndex >= 0)
-                {
-                    item.BeamEntity = world.EntityManager.CreateEntity(typeof(LocalTransform), typeof(LootStressEntity));
-                    RenderMeshUtility.AddComponents(item.BeamEntity, world.EntityManager,
-                        new RenderMeshDescription(ShadowCastingMode.Off, false,
-                            MotionVectorGenerationMode.ForceNoMotion, 0, uint.MaxValue, LightProbeUsage.Off),
-                        renderArray, MaterialMeshInfo.FromRenderMeshArrayIndices(
-                            beamMaterialStart + (int)item.Definition.Rarity, beamMeshIndex));
-                    world.EntityManager.AddComponentData(item.BeamEntity, new PostTransformMatrix());
-                }
+                item.RarityEffect = DotsLootRarityEffect.Create(world, item.Definition.Rarity,
+                    _effectPrefab, id + 1);
                 Items.Add(id, item);
                 if (onWater) WaterItems.Add(item);
                 SetPose(item);
@@ -979,7 +975,7 @@ namespace WaveByWave.Items
                 if (delta.CatalogIndex < 0 || delta.CatalogIndex >= _catalog.Items.Count) return;
                 var definition = _catalog.Items[delta.CatalogIndex];
                 var variant = BuildVariant(delta.CatalogIndex);
-                var presentation = DotsWorldItemPresentation.Create(definition);
+                var presentation = DotsWorldItemPresentation.Create(definition, _effectPrefab, delta.Id + 1);
                 if (definition == null || variant == null || presentation == null) return;
                 item = new ClientItem
                 {
@@ -1068,6 +1064,7 @@ namespace WaveByWave.Items
         internal static void UpdateDynamicItems()
         {
             if (_world == null || !_world.IsCreated) return;
+            using var presentationScope = UpdateMarker.Auto();
             PlayerEquipment[] hooks = null;
             foreach (var item in Items.Values)
             {
@@ -1128,12 +1125,10 @@ namespace WaveByWave.Items
                         SetPose(item);
                     }
                 }
-                if (item.Effect != null) item.Effect.transform.position = item.Position;
                 if (item.OpeningAt > 0d || item.FadeDuration > 0f) UpdateChestAndFade(item);
             }
             UpdateWaterItems();
             UpdateFocusedPrompt();
-            if (Time.unscaledTime >= _nextEffectRefresh) { _nextEffectRefresh = Time.unscaledTime + 0.5f; RefreshEffects(); }
         }
 
         internal static void SetFocused(IPlayerInteractable target)
@@ -1172,9 +1167,6 @@ namespace WaveByWave.Items
             Items.Clear();
             WaterItems.Clear();
             _waterCursor = 0;
-            foreach (var material in RuntimeMaterials)
-                if (material != null) UnityEngine.Object.Destroy(material);
-            RuntimeMaterials.Clear();
             if (_prompt != null) _prompt.SetActive(false);
             _world = null;
             _activeScene = null;
@@ -1338,34 +1330,16 @@ namespace WaveByWave.Items
             var rotation = item.Rotation * item.Variant.Rotation;
             foreach (var entity in item.Entities)
             {
-                if (!_world.EntityManager.Exists(entity)) continue;
                 _world.EntityManager.SetComponentData(entity,
-                    LocalTransform.FromPositionRotationScale(position, rotation, 1f));
-                if (_world.EntityManager.HasComponent<LocalToWorld>(entity))
-                    _world.EntityManager.SetComponentData(entity,
-                        new LocalToWorld { Value = float4x4.TRS(position, rotation, item.Variant.Scale) });
-                _world.EntityManager.SetComponentData(entity,
-                    new PostTransformMatrix { Value = float4x4.Scale(item.Variant.Scale) });
+                    new LocalToWorld { Value = float4x4.TRS(position, rotation, item.Variant.Scale) });
             }
-            if (item.BeamEntity != Entity.Null && _world.EntityManager.Exists(item.BeamEntity))
-            {
-                _world.EntityManager.SetComponentData(item.BeamEntity,
-                    LocalTransform.FromPositionRotationScale(item.Position + Vector3.up * 0.72f,
-                        Quaternion.identity, 1f));
-                if (_world.EntityManager.HasComponent<LocalToWorld>(item.BeamEntity))
-                    _world.EntityManager.SetComponentData(item.BeamEntity, new LocalToWorld
-                    {
-                        Value = float4x4.TRS(item.Position + Vector3.up * 0.72f,
-                            Quaternion.identity, new float3(0.08f, 1.4f, 0.08f))
-                    });
-                _world.EntityManager.SetComponentData(item.BeamEntity,
-                    new PostTransformMatrix { Value = float4x4.Scale(0.08f, 1.4f, 0.08f) });
-            }
+            item.RarityEffect?.SetPose(item.Position);
         }
 
         private static void UpdateWaterItems()
         {
             if (_water == null || WaterItems.Count == 0) return;
+            using var waterScope = WaterMarker.Auto();
             var budget = Mathf.Max(1, Mathf.CeilToInt(WaterItems.Count / 10f));
             for (var n = 0; n < budget && WaterItems.Count > 0; n++)
             {
@@ -1405,50 +1379,6 @@ namespace WaveByWave.Items
             item.OnWater = false;
         }
 
-        private static Material[] BuildGlowMaterials()
-        {
-            var source = _effectPrefab != null
-                ? _effectPrefab.GetComponentInChildren<LineRenderer>(true)?.sharedMaterial : null;
-            if (source == null) return Array.Empty<Material>();
-            var result = new Material[5];
-            for (var i = 0; i < result.Length; i++)
-            {
-                var color = i switch
-                {
-                    1 => new Color(0.3f, 1f, 0.4f, 0.22f),
-                    2 => new Color(0.15f, 0.55f, 1f, 0.22f),
-                    3 => new Color(0.8f, 0.25f, 1f, 0.22f),
-                    4 => new Color(1f, 0.65f, 0.12f, 0.22f),
-                    _ => new Color(0.8f, 0.9f, 1f, 0.16f)
-                };
-                var material = new Material(source) { name = $"DOTS rarity {i}", enableInstancing = true };
-                if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
-                if (material.HasProperty("_Color")) material.SetColor("_Color", color);
-                if (material.HasProperty("_EmissionColor")) material.SetColor("_EmissionColor", color * 2f);
-                result[i] = material;
-                RuntimeMaterials.Add(material);
-            }
-            return result;
-        }
-
-        private static void RefreshEffects()
-        {
-            if (_effectPrefab == null || Camera.main == null) return;
-            var cameraPosition = Camera.main.transform.position;
-            var ordered = new List<ClientItem>(Items.Values);
-            ordered.Sort((a, b) => (a.Position - cameraPosition).sqrMagnitude.CompareTo((b.Position - cameraPosition).sqrMagnitude));
-            for (var i = 0; i < ordered.Count; i++)
-            {
-                var item = ordered[i];
-                if (i < 96 && item.Effect == null)
-                {
-                    item.Effect = UnityEngine.Object.Instantiate(_effectPrefab, item.Position, Quaternion.identity);
-                    if (item.Effect.TryGetComponent<LootRarityGlow>(out var glow)) glow.Initialize(item.Definition.RarityColor);
-                }
-                else if (i >= 96 && item.Effect != null) { UnityEngine.Object.Destroy(item.Effect); item.Effect = null; }
-            }
-        }
-
         private static void Destroy(ClientItem item)
         {
             WaterItems.Remove(item);
@@ -1457,10 +1387,9 @@ namespace WaveByWave.Items
             if (_world != null && _world.IsCreated)
             {
                 foreach (var entity in item.Entities) if (_world.EntityManager.Exists(entity)) _world.EntityManager.DestroyEntity(entity);
-                if (item.BeamEntity != Entity.Null && _world.EntityManager.Exists(item.BeamEntity))
-                    _world.EntityManager.DestroyEntity(item.BeamEntity);
             }
-            if (item.Effect != null) UnityEngine.Object.Destroy(item.Effect);
+            item.RarityEffect?.Dispose();
+            item.RarityEffect = null;
         }
     }
 }

@@ -539,6 +539,85 @@ namespace WaveByWave.Enemies
             }
             return (1UL << 63) | (uint)SceneKey(key);
         }
+        public void RegisterSurface(Transform root)
+        {
+            if (root == null) return;
+            _surfaces[SceneSurfaceKey(root)] = root;
+        }
+
+        public static int CrewGroupForShip(int shipId) => -1000000 - Mathf.Max(0, shipId);
+
+        public bool SpawnCrewOnSurface(int shipId, Transform support, IReadOnlyList<Vector3> localPositions,
+            EnemyCombatType combatType, uint seed)
+        {
+            if (!CanSimulate || support == null || localPositions == null || localPositions.Count == 0 ||
+                !AttachServer() || Catalog == null || !Catalog.IsBaked) return false;
+            var group = CrewGroupForShip(shipId);
+            var manager = _serverWorld.EntityManager;
+            using (var existing = _enemies.ToEntityArray(Allocator.Temp))
+                foreach (var entity in existing)
+                    if (manager.GetComponentData<DotsEnemyBrain>(entity).SpawnGroup == group) return true;
+            using var prefabQuery = manager.CreateEntityQuery(typeof(DotsEnemyPrefab));
+            if (prefabQuery.IsEmptyIgnoreFilter) return false;
+            var prefab = prefabQuery.GetSingleton<DotsEnemyPrefab>().Value;
+            var surface = SceneSurfaceKey(support);
+            _surfaces[surface] = support;
+            var frame = PhysicsFrame(support);
+            var random = new Random(seed | 1u);
+            var now = Now;
+            foreach (var localPosition in localPositions)
+            {
+                if (_byId.Count >= Catalog.MaximumEnemies) break;
+                var type = combatType == EnemyCombatType.Random
+                    ? (EnemyCombatType)random.NextInt(0, 3)
+                    : combatType == EnemyCombatType.Ranged
+                        ? (EnemyCombatType)random.NextInt(1, 3)
+                        : combatType;
+                var localRotation = Quaternion.Euler(0f, random.NextFloat(0f, 360f), 0f);
+                var state = new DotsEnemyState
+                {
+                    Id = _nextId++,
+                    Seed = random.NextUInt() | 1u,
+                    Scene = _scene,
+                    CombatType = type,
+                    Health = Catalog.MaximumHealth,
+                    Position = frame.MultiplyPoint3x4(localPosition),
+                    Rotation = frame.rotation * localRotation,
+                    Animation = EnemyAnimationState.Idle,
+                    AnimationStarted = now,
+                    AnimationDuration = Catalog.Duration(EnemyAnimationState.Idle),
+                    SupportId = surface,
+                    LocalPosition = localPosition,
+                    LocalRotation = localRotation
+                };
+                var entity = manager.Instantiate(prefab);
+                manager.SetComponentData(entity, state);
+                manager.SetComponentData(entity, new DotsEnemyBrain
+                {
+                    Target = -1,
+                    SpawnGroup = group,
+                    LastSurfaceTime = now,
+                    NextAttack = now + random.NextFloat(0.5f, 1.5f)
+                });
+                _byId.Add(state.Id, entity);
+            }
+            return true;
+        }
+
+        public void DespawnGroup(int group)
+        {
+            if (!AttachServer()) return;
+            var manager = _serverWorld.EntityManager;
+            using var entities = _enemies.ToEntityArray(Allocator.Temp);
+            foreach (var entity in entities)
+            {
+                if (!manager.Exists(entity) || manager.GetComponentData<DotsEnemyBrain>(entity).SpawnGroup != group)
+                    continue;
+                _byId.Remove(manager.GetComponentData<DotsEnemyState>(entity).Id);
+                manager.DestroyEntity(entity);
+            }
+        }
+
         public Transform ResolveSurface(ulong key)
         {
             if (key == 0) return null;

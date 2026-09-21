@@ -20,6 +20,10 @@ namespace WaveByWave.Player
         private int _enemyTarget;
         private bool _enemyDirty;
         private float _enemyApplyAt, _enemyRadius = 15f;
+        private Slider _shipCountSlider, _shipRadiusSlider;
+        private Text _shipLabel, _shipRadiusLabel;
+        private int _shipSpawnCount = 12;
+        private float _shipSpawnRadius = 350f;
         public void Initialize(PlayerInventory inventory) => _inventory = inventory;
         private void Update()
         {
@@ -55,6 +59,11 @@ namespace WaveByWave.Player
                 var runtime = WaveByWave.Enemies.DotsEnemyRuntime.Instance;
                 _enemyLabel.text = $"Скелеты: {runtime?.StressCount ?? 0} • цель {_enemyTarget} / 3000";
             }
+            if (InputCaptured && _shipLabel != null)
+            {
+                var ships = WaveByWave.Enemies.DotsEnemyShipRuntime.Instance;
+                _shipLabel.text = $"Корабли: {ships?.AliveCount ?? 0} • заспавнить {_shipSpawnCount}";
+            }
         }
         private void Build()
         {
@@ -68,7 +77,7 @@ namespace WaveByWave.Player
             _panel = new GameObject("Items", typeof(RectTransform), typeof(Image));
             _panel.transform.SetParent(_canvas.transform, false);
             var rect = _panel.GetComponent<RectTransform>(); rect.anchorMin = rect.anchorMax = Vector2.one * 0.5f;
-            rect.sizeDelta = new Vector2(660f, 840f); _panel.GetComponent<Image>().color = new Color(0.035f, 0.055f, 0.075f, 0.98f);
+            rect.sizeDelta = new Vector2(660f, 960f); _panel.GetComponent<Image>().color = new Color(0.035f, 0.055f, 0.075f, 0.98f);
             Label(_panel.transform, "Админ-панель • F2", new Vector2(0, 390), new Vector2(610, 40), Color.white);
 
             Label(_panel.transform, "DOTS / Steam нагрузочный тест", new Vector2(0, 345), new Vector2(600, 32),
@@ -98,8 +107,8 @@ namespace WaveByWave.Player
             var scrollObject = new GameObject("Catalog", typeof(RectTransform), typeof(Image), typeof(Mask), typeof(ScrollRect));
             scrollObject.transform.SetParent(_panel.transform, false);
             var scrollRect = scrollObject.GetComponent<RectTransform>();
-            scrollRect.sizeDelta = new Vector2(590f, 330f);
-            scrollRect.anchoredPosition = new Vector2(0f, -170f);
+            scrollRect.sizeDelta = new Vector2(590f, 240f);
+            scrollRect.anchoredPosition = new Vector2(0f, -285f);
             scrollObject.GetComponent<Image>().color = new Color(0, 0, 0, 0.1f);
             scrollObject.GetComponent<Mask>().showMaskGraphic = false;
             var contentObject = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
@@ -128,7 +137,7 @@ namespace WaveByWave.Player
                 }
             var close = new GameObject("Close", typeof(RectTransform), typeof(Image), typeof(Button));
             close.transform.SetParent(_panel.transform, false); close.GetComponent<RectTransform>().sizeDelta = new Vector2(170, 35);
-            close.GetComponent<RectTransform>().anchoredPosition = new Vector2(105, -392);
+            close.GetComponent<RectTransform>().anchoredPosition = new Vector2(105, -455);
             close.GetComponent<Image>().color = new Color(0.25f, 0.32f, 0.37f);
             close.GetComponent<Button>().targetGraphic = close.GetComponent<Image>();
             close.GetComponent<Button>().onClick.AddListener(() => SetOpen(false));
@@ -136,7 +145,7 @@ namespace WaveByWave.Player
 
             var clear = new GameObject("Clear stress items", typeof(RectTransform), typeof(Image), typeof(Button));
             clear.transform.SetParent(_panel.transform, false); clear.GetComponent<RectTransform>().sizeDelta = new Vector2(190, 35);
-            clear.GetComponent<RectTransform>().anchoredPosition = new Vector2(-105, -392);
+            clear.GetComponent<RectTransform>().anchoredPosition = new Vector2(-105, -455);
             clear.GetComponent<Image>().color = new Color(0.45f, 0.17f, 0.15f);
             clear.GetComponent<Button>().targetGraphic = clear.GetComponent<Image>();
             clear.GetComponent<Button>().onClick.AddListener(() => _stressCountSlider.value = 0f);
@@ -158,6 +167,38 @@ namespace WaveByWave.Player
                 _enemyRadius = value; enemyRadiusLabel.text = $"Радиус скелетов: {value:0.0} м";
             });
             clear.GetComponent<Button>().onClick.AddListener(() => { if (_enemySlider != null) _enemySlider.value = 0; });
+
+            _shipLabel = Label(_panel.transform, "Корабли: 0 • заспавнить 12", new Vector2(0, 18),
+                new Vector2(570, 28), new Color(1f, 0.45f, 0.28f));
+            _shipLabel.fontSize = 17;
+            _shipCountSlider = CreateSlider(_panel.transform, new Vector2(0, -12), 1, 1000, _shipSpawnCount, true);
+            _shipCountSlider.onValueChanged.AddListener(value => _shipSpawnCount = Mathf.RoundToInt(value));
+            _shipRadiusLabel = Label(_panel.transform, "Радиус кораблей: 350 м", new Vector2(0, -50),
+                new Vector2(570, 28), Color.white);
+            _shipRadiusLabel.fontSize = 17;
+            _shipRadiusSlider = CreateSlider(_panel.transform, new Vector2(0, -80), 35, 1000,
+                _shipSpawnRadius, false);
+            _shipRadiusSlider.onValueChanged.AddListener(value =>
+            {
+                _shipSpawnRadius = value;
+                _shipRadiusLabel.text = $"Радиус кораблей: {value:0} м";
+            });
+            var spawnShips = new GameObject("Spawn enemy ships", typeof(RectTransform), typeof(Image), typeof(Button));
+            spawnShips.transform.SetParent(_panel.transform, false);
+            spawnShips.GetComponent<RectTransform>().sizeDelta = new Vector2(260, 36);
+            spawnShips.GetComponent<RectTransform>().anchoredPosition = new Vector2(0, -125);
+            spawnShips.GetComponent<Image>().color = new Color(0.62f, 0.2f, 0.12f);
+            spawnShips.GetComponent<Button>().targetGraphic = spawnShips.GetComponent<Image>();
+            spawnShips.GetComponent<Button>().onClick.AddListener(SpawnEnemyShips);
+            Label(spawnShips.transform, "Заспавнить корабли", Vector2.zero, new Vector2(250, 32), Color.white);
+        }
+
+        private void SpawnEnemyShips()
+        {
+            var runtime = WaveByWave.Enemies.DotsEnemyShipRuntime.EnsureInstance();
+            if (runtime == null || !runtime.SpawnAt(_inventory.transform.position, _shipSpawnCount,
+                    _shipSpawnRadius, (uint)Random.Range(1, int.MaxValue)))
+                Debug.LogWarning("[Admin] Вражеские корабли не заспавнены: сервер не готов или достигнут лимит.");
         }
 
         private void ScheduleStressApply() => _stressApplyAt = Time.unscaledTime + 0.12f;

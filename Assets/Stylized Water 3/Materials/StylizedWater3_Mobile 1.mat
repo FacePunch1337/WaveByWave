@@ -18,7 +18,6 @@ Material:
   - _NORMALMAP
   - _RECEIVE_SHADOWS_OFF
   - _REFRACTION
-  - _SURFACE_FOAM_SINGLE
   - _UNLIT
   - _WAVES
   m_InvalidKeywords:
@@ -27,7 +26,6 @@ Material:
   - _DEPTHEXP_ON
   - _DEPTH_TEX
   - _FOAM
-  - _FOAMON_ON
   - _INTERSECTIONSHARP_ON
   - _RECEIVEDYNAMICEFFECTSFOAM_ON
   - _RECEIVEDYNAMICEFFECTSHEIGHT_ON
@@ -54,7 +52,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BumpMap:
-        m_Texture: {fileID: 2800000, guid: c94169d55087aee43a4ebd71c975f082, type: 3}
+        m_Texture: {fileID: 2800000, guid: 1a9f5604a68a49c489e90410796483a1, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BumpMapLarge:
@@ -66,7 +64,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _CausticsTex:
-        m_Texture: {fileID: 2800000, guid: 6a6111d7c04a2aa41a70e3595cc26c9c, type: 3}
+        m_Texture: {fileID: 2800000, guid: 4a228663f34027f4689410ae3c8974cc, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _DepthTex:
@@ -156,7 +154,7 @@ Material:
     - _Blend: 0
     - _BumpScale: 1
     - _CROSSPAN_INTERSECTIONOn: 1
-    - _CausticsBrightness: 1
+    - _CausticsBrightness: 0.1
     - _CausticsChromance: 1
     - _CausticsDistortion: 0.15
     - _CausticsOn: 1
@@ -190,7 +188,7 @@ Material:
     - _FoamClippingDynamic: 0
     - _FoamDistanceOn: 0
     - _FoamDistortion: 0.47
-    - _FoamOn: 1
+    - _FoamOn: 0
     - _FoamOpacity: 0.253
     - _FoamSize: 0.01
     - _FoamSpeed: 0.31
@@ -210,20 +208,20 @@ Material:
     - _Glossiness: 0
     - _GlossyReflections: 0
     - _HorizonDistance: 10.4
-    - _IntersectionClipping: 0.428
-    - _IntersectionDistortion: 0.2
+    - _IntersectionClipping: 0.45
+    - _IntersectionDistortion: 0
     - _IntersectionFalloff: 1
     - _IntersectionFoamOn: 1
-    - _IntersectionLength: 1.79
-    - _IntersectionRippleDist: 64
-    - _IntersectionRippleSpeed: 2
-    - _IntersectionRippleStrength: 0.355
+    - _IntersectionLength: 1.7
+    - _IntersectionRippleDist: 20
+    - _IntersectionRippleSpeed: 1
+    - _IntersectionRippleStrength: 0
     - _IntersectionSharp: 1
     - _IntersectionSize: 0.944
     - _IntersectionSource: 0
-    - _IntersectionSpeed: 0.06000001
+    - _IntersectionSpeed: 2
     - _IntersectionStyle: 1
-    - _IntersectionTiling: 0.16999984
+    - _IntersectionTiling: 50
     - _IntersectionWaveDist: 33.28
     - _LightingMode: 0
     - _LightingOn: 0
@@ -235,7 +233,7 @@ Material:
     - _NormalSpeed: 0.5
     - _NormalStrength: 1
     - _NormalSubSpeed: -0.5
-    - _NormalSubTiling: 0.5
+    - _NormalSubTiling: 1.0000001
     - _NormalTiling: 0.29999992
     - _OcclusionStrength: 1
     - _PlanarReflectionsEnabled: 0
@@ -280,7 +278,7 @@ Material:
     - _SlopeThreshold: 0.25
     - _Smoothness: 0.5
     - _SmoothnessTextureChannel: 0
-    - _SparkleIntensity: 4
+    - _SparkleIntensity: 0
     - _SparkleSize: 0.7
     - _SpecularHighlights: 1
     - _SpecularReflectionsOn: 1
@@ -325,7 +323,7 @@ Material:
     - _ZClip: 1
     - _ZWrite: 1
     m_Colors:
-    - _BaseColor: {r: 0, g: 0.48235297, b: 1, a: 0.9647059}
+    - _BaseColor: {r: 0, g: 0.095219016, b: 0.10980392, a: 0.9647059}
     - _Color: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _DepthMapBounds: {r: -402.3, g: -459.43, b: 0.0012693577, a: 0}
     - _Direction: {r: 1, g: 1, b: 0, a: 0}
@@ -337,9 +335,9 @@ Material:
     - _FoamTiling: {r: 0.1, g: 0.1, b: 0, a: 0}
     - _HorizonColor: {r: 0.2352941, g: 0.9051294, b: 1, a: 1}
     - _IntersectionColor: {r: 1, g: 1, b: 1, a: 1}
-    - _NormalTiling: {r: 0.3, g: 0.3, b: 0, a: 0}
+    - _NormalTiling: {r: 0.01, g: 0.01, b: 0, a: 0}
     - _RimColor: {r: 1, g: 1, b: 1, a: 1}
-    - _ShallowColor: {r: 0, g: 0.8446603, b: 1, a: 0.39607844}
+    - _ShallowColor: {r: 0, g: 0.41679612, b: 0.4943396, a: 0.39607844}
     - _SpecColor: {r: 0.2, g: 0.2, b: 0.2, a: 1}
     - _WaterColor: {r: 0.21176466, g: 0.6745098, b: 1, a: 1}
     - _WaterShallowColor: {r: 0, g: 0.9394503, b: 1, a: 1}

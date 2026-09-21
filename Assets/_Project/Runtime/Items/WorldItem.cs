@@ -11,7 +11,7 @@ namespace WaveByWave.Items
     public sealed class WorldItem : NetworkBehaviour, IPlayerInteractable
     {
         [SerializeField] private ItemCatalog catalog;
-        [SerializeField, Tooltip("Prefab эффекта редкости. Луч, частицы и материал настраиваются в нём.")]
+        [SerializeField, Tooltip("Префаб-источник материала свечения. Он не создаётся в игре: луч и искры отрисовываются через DOTS.")]
         private GameObject rarityEffectPrefab;
         [SerializeField] private string initialItemId = "cannonball";
         [SerializeField, Min(1)] private int initialAmount = 1;
@@ -31,7 +31,6 @@ namespace WaveByWave.Items
         private PlatformNetworkTransform _supportMotion;
         private Bounds _modelBounds;
         private DotsWorldItemPresentation _visual;
-        private GameObject _rarityEffect;
         private EquipmentWaterQuery _water;
         private bool _waterPoseInitialized;
 
@@ -435,21 +434,14 @@ namespace WaveByWave.Items
             if (original != null) original.enabled = false;
             if (definition.WorldVisualPrefab != null)
             {
-                _visual = DotsWorldItemPresentation.Create(definition);
+                _visual = DotsWorldItemPresentation.Create(definition, rarityEffectPrefab,
+                    unchecked((int)NetworkObjectId) + 1);
                 _visual?.SetPose(transform.position, transform.rotation);
             }
             else
             {
                 Debug.LogError($"Item '{definition.Id}' has no prefab assigned. Runtime geometry is intentionally not generated.", definition);
                 return;
-            }
-            if (_rarityEffect != null) Destroy(_rarityEffect);
-            if (rarityEffectPrefab != null)
-            {
-                _rarityEffect = Instantiate(rarityEffectPrefab, transform, false);
-                if (_rarityEffect.TryGetComponent<LootRarityGlow>(out var glow))
-                    glow.Initialize(definition.RarityColor);
-                else Debug.LogError("Rarity effect prefab requires LootRarityGlow.", rarityEffectPrefab);
             }
         }
 

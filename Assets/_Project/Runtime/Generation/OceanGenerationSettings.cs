@@ -35,6 +35,8 @@ namespace WaveByWave.Generation
         [Min(1)] public int LootPerInterval = 2;
         [Min(1f)] public float LootDespawnRadius = 100f;
         [Min(0.1f)] public float LootFadeDuration = 1.2f;
+        [Range(0.05f, 1f), Tooltip("Интервал проверки видимости готовых островов после загрузки. Эта проверка не обязана выполняться каждый кадр.")]
+        public float PresentationRefreshInterval = 0.2f;
         public List<WeightedLootEntry> FloatingLoot = new();
         [Header("Цепочка и предзагрузка островов")]
         [FormerlySerializedAs("IslandRadius")]
@@ -70,6 +72,10 @@ namespace WaveByWave.Generation
         public Material GroundMaterial;
         public GameObject IslandPrefab;
         public GameObject ChunkPrefab;
+        [Range(1, 32), Tooltip("Максимум попыток размещения декораций острова за кадр, включая неудачные.")]
+        public int DecorationAttemptsPerFrame = 4;
+        [Range(0.1f, 5f), Tooltip("Бюджет декораций в мс. Следующая попытка переносится на новый кадр после исчерпания бюджета.")]
+        public float DecorationBudgetMilliseconds = 1f;
         public List<IslandDecoration> Decorations = new();
 
         [Header("Точки появления скелетов на островах")]
@@ -101,6 +107,7 @@ namespace WaveByWave.Generation
         [Header("Общие ресурсы")]
         public ItemCatalog Catalog;
         public WaveProfile WaterProfile;
+        [Tooltip("Префаб-источник материала свечения. Сам префаб в игре не создаётся: луч и искры отрисовываются через DOTS.")]
         public GameObject RarityEffectPrefab;
 
         public float Diameter(IslandSize size) => size switch

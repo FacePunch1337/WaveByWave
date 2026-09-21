@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: efb2f4c9c0cd58c47836d230dc3c23fe, type: 3}
+  m_Name: EnemyShipDefinition
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Enemies.EnemyShipDefinition
+  ViewPrefab: {fileID: 1751487147457462807, guid: 99d70853d7924a44a9d26df4d22e5deb, type: 3}
+  ProjectilePrefab: {fileID: 1752187800401385198, guid: d0c8f100476894344b61b12807f04981, type: 3}
+  MuzzleEffectPrefab: {fileID: 3414420187532498168, guid: e5c5e2442186f72439b239c27776697e, type: 3}
+  ImpactEffectPrefab: {fileID: 8210145221990291125, guid: 2f58c8616dce4ee4095bf677be6a8c6c, type: 3}
+  WaterImpactPrefab: {fileID: 1402041941817024963, guid: ade152f810abc93439076107c5a46d15, type: 3}
+  DeathEffectPrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
+  WaterProfile: {fileID: 11400000, guid: 1ca4610f5bf9e2f4bb39535503a79eeb, type: 2}
+  MaximumHealth: 500
+  CollisionCenter: {x: 0, y: 1.2, z: 0}
+  CollisionHalfExtents: {x: 3.2, y: 1.5, z: 7.5}
+  CollisionSkin: 0.15
+  CollisionLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  BaseSpeed: 2.4
+  MaximumSpeed: 5.8
+  Acceleration: 1.4
+  Deceleration: 0.8
+  WindSpeedBonus: 2.4
+  WindDriftSpeed: 0.3
+  TurnSpeed: 16
+  WaterHeightResponse: 3.5
+  WaterTiltResponse: 2.8
+  WaterlineOffset: 0
+  WaterSampleSize: {x: 6, y: 15}
+  PreferredBroadsideRange: 32
+  RangeCorrectionBand: 12
+  OrbitWeight: 1
+  RangeCorrectionWeight: 1.25
+  BroadsideFireAngle: 18
+  FireRange: 52
+  FireCooldown: 5.5
+  FireCooldownJitter: 1.5
+  ProjectileSpeed: 44
+  ProjectileGravity: 9.81
+  ProjectileRadius: 0.16
+  ProjectileLifetime: 12
+  ProjectileDamage: 34
+  CannonHeight: 1.8
+  CannonSideOffset: 3.2
+  AvoidanceRadius: 15
+  AvoidanceStrength: 1.6
+  MaximumShips: 1000
+  SpawnsPerFrame: 2
+  TargetSearchRadius: 350
+  CrewCount: 4
+  CrewCombatType: 0
+  SinkDuration: 8
+  SinkSpeed: 0.9

@@ -56,7 +56,7 @@ namespace WaveByWave.Generation
         private bool _wasListening, _snapshotReady;
         private bool _initialGenerationStarted, _loadingComplete;
         private int _initialTargetCount;
-        private float _nextLoot, _nextIslands, _nextRequest;
+        private float _nextLoot, _nextIslands, _nextRequest, _nextPresentation;
         private int _nextIslandId = 1;
         private Unity.Mathematics.Random _random;
         private NetworkShipController[] _ships = Array.Empty<NetworkShipController>();
@@ -141,6 +141,7 @@ namespace WaveByWave.Generation
                 _initialTargetCount = scene == GameScenes.Ocean && settings.GenerateIslands
                     ? Mathf.Clamp(settings.InitialIslandCount, 0, 32) : 0;
                 _nextLoot = Time.unscaledTime + 1f; _nextIslands = Time.unscaledTime + 0.1f;
+                _nextPresentation = 0f;
                 if (scene == GameScenes.Ocean) _loadingCurtain?.Show(0, 0);
                 else _loadingCurtain?.HideImmediate();
             }
@@ -187,7 +188,14 @@ namespace WaveByWave.Generation
                     _nextIslands = Time.unscaledTime + Mathf.Max(0.1f, settings.IslandStreamingInterval);
                     _ships = FindObjectsByType<NetworkShipController>(FindObjectsSortMode.None);
                 }
-                UpdateLoadingAndPresentation();
+                // Initial generation updates the curtain continuously. Once ready, island
+                // visibility and marker state do not need a 60 Hz managed traversal.
+                if (!_loadingComplete || Time.unscaledTime >= _nextPresentation)
+                {
+                    _nextPresentation = Time.unscaledTime +
+                        Mathf.Clamp(settings.PresentationRefreshInterval, 0.05f, 1f);
+                    UpdateLoadingAndPresentation();
+                }
             }
             // Bound snapshot catch-up traffic, including deep digging histories.
             for (var i = 0; i < 64 && _outgoing.Count > 0; i++)
@@ -353,14 +361,14 @@ namespace WaveByWave.Generation
             {
                 if (!LootStressTest.HasServerItem(id)) { _removeIds.Add(id); continue; }
                 // Once a hook claims procedural loot, it becomes persistent gameplay loot.
-                if (!LootStressTest.TryGetServerItem(id, out _, out var position)) { _removeIds.Add(id); continue; }
+                if (!LootStressTest.TryGetStreamingPosition(id, out var position)) { _removeIds.Add(id); continue; }
                 if (!NearAnyPlayerOrShip(position, Mathf.Max(settings.LootRadius.y + 10f, settings.LootDespawnRadius)))
                     _removeIds.Add(id);
             }
             foreach (var id in _removeIds)
             {
                 _floating.Remove(id);
-                if (LootStressTest.TryGetServerItem(id, out _, out _)) LootStressTest.RemoveServerItem(id);
+                if (LootStressTest.TryGetStreamingPosition(id, out _)) LootStressTest.RemoveServerItem(id);
             }
         }
         private void GenerateInitialIslands()

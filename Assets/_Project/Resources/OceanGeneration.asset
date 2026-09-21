@@ -21,6 +21,7 @@ MonoBehaviour:
   LootPerInterval: 2
   LootDespawnRadius: 100
   LootFadeDuration: 1.2
+  PresentationRefreshInterval: 0.2
   FloatingLoot:
   - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
     Weight: 4
@@ -102,7 +103,7 @@ MonoBehaviour:
   DigRadius: 0.65
   DigPenetration: 0.22
   DigSmoothing: 0.45
-  MeshUploadsPerFrame: 4
+  MeshUploadsPerFrame: 1
   BurialDepth: {x: 0.6, y: 1.6}
   ChestCountSmall: {x: 1, y: 1}
   ChestCountMedium: {x: 1, y: 2}

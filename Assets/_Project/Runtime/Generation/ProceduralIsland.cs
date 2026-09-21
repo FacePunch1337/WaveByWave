@@ -45,6 +45,10 @@ namespace WaveByWave.Generation
         private readonly HashSet<int> _queued = new();
         private readonly List<Transform> _decorations = new();
         private readonly HashSet<Collider> _decorationColliders = new();
+        private IEnumerator<byte> _decorationBuilder;
+        private static int _uploadFrame = -1, _uploadsThisFrame;
+        private static readonly Unity.Profiling.ProfilerMarker MeshUploadMarker = new("WaveByWave.Island.MeshUpload");
+        private static readonly Unity.Profiling.ProfilerMarker DecorationMarker = new("WaveByWave.Island.Decorations");
 
         public bool IsDecorationCollider(Collider collider) => _decorationColliders.Contains(collider);
 
@@ -131,6 +135,8 @@ namespace WaveByWave.Generation
         private void Update()
         {
             if (!_density.IsCreated) return;
+            if (_uploadFrame != Time.frameCount)
+            { _uploadFrame = Time.frameCount; _uploadsThisFrame = 0; }
             if (!_initialized)
             {
                 if (!_job.IsCompleted) return;
@@ -141,7 +147,10 @@ namespace WaveByWave.Generation
                 if (_meshing)
                 {
                     if (!_job.IsCompleted) break;
+                    // A shared limit, not a separate upload allowance for every island.
+                    if (_uploadsThisFrame >= Mathf.Max(1, Settings.MeshUploadsPerFrame)) break;
                     FinishMesh();
+                    _uploadsThisFrame++;
                 }
                 if (_dirty.Count == 0) break;
                 _activeChunk = _dirty.Dequeue(); _queued.Remove(_activeChunk);
@@ -155,8 +164,22 @@ namespace WaveByWave.Generation
             }
             if (GeometryReady && !_decorated)
             {
-                _decorated = true;
-                CreateDecorations();
+                using var decorationScope = DecorationMarker.Auto();
+                _decorationBuilder ??= CreateDecorations().GetEnumerator();
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                var budget = Mathf.Max(0.1f, Settings.DecorationBudgetMilliseconds) *
+                    System.Diagnostics.Stopwatch.Frequency / 1000.0;
+                // Yield after every placement attempt, including rejected ones.
+                for (var step = 0; step < Mathf.Max(1, Settings.DecorationAttemptsPerFrame); step++)
+                {
+                    if (!_decorationBuilder.MoveNext())
+                    {
+                        _decorationBuilder.Dispose(); _decorationBuilder = null;
+                        _decorated = true;
+                        break;
+                    }
+                    if (System.Diagnostics.Stopwatch.GetTimestamp() - started >= budget) break;
+                }
             }
             if (GeometryReady && _decorated && !_hasCompletedInitialBuild)
             {
@@ -172,6 +195,7 @@ namespace WaveByWave.Generation
 
         private void FinishMesh()
         {
+            using var uploadScope = MeshUploadMarker.Auto();
             _job.Complete();
             var chunk = _chunks[_activeChunk];
             var isInitialBuild = !_hasCompletedInitialBuild;
@@ -380,7 +404,7 @@ namespace WaveByWave.Generation
             return false;
         }
 
-        private void CreateDecorations()
+        private IEnumerable<byte> CreateDecorations()
         {
             var random = new Unity.Mathematics.Random(Seed == 0 ? 1u : Seed);
             var reserved = new List<Vector3>();
@@ -391,6 +415,7 @@ namespace WaveByWave.Generation
                 for (var n = 0; n < count; n++)
                 for (var attempt = 0; attempt < 12; attempt++)
                 {
+                    yield return 0;
                     var p = random.NextFloat2(-Diameter * 0.45f, Diameter * 0.45f);
                     // Choose from the original field, even after a late-join dig replay.
                     // Excavation removes decorations; it must not reroll the other trees.
@@ -495,6 +520,7 @@ namespace WaveByWave.Generation
 
         private void OnDestroy()
         {
+            _decorationBuilder?.Dispose();
             KinematicShipCollision.InvalidateAllStaticObstacles();
             _job.Complete();
             if (_meshing) { _meshJob.Vertices.Dispose(); _meshJob.Normals.Dispose(); _meshJob.Colors.Dispose(); }

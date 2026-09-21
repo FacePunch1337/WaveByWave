@@ -1584,7 +1584,7 @@ MonoBehaviour:
   SurfaceLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  WaterProfile: {fileID: 11400000, guid: 343e9ebae18bc0f48811edac300d64d0, type: 2}
+  WaterProfile: {fileID: 11400000, guid: 07fa768fab398d34ea0cb010bc30e496, type: 2}
   NetworkSimulationRadius: 160
   SpawnsPerFrame: 32
   MaximumEnemies: 6000

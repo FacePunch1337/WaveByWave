@@ -26,7 +26,8 @@ MonoBehaviour:
     probeVolumeBlendStatesCS: {fileID: 0}
   m_RendererFeatures:
   - {fileID: 5364167812660161626}
-  m_RendererFeatureMap: 
+  - {fileID: 6021594781367715012}
+  m_RendererFeatureMap: 5a6c317d345a714ac4c4c4c48c009153
   m_UseNativeRenderPass: 1
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -86,3 +87,17 @@ MonoBehaviour:
     renderMethod: 0
     ignoreSceneView: 0
   underwaterResources: {fileID: 11400000, guid: 185c96ef53e9cf14bbc913f624752e24, type: 2}
+--- !u!114 &6021594781367715012
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a61ac772a314f6c96380e745fd41b58, type: 3}
+  m_Name: Loot visible silhouettes
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Items.LootSilhouetteRenderFeature
+  m_Active: 1
+  silhouetteMaterial: {fileID: 2100000, guid: 97762fc2cf144df9a95694d2814c2b62, type: 2}

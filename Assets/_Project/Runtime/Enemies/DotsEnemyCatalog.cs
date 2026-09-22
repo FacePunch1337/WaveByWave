@@ -150,9 +150,14 @@ namespace WaveByWave.Enemies
         public LayerMask SurfaceLayers = ~0;
         public WaveProfile WaterProfile;
 
+        [Range(0f, 5f), Tooltip("Maximum water/air gap that can be crossed with a straight walking step, without a jump. Zero requires continuous ground.")]
+        public float MaximumSurfaceGap = 1f;
+        [Min(0.05f), Tooltip("Maximum height difference for a walking transfer between separated surfaces.")]
+        public float SurfaceTransferHeight = 1f;
+        [Range(1, 128), Tooltip("Maximum edge/adjacent-surface searches per frame, shared fairly between enemies.")]
+        public int EdgeSearchesPerFrame = 32;
+
         [Header("Network for Entities")]
-        [Min(10f), InspectorName("Target Search Radius"), Tooltip("Target acquisition distance, not network visibility culling.")]
-        public float NetworkSimulationRadius = 160f;
         [Range(1, 512)] public int SpawnsPerFrame = 32;
         [Range(1, 10000)] public int MaximumEnemies = 6000;
 

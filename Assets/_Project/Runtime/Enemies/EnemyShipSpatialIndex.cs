@@ -5,8 +5,7 @@ using UnityEngine;
 
 namespace WaveByWave.Enemies
 {
-    // Persistent broad phase shared by spawning and swept fleet contacts. Hull-enclosing
-    // circles are conservative even while a ship turns, pitches or rolls between updates.
+    // Broad phase only. Cells/circles never stop motion; authored colliders decide contact.
     internal sealed class EnemyShipSpatialIndex
     {
         private readonly Dictionary<int2, List<int>> _cells = new();
@@ -53,35 +52,23 @@ namespace WaveByWave.Enemies
             return true;
         }
 
-        public Vector3 LimitMotion(int self, float3 position, Vector3 displacement, float selfRadius = -1f)
+        public void CollectCandidates(int self, float3 position, Vector3 displacement, List<int> result)
         {
+            result.Clear();
             var move = new float2(displacement.x, displacement.z);
-            var length = math.length(move);
-            if (length < 0.00001f) return displacement;
-            var direction = move / length;
             var from = position.xz;
-            var clearance = selfRadius < 0 ? _diameter : _diameter * 0.5f + selfRadius;
+            var clearance = _diameter;
             var min = (int2)math.floor((math.min(from, from + move) - clearance) / _diameter);
             var max = (int2)math.floor((math.max(from, from + move) + clearance) / _diameter);
-            var accepted = length;
             for (var z = min.y; z <= max.y; z++)
             for (var x = min.x; x <= max.x; x++)
             {
                 if (!_cells.TryGetValue(new int2(x, z), out var list)) continue;
                 foreach (var id in list)
                 {
-                    if (id == self) continue;
-                    var to = _positions[id] - from;
-                    var along = math.dot(to, direction);
-                    if (along <= 0) continue; // Allow already touching hulls to separate.
-                    var sideSq = math.lengthsq(to) - along * along;
-                    var radiusSq = clearance * clearance;
-                    if (sideSq >= radiusSq) continue;
-                    var contact = along - math.sqrt(math.max(0, radiusSq - sideSq));
-                    accepted = math.min(accepted, math.max(0, contact - 0.01f));
+                    if (id != self) result.Add(id);
                 }
             }
-            return displacement * (accepted / length);
         }
 
         public void Clear()

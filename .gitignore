@@ -46,6 +46,8 @@ ExportedObj/
 *.csproj
 !Tools/ShipFleetChecks/ShipFleetChecks.csproj
 /Tools/ShipFleetChecks/obj/
+!Tools/EnemyGapChecks/EnemyGapChecks.csproj
+/Tools/EnemyGapChecks/obj/
 *.unityproj
 *.sln
 *.slnx

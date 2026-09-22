@@ -41,7 +41,8 @@ namespace WaveByWave.Enemies
         public Vector2 WaterSampleSize = new(6f, 15f);
 
         [Header("Broadside tactics")]
-        [Min(2f)] public float PreferredBroadsideRange = 32f;
+        [Tooltip("Start aligning the broadside inside this distance, while continuing to close to collider contact.")]
+        [Min(2f)] public float PreferredBroadsideRange = 20f;
         [Min(0.5f)] public float RangeCorrectionBand = 12f;
         [Range(0f, 3f)] public float OrbitWeight = 1f;
         [Range(0f, 3f)] public float RangeCorrectionWeight = 1.25f;
@@ -59,12 +60,9 @@ namespace WaveByWave.Enemies
         [Min(0f)] public float CannonHeight = 1.8f;
         [Min(0f)] public float CannonSideOffset = 3.2f;
 
-        [Header("Fleet avoidance")]
-        [Min(1f)] public float AvoidanceRadius = 15f;
-        [Range(0f, 4f)] public float AvoidanceStrength = 1.6f;
+        [Header("Fleet population")]
         [Range(1, 2000)] public int MaximumShips = 1000;
         [Range(1, 32)] public int SpawnsPerFrame = 2;
-        [Min(10f)] public float TargetSearchRadius = 350f;
 
         [Header("Fleet performance")]
         [Range(5, 60)] public int SimulationRate = 20;

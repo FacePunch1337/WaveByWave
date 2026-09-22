@@ -8,6 +8,7 @@
         "Unity.Entities",
         "Unity.InputSystem",
         "Unity.Mathematics",
+        "Unity.Physics",
         "Unity.NetCode",
         "Unity.Netcode.Runtime",
         "Unity.Networking.Transport",

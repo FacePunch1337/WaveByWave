@@ -1,6 +1,6 @@
 # DOTS enemy ships
 
-Enemy ships use an ECS ghost for authoritative movement/combat state and a lightweight GameObject view for rendering and PhysX hull contacts. The server simulates broadside orbiting, wind-assisted sailing, wave alignment, avoidance, cannon trajectories and damage. The same ghost drives the view on clients.
+Enemy ships use an ECS ghost for authoritative movement/combat state and a lightweight GameObject view for rendering and PhysX passenger contacts. The server simulates close pursuit, broadside alignment, wind-assisted sailing, wave alignment, cannon trajectories and damage. The same ghost drives the view on clients.
 
 ## Content
 
@@ -18,7 +18,13 @@ The host admin panel (`F2`) has enemy-ship count (up to 1000) and radius control
 
 ## Tactics
 
-Each ship deterministically chooses a port or starboard orbit. It corrects toward `Preferred Broadside Range`, follows the tangent around the target, and fires only when the target is inside `Broadside Fire Angle`. Burst steering supplies fleet separation. A persistent spatial index sweeps conservative hull-enclosing circles against neighbouring ships, including ships without physical views. Non-allocating box sweeps handle the player ship and scenery. The player ship also queries the fleet index because its existing triangle collision world contains static scenery only. Circle clearance is deliberately conservative during turns and wave tilt.
+Player ships register on server spawn and unregister on despawn. Every enemy receives their current authoritative positions from this shared list; there is no target-detection radius or repeated scene-wide ship search. Health, range and crew occupancy never exclude a registered player ship. With multiple ships, each enemy chooses the nearest. Firing range remains independent of target awareness.
+
+Each ship continuously closes on the player. `Preferred Broadside Range` now starts close-range broadside alignment; it never commands retreat. The desired course always has an inward component, and turn/wind drift cannot add outward velocity. Cannons have unlimited ammunition and retain cooldown/angle checks. The simultaneous projectile cap is a workload limit, not ammunition.
+
+Fleet avoidance and circle-based motion limits are removed. A persistent spatial grid only gathers collision candidates. Shared native compounds built once from the saved solid colliders perform actual hull sweeps, sliding and rotation checks, including for distant ships without views. Player-ship collider geometry is also used for these contacts. Static scenery retains its separate non-allocating sweep.
+
+Player movement does not use fleet-circle clearance. Its native contact world shares a compound built from the saved enemy prefab's enabled solid colliders, including child transforms and scale. Authoritative enemy positions and rotations update the native dynamic tree only when the fleet snapshot changes; the static scenery tree is retained. The same triangle contact solver handles translation, turning and wave tilt against both scenery and enemy geometry. No prefab components are created or modified, and contact does not depend on a detailed enemy view having been instantiated.
 
 ## Crew
 

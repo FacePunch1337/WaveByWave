@@ -15,6 +15,13 @@ namespace WaveByWave.Ships
     {
         public const ulong NoHelmsman = ulong.MaxValue;
 
+        private static readonly List<NetworkShipController> ServerShipRegistry = new();
+        internal static IReadOnlyList<NetworkShipController> ServerShips => ServerShipRegistry;
+        internal Vector3 SimulationPosition => body.position;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetServerShipRegistry() => ServerShipRegistry.Clear();
+
         [SerializeField] private Rigidbody body;
         [SerializeField, Min(0f)] private float maximumSpeed = 7f;
         [SerializeField, Min(0f)] private float acceleration = 2.5f;
@@ -241,6 +248,7 @@ namespace WaveByWave.Ships
 
             if (IsServer)
             {
+                if (!ServerShipRegistry.Contains(this)) ServerShipRegistry.Add(this);
                 _anchorOperators.Clear();
                 _anchorPushInputs = new AnchorPushInput[anchor != null ? anchor.HandleCount : 0];
                 for (var i = 0; i < _anchorPushInputs.Length; i++)
@@ -277,6 +285,7 @@ namespace WaveByWave.Ships
 
         public override void OnNetworkDespawn()
         {
+            ServerShipRegistry.Remove(this);
             _anchorLowerHolds.Clear();
             _anchorPushInputs = null;
             if (NetworkManager != null)
@@ -405,30 +414,20 @@ namespace WaveByWave.Ships
                     waterAlignment.ExternalMotionTargetRotation, deltaTime);
                 // Buoyancy, propulsion, helm and contacts share one velocity state.
                 // AlignToWater is a sampled equilibrium, never a second pose writer.
-                var resolved = _geometryCollision.ResolveMotion(_collisionStartPosition,
-                    _collisionStartRotation, _linearVelocity, _angularVelocity, deltaTime);
+                var fleet = WaveByWave.Enemies.DotsEnemyShipRuntime.Instance;
+                var hasFleet = fleet != null && fleet.CanSimulate;
+                var fleetReady = _geometryCollision.SetFleetObstacles(
+                    hasFleet ? fleet.Definition.ViewPrefab : null,
+                    hasFleet ? fleet.CollisionPoses : null, hasFleet ? fleet.CollisionRevision : 0);
+                var resolved = fleetReady
+                    ? _geometryCollision.ResolveMotion(_collisionStartPosition,
+                        _collisionStartRotation, _linearVelocity, _angularVelocity, deltaTime)
+                    : new KinematicShipCollision.Motion(_collisionStartPosition,
+                        _collisionStartRotation, true, Vector3.zero, _collisionStartPosition);
                 position = resolved.Position;
                 rotation = resolved.Rotation;
                 _linearVelocity = resolved.Velocity;
                 _angularVelocity = resolved.AngularVelocity;
-
-                // The triangle query world contains static scenery only. Fleet contacts
-                // use the same authoritative spatial index as the enemy hulls, including
-                // distant ships whose presentation has no GameObject colliders.
-                var fleet = WaveByWave.Enemies.DotsEnemyShipRuntime.Instance;
-                if (fleet != null && fleet.CanSimulate)
-                {
-                    var wanted = position - _collisionStartPosition;
-                    var accepted = fleet.LimitPlayerMotion(_collisionStartPosition, wanted,
-                        _geometryCollision.HullRadius);
-                    if ((accepted - wanted).sqrMagnitude > 0.000001f)
-                    {
-                        position = _collisionStartPosition + accepted;
-                        var normal = Vector3.ProjectOnPlane(accepted - wanted, Vector3.up).normalized;
-                        var intoContact = Vector3.Dot(_linearVelocity, normal);
-                        if (intoContact < 0) _linearVelocity -= normal * intoContact;
-                    }
-                }
 
                 var tilt = Quaternion.FromToRotation(Vector3.up, rotation * Vector3.up);
                 var yawForward = Quaternion.Inverse(tilt) * (rotation * Vector3.forward);
@@ -511,6 +510,7 @@ namespace WaveByWave.Ships
 
         public override void OnDestroy()
         {
+            ServerShipRegistry.Remove(this);
             DestroyPlanarMotionTarget();
             base.OnDestroy();
         }

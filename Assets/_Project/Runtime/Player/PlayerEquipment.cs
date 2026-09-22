@@ -678,11 +678,22 @@ namespace WaveByWave.Player
             {
                 var target = _targets[i];
                 if (target.GetComponentInParent<NetworkPlayerController>() == _player) continue;
-                var toward = target.ClosestPoint(origin + direction * swordRange * 0.7f) - origin;
-                if (toward.sqrMagnitude > swordRange * swordRange || Vector3.Dot(toward.normalized, direction) < 0.35f) continue;
                 if (!EquipmentDamageReceiverUtility.TryGet(target, out var receiver, out var component) ||
-                    !_swordTargets.Add(component)) continue;
-                if (!HasSolidBetween(origin, target.bounds.center, target))
+                    _swordTargets.Contains(component)) continue;
+                Vector3 contact;
+                if (target is MeshCollider mesh && !mesh.convex)
+                {
+                    // PhysX ClosestPoint does not support non-convex ship/terrain meshes.
+                    // An actual surface ray avoids both the warning and bounds-only hits.
+                    var aim = target.bounds.ClosestPoint(origin + direction * swordRange * 0.7f) - origin;
+                    if (aim.sqrMagnitude < 0.0001f) aim = direction;
+                    if (!target.Raycast(new Ray(origin, aim.normalized), out var hit, swordRange)) continue;
+                    contact = hit.point;
+                }
+                else contact = target.ClosestPoint(origin + direction * swordRange * 0.7f);
+                var toward = contact - origin;
+                if (toward.sqrMagnitude > swordRange * swordRange || Vector3.Dot(toward.normalized, direction) < 0.35f) continue;
+                if (!HasSolidBetween(origin, contact, target) && _swordTargets.Add(component))
                     receiver.ReceiveEquipmentHitServer(damage, origin);
             }
         }

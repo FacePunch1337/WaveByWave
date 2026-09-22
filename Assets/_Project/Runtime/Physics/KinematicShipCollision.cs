@@ -20,7 +20,8 @@ namespace WaveByWave.Collision
 {
     /// <summary>
     /// Query-only triangle geometry. PhysX continues to support players on deck;
-    /// a separate static query world prevents its solver from driving the ship.
+    /// a separate query world prevents its solver from driving the ship. Static
+    /// scenery and authored enemy colliders share the same precise contact solver.
     /// No mesh cooking, scene searches or managed allocations in ResolveMotion.
     /// </summary>
     [DisallowMultipleComponent]
@@ -45,6 +46,12 @@ namespace WaveByWave.Collision
         private FixedList512Bytes<ContactConstraint> _contactPlanes;
         private NativeArray<float3> _patchVertices;
         private PhysicsWorld _world;
+        private readonly List<Unity.Physics.RigidBody> _staticBodies = new();
+        private BlobAssetReference<PhysicsCollider> _fleetGeometry;
+        private GameObject _fleetPrefab;
+        private IReadOnlyDictionary<int, RigidTransform> _fleetPoses;
+        private uint _fleetRevision;
+        private bool _fleetGeometryFailed;
         private readonly HashSet<BlobAssetReference<PhysicsCollider>> _obstacleGeometry = new();
         private readonly Dictionary<(Mesh, Vector3, bool), BlobAssetReference<PhysicsCollider>> _meshObstacleCache = new();
         private ShipCollisionMeshLibrary _library;
@@ -56,7 +63,6 @@ namespace WaveByWave.Collision
 
         public bool IsReady => _hullNodes.IsCreated && _hasWorld;
         public Vector3 HullHalfSize { get; private set; } = Vector3.one;
-        public float HullRadius => _radius;
 
         private struct HullNode
         {
@@ -176,7 +182,7 @@ namespace WaveByWave.Collision
         public void RefreshStaticObstacles()
         {
             ReleaseWorld();
-            var bodies = new List<Unity.Physics.RigidBody>();
+            var bodies = _staticBodies;
             AddIslandObstacles(bodies);
 
             var candidates = UnityEngine.Object.FindObjectsByType<EngineCollider>(
@@ -212,6 +218,101 @@ namespace WaveByWave.Collision
                 staticBodies[i] = bodies[i];
             _world.CollisionWorld.BuildBroadphase(ref _world, Time.fixedDeltaTime, float3.zero);
             _sceneChanged = false;
+        }
+
+        /// <summary>
+        /// Read the saved collider graph once; share it between all fleet bodies.
+        /// Only authoritative poses and the native dynamic tree change on fleet ticks.
+        /// No proximity search, prefab mutation, or GameObject view is required.
+        /// </summary>
+        public bool SetFleetObstacles(GameObject prefab,
+            IReadOnlyDictionary<int, RigidTransform> poses, uint revision)
+        {
+            if (!IsReady) return false;
+            if (prefab == _fleetPrefab && ReferenceEquals(poses, _fleetPoses) && revision == _fleetRevision)
+                return !_fleetGeometryFailed;
+            try
+            {
+                if (prefab != _fleetPrefab)
+                {
+                    _fleetGeometry = default;
+                    _fleetGeometryFailed = false;
+                }
+                _fleetPrefab = prefab;
+                _fleetPoses = poses;
+                _fleetRevision = revision;
+                var count = prefab != null && poses != null ? poses.Count : 0;
+                if (count > 0 && !_fleetGeometry.IsCreated && !_fleetGeometryFailed)
+                    _fleetGeometry = CreateFleetGeometry(prefab);
+                if (_fleetGeometryFailed && count > 0) return false;
+                if (count == 0) _fleetGeometryFailed = false;
+
+                var layoutChanged = _world.NumDynamicBodies != count;
+                if (layoutChanged)
+                {
+                    _world.Reset(_staticBodies.Count, count, 0);
+                    var scenery = _world.StaticBodies;
+                    for (var i = 0; i < _staticBodies.Count; i++) scenery[i] = _staticBodies[i];
+                }
+                var dynamicBodies = _world.DynamicBodies;
+                var velocities = _world.MotionVelocities;
+                var index = 0;
+                if (count > 0)
+                    foreach (var pose in poses.Values)
+                    {
+                        dynamicBodies[index] = new Unity.Physics.RigidBody
+                        {
+                            Collider = _fleetGeometry, WorldFromBody = pose,
+                            Scale = 1f, Entity = Entity.Null
+                        };
+                        velocities[index++] = default;
+                    }
+                RebuildFleetBroadphase(ref _world, layoutChanged);
+                // Body slots and world-space contact planes can move between ticks.
+                _contactPlanes.Clear();
+                _cachedContact = default;
+                _lastContactLeaf = -1;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                _fleetGeometryFailed = true;
+                Debug.LogError($"[Wave by Wave] Fleet collider query could not be prepared: {exception.Message}", this);
+                return false;
+            }
+        }
+
+        [BurstCompile]
+        private static void RebuildFleetBroadphase(ref PhysicsWorld world, bool rebuildScenery) =>
+            world.CollisionWorld.BuildBroadphase(ref world, 0f, float3.zero, rebuildScenery);
+
+        private BlobAssetReference<PhysicsCollider> CreateFleetGeometry(GameObject prefab)
+        {
+            var children = new List<CompoundCollider.ColliderBlobInstance>();
+            var root = prefab.transform;
+            var rootRotation = Quaternion.Inverse(root.rotation);
+            foreach (var collider in prefab.GetComponentsInChildren<EngineCollider>())
+            {
+                if (!collider.enabled || collider.isTrigger ||
+                    (_obstacleLayers & (1 << collider.gameObject.layer)) == 0 ||
+                    UnityEngine.Physics.GetIgnoreLayerCollision(gameObject.layer, collider.gameObject.layer)) continue;
+                var geometry = CreateObstacle(collider);
+                if (!geometry.IsCreated)
+                    throw new NotSupportedException($"Unsupported fleet collider: {collider.name} ({collider.GetType().Name}).");
+                _obstacleGeometry.Add(geometry);
+                children.Add(new CompoundCollider.ColliderBlobInstance
+                {
+                    Collider = geometry,
+                    CompoundFromChild = new RigidTransform(ToQuaternion(rootRotation * collider.transform.rotation),
+                        rootRotation * (collider.transform.position - root.position))
+                });
+            }
+            if (children.Count == 0)
+                throw new InvalidOperationException("Enemy ship prefab has no enabled solid colliders in the ship collision layers.");
+            using var nativeChildren = new NativeArray<CompoundCollider.ColliderBlobInstance>(children.ToArray(), Allocator.Temp);
+            var compound = CompoundCollider.Create(nativeChildren);
+            _obstacleGeometry.Add(compound);
+            return compound;
         }
 
         private void AddIslandObstacles(List<Unity.Physics.RigidBody> bodies)
@@ -260,7 +361,15 @@ namespace WaveByWave.Collision
                 return new Motion(startPosition, startRotation, false, Vector3.zero, startPosition);
             if (_sceneChanged)
             {
-                try { RefreshStaticObstacles(); }
+                try
+                {
+                    var prefab = _fleetPrefab;
+                    var poses = _fleetPoses;
+                    var revision = _fleetRevision;
+                    RefreshStaticObstacles();
+                    if (!SetFleetObstacles(prefab, poses, revision))
+                        return new Motion(startPosition, startRotation, false, Vector3.zero, startPosition);
+                }
                 catch (Exception exception)
                 {
                     Debug.LogError($"[Wave by Wave] Static collision world rebuild failed: {exception.Message}", this);
@@ -1022,6 +1131,12 @@ namespace WaveByWave.Collision
                 if (geometry.IsCreated) geometry.Dispose();
             _obstacleGeometry.Clear();
             _meshObstacleCache.Clear();
+            _staticBodies.Clear();
+            _fleetGeometry = default;
+            _fleetPrefab = null;
+            _fleetPoses = null;
+            _fleetRevision = 0;
+            _fleetGeometryFailed = false;
         }
 
         public void Release()

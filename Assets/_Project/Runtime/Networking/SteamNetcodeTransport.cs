@@ -24,10 +24,43 @@ namespace WaveByWave.Networking
     [UnityEngine.Scripting.Preserve]
     public sealed class SteamNetcodeBootstrap : ClientServerBootstrap
     {
+        // NFE must advance at the same fixed frequency as the authoritative NGO/PhysX
+        // simulation. Its package default is 60 Hz, while this project uses 50 Hz.
+        public static int ConfiguredSimulationTickRate =>
+            Mathf.Max(1, Mathf.RoundToInt(1f / Mathf.Max(0.0001f, Time.fixedDeltaTime)));
+
         public override bool Initialize(string defaultWorldName)
         {
             NetworkStreamReceiveSystem.DriverConstructor = new SteamNetworkDriverConstructor();
-            return base.Initialize(defaultWorldName);
+            if (!base.Initialize(defaultWorldName)) return false;
+            foreach (var world in ClientServerBootstrap.ServerWorlds) ConfigureServerTickRate(world);
+            return true;
+        }
+
+        internal static void ConfigureServerTickRate(World world)
+        {
+            if (world == null || !world.IsCreated) return;
+            var rate = ConfiguredSimulationTickRate;
+            var settings = new ClientServerTickRate
+            {
+                SimulationTickRate = rate,
+                NetworkTickRate = rate,
+                // The editor commonly renders below the 50 Hz simulation rate while running
+                // both the client and server worlds. NetCode's default of one step per rendered
+                // frame turns an ordinary 25-49 FPS frame into a batched (long-delta) tick and
+                // produces WarnAboutBatchedTicks even when the server world is empty. Allow the
+                // rate manager to catch up with separate fixed ticks first, preserving simulation
+                // accuracy and reserving batching for an actual severe stall.
+                MaxSimulationStepsPerFrame = 4,
+                MaxSimulationStepBatchSize = 4
+            };
+            settings.ResolveDefaults();
+            using var query = world.EntityManager.CreateEntityQuery(
+                ComponentType.ReadWrite<ClientServerTickRate>());
+            if (query.IsEmptyIgnoreFilter)
+                world.EntityManager.CreateSingleton(settings, "WaveByWave NetCode Tick Rate");
+            else
+                query.SetSingleton(settings);
         }
     }
 

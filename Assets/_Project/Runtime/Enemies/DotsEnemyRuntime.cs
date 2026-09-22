@@ -18,7 +18,7 @@ using Random = Unity.Mathematics.Random;
 namespace WaveByWave.Enemies
 {
     [DefaultExecutionOrder(9850)]
-    public sealed class DotsEnemyRuntime : MonoBehaviour
+    public sealed partial class DotsEnemyRuntime : MonoBehaviour
     {
         public static DotsEnemyRuntime Instance { get; private set; }
         public DotsEnemyCatalog Catalog { get; private set; }
@@ -109,7 +109,9 @@ namespace WaveByWave.Enemies
                 foreach (var entity in entities)
                 {
                     if (manager.GetComponentData<DotsEnemyBrain>(entity).SpawnGroup != point.SpawnGroup) continue;
-                    _byId.Remove(manager.GetComponentData<DotsEnemyState>(entity).Id);
+                    var id = manager.GetComponentData<DotsEnemyState>(entity).Id;
+                    _byId.Remove(id);
+                    _surfaceTransfers.Remove(id);
                     manager.DestroyEntity(entity);
                 }
             }
@@ -169,7 +171,7 @@ namespace WaveByWave.Enemies
                     Carry(ref state);
                     manager.SetComponentData(entity, state);
                 }
-            system.Seek(targets, now, Catalog.NetworkSimulationRadius, Catalog.CrowdSeparationRadius);
+            system.Seek(targets, now, Catalog.CrowdSeparationRadius);
             using (var entities = _enemies.ToEntityArray(Allocator.Temp))
             {
                 StressCount = 0;
@@ -180,10 +182,12 @@ namespace WaveByWave.Enemies
                     if (state.Scene != _scene) continue;
                     if (state.Health <= 0)
                     {
+                        _surfaceTransfers.Remove(state.Id);
                         if (now > state.DeathAt + 1f) _remove.Add(entity);
                         continue;
                     }
                     if (brain.SpawnGroup == -1) StressCount++;
+                    FaceTarget(ref state, brain, Mathf.Min(Time.unscaledDeltaTime, 0.2f), now);
                     TickCombat(ref state, ref brain, now);
                     manager.SetComponentData(entity, state);
                     manager.SetComponentData(entity, brain);
@@ -193,7 +197,9 @@ namespace WaveByWave.Enemies
             foreach (var entity in _remove)
                 if (manager.Exists(entity))
                 {
-                    _byId.Remove(manager.GetComponentData<DotsEnemyState>(entity).Id);
+                    var id = manager.GetComponentData<DotsEnemyState>(entity).Id;
+                    _byId.Remove(id);
+                    _surfaceTransfers.Remove(id);
                     manager.DestroyEntity(entity);
                 }
             _remove.Clear();
@@ -256,6 +262,7 @@ namespace WaveByWave.Enemies
                 if (state.Health <= 0) continue;
                 if (found++ < count) continue;
                 _byId.Remove(state.Id);
+                _surfaceTransfers.Remove(state.Id);
                 _serverWorld.EntityManager.DestroyEntity(entity);
             }
             StressCount = Mathf.Min(found, count);
@@ -316,6 +323,7 @@ namespace WaveByWave.Enemies
         }
         private void TickCombat(ref DotsEnemyState state, ref DotsEnemyBrain brain, float now)
         {
+            if (_surfaceTransfers.ContainsKey(state.Id)) return;
             if (state.StunUntil > now)
             {
                 brain.Attacking = 0;
@@ -391,6 +399,7 @@ namespace WaveByWave.Enemies
             var count = Mathf.Min(entities.Length, Catalog.SurfaceProbesPerFrame);
             EnsureProbeCapacity(count);
             _probes.Clear();
+            var edgeSearchesRemaining = Mathf.Clamp(Catalog.EdgeSearchesPerFrame, 1, 128);
             var query = new QueryParameters(Catalog.SurfaceLayers, false, QueryTriggerInteraction.Ignore, false);
             for (var i = 0; i < count; i++)
             {
@@ -401,9 +410,14 @@ namespace WaveByWave.Enemies
                 var dt = Mathf.Clamp(now - brain.LastSurfaceTime, 0, 0.2f);
                 if (dt < 0.02f) continue;
                 brain.LastSurfaceTime = now;
+                if (AdvanceSurfaceTransfer(ref state, ref brain, dt, now))
+                {
+                    manager.SetComponentData(entity, state);
+                    manager.SetComponentData(entity, brain);
+                    continue;
+                }
                 var direction = brain.Direction;
-                var stoppingDistance = state.CombatType == EnemyCombatType.Melee
-                    ? Catalog.MeleeRange * 0.82f : Catalog.RangedMinimumRange;
+                var stoppingDistance = Catalog.MeleeRange * 0.82f;
                 if (brain.Attacking != 0 || brain.TargetDistance <= stoppingDistance)
                     direction = float3.zero;
                 var separation = brain.Separation * Catalog.CrowdSeparationStrength;
@@ -417,7 +431,13 @@ namespace WaveByWave.Enemies
                 manager.SetComponentData(entity, brain);
                 // Idle passengers already have an exact local pose. Re-projecting them onto
                 // last frame's rendered collider introduces drift and wastes surface probes.
-                if (state.SupportId != 0 && math.lengthsq(displacement) < 0.000001f) continue;
+                if (state.SupportId != 0 && math.lengthsq(displacement) < 0.000001f)
+                {
+                    UpdateLocomotion(ref state, ref brain, 0, dt, true, now);
+                    manager.SetComponentData(entity, state);
+                    manager.SetComponentData(entity, brain);
+                    continue;
+                }
                 if (IsShipSurface(state.SupportId) && ResolveSurface(state.SupportId) == null) continue;
                 Vector3 from = state.Position;
                 var to = from + (Vector3)displacement;
@@ -426,7 +446,7 @@ namespace WaveByWave.Enemies
                 _groundCommands[index] = new RaycastCommand(to + Vector3.up * (Catalog.StepHeight + 0.08f),
                     Vector3.down, query, Catalog.StepHeight + Catalog.MaximumDrop + 0.1f);
             }
-            _surfaceCursor = (_surfaceCursor + count) % entities.Length;
+            _surfaceCursor = NextSurfaceCursor(_surfaceCursor, count, entities.Length, Catalog.EdgeSearchesPerFrame);
             count = _probes.Count;
             if (count == 0) return;
             // Pursuit is deliberately ground-following, not a capsule character controller.
@@ -448,21 +468,43 @@ namespace WaveByWave.Enemies
                     // A steep rock face or a tree above the ground must not hide the actual floor.
                     if (ValidSolid(hit.collider) && !IsIslandDecoration(hit.collider) && Walkable(hit)) ground = hit;
                 }
-                var moved = false;
+                var movedDistance = 0f;
+                var movementEvaluated = true;
+                if (ground.collider != null && !HasContinuousGround(state.Position, ground.point))
+                    ground = default;
+                if (ground.collider == null && brain.Target >= 0 && brain.Target < _players.Count && brain.Attacking == 0 &&
+                    state.StunUntil <= now)
+                {
+                    if (edgeSearchesRemaining > 0)
+                    {
+                        edgeSearchesRemaining--;
+                        var goal = Feet(_players[brain.Target].Player);
+                        if (TryBeginSurfaceTransfer(state, goal))
+                        {
+                            AdvanceSurfaceTransfer(ref state, ref brain, probe.DeltaTime, now);
+                            manager.SetComponentData(probe.Entity, state);
+                            manager.SetComponentData(probe.Entity, brain);
+                            continue;
+                        }
+                        TryFollowEdge(state, goal, probe.DeltaTime, out ground);
+                    }
+                    else movementEvaluated = false;
+                }
                 if (ground.collider != null)
                 {
                     var previous = state.Position;
                     state.Position = ground.point;
-                    moved = math.distancesq(previous.xz, state.Position.xz) > 0.000001f;
+                    movedDistance = math.distance(previous.xz, state.Position.xz);
                     if (math.lengthsq(brain.Direction) > 0.01f && state.StunUntil <= now && brain.Attacking == 0)
                         state.Rotation = math.slerp(state.Rotation, quaternion.LookRotationSafe(
-                            (float3)Vector3.ProjectOnPlane(brain.Direction, ground.normal), ground.normal),
+                            (float3)Vector3.ProjectOnPlane(state.Position - previous, ground.normal), ground.normal),
                             1 - math.exp(-12 * probe.DeltaTime));
                     AttachSurface(ref state, ground.collider);
+                    ReleaseBoardedCrew(ref brain, state);
                 }
-                if (brain.Attacking == 0 && state.StunUntil <= now)
-                    SetAnimation(ref state, moved ? EnemyAnimationState.Run : EnemyAnimationState.Idle);
+                UpdateLocomotion(ref state, ref brain, movedDistance, probe.DeltaTime, movementEvaluated, now);
                 manager.SetComponentData(probe.Entity, state);
+                manager.SetComponentData(probe.Entity, brain);
             }
         }
         private static bool ValidSolid(Collider collider) => collider != null && !collider.isTrigger &&
@@ -645,7 +687,9 @@ namespace WaveByWave.Enemies
             {
                 if (!manager.Exists(entity) || manager.GetComponentData<DotsEnemyBrain>(entity).SpawnGroup != group)
                     continue;
-                _byId.Remove(manager.GetComponentData<DotsEnemyState>(entity).Id);
+                var id = manager.GetComponentData<DotsEnemyState>(entity).Id;
+                _byId.Remove(id);
+                _surfaceTransfers.Remove(id);
                 manager.DestroyEntity(entity);
             }
         }
@@ -770,7 +814,7 @@ namespace WaveByWave.Enemies
         private void ClearServer()
         {
             if (_serverWorld != null && _serverWorld.IsCreated) _serverWorld.EntityManager.DestroyEntity(_enemies);
-            _byId.Clear(); _crewGroups.Clear(); _spawns.Clear(); StressCount = 0;
+            _byId.Clear(); _crewGroups.Clear(); _spawns.Clear(); _surfaceTransfers.Clear(); StressCount = 0;
         }
         private void DisposeProbes()
         {

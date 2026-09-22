@@ -1572,7 +1572,7 @@ MonoBehaviour:
   DamageFlashDuration: 0.12
   ParryStunDuration: 2
   ParryKnockback: 2.25
-  MaximumSlope: 48
+  MaximumSlope: 70
   StepHeight: 10
   MaximumDrop: 10
   BodyRadius: 0.4
@@ -1584,8 +1584,10 @@ MonoBehaviour:
   SurfaceLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  WaterProfile: {fileID: 11400000, guid: 07fa768fab398d34ea0cb010bc30e496, type: 2}
-  NetworkSimulationRadius: 160
+  WaterProfile: {fileID: 11400000, guid: 1ca4610f5bf9e2f4bb39535503a79eeb, type: 2}
+  MaximumSurfaceGap: 3
+  SurfaceTransferHeight: 10
+  EdgeSearchesPerFrame: 32
   SpawnsPerFrame: 32
   MaximumEnemies: 6000
   LootDrops:

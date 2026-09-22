@@ -17,7 +17,7 @@ using Random = Unity.Mathematics.Random;
 namespace WaveByWave.Enemies
 {
     [DefaultExecutionOrder(2500)]
-    public sealed class DotsEnemyShipRuntime : MonoBehaviour
+    public sealed partial class DotsEnemyShipRuntime : MonoBehaviour
     {
         public static DotsEnemyShipRuntime Instance { get; private set; }
         public EnemyShipDefinition Definition { get; private set; }
@@ -60,10 +60,13 @@ namespace WaveByWave.Enemies
         private readonly Dictionary<int, Entity> _byId = new();
         private readonly Dictionary<int, EnemyShipView> _views = new();
         private readonly Dictionary<int, Matrix4x4> _physicsFrames = new();
+        private readonly Dictionary<int, RigidTransform> _collisionPoses = new();
+        internal IReadOnlyDictionary<int, RigidTransform> CollisionPoses => _collisionPoses;
+        internal uint CollisionRevision { get; private set; }
         private static readonly ProfilerMarker SimulationMarker = new("WaveByWave.Fleet.Simulation");
         private readonly List<Entity> _remove = new();
         private readonly EnemyShipSpatialIndex _fleet = new();
-        private readonly RaycastHit[] _collisionHits = new RaycastHit[64];
+        private RaycastHit[] _collisionHits = new RaycastHit[64];
         private readonly Collider[] _spawnOverlaps = new Collider[64];
         private readonly List<Vector3> _observers = new();
         private IReadOnlyList<Vector3> _crewPositions;
@@ -75,7 +78,6 @@ namespace WaveByWave.Enemies
         private int _scene;
         private int _nextId = 1;
         private int _lastFrame = -1;
-        private float _nextTargetRefresh;
         private bool _wasServer;
         private const float ProjectileStep = 1f / 60f;
 
@@ -107,9 +109,7 @@ namespace WaveByWave.Enemies
             Definition = Resources.Load<EnemyShipDefinition>("EnemyShipDefinition");
             _water?.Dispose();
             _water = new EquipmentWaterQuery(Definition != null ? Definition.WaterProfile : null);
-            _crewPositions = Definition != null && Definition.ViewPrefab != null &&
-                Definition.ViewPrefab.TryGetComponent<EnemyShipView>(out var view)
-                ? view.GetCrewLocalPositions(Definition.CrewCount, Definition) : null;
+            _crewPositions = null;
         }
 
         public void Register(EnemyShipSpawnPoint point)
@@ -150,6 +150,8 @@ namespace WaveByWave.Enemies
             _ships = world.EntityManager.CreateEntityQuery(typeof(DotsEnemyShipState), typeof(DotsEnemyShipBrain));
             _byId.Clear();
             _physicsFrames.Clear();
+            _collisionPoses.Clear();
+            CollisionRevision++;
             _fleet.Clear();
             return true;
         }
@@ -162,6 +164,7 @@ namespace WaveByWave.Enemies
             if (_scene != DotsEnemyRuntime.SceneKey(SceneManager.GetActiveScene().name)) return;
             RefreshTargets();
             ActivatePoints();
+            if (_ships.IsEmptyIgnoreFilter && _spawns.Count == 0 && _projectiles.Count == 0) return;
             var now = Now;
             if (now < _nextSimulation)
             {
@@ -171,9 +174,9 @@ namespace WaveByWave.Enemies
                 return;
             }
             _nextSimulation = now + 1f / Mathf.Max(1, Definition.SimulationRate);
+            if (!EnsureCollisionGeometry()) return;
             using (var states = _ships.ToComponentDataArray<DotsEnemyShipState>(Allocator.Temp))
-                _fleet.Rebuild(states, Definition.CollisionHalfExtents.magnitude +
-                    Definition.CollisionCenter.magnitude + Definition.CollisionSkin);
+                _fleet.Rebuild(states, _authoredHullRadius);
             SpawnBatch();
 
             var targets = new NativeArray<EnemyShipTarget>(_targets.Count, Allocator.TempJob);
@@ -212,6 +215,8 @@ namespace WaveByWave.Enemies
                 var state = manager.GetComponentData<DotsEnemyShipState>(entity);
                 _byId.Remove(state.Id);
                 _physicsFrames.Remove(state.Id);
+                _collisionPoses.Remove(state.Id);
+                CollisionRevision++;
                 DotsEnemyRuntime.Instance?.DespawnGroup(DotsEnemyRuntime.CrewGroupForShip(state.Id));
                 manager.DestroyEntity(entity);
             }
@@ -220,19 +225,17 @@ namespace WaveByWave.Enemies
 
         private void RefreshTargets()
         {
-            if (Time.unscaledTime < _nextTargetRefresh) return;
-            _nextTargetRefresh = Time.unscaledTime + 0.2f;
             _targets.Clear();
             _observers.Clear();
             foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
                 if (client.PlayerObject != null) _observers.Add(client.PlayerObject.transform.position);
-            foreach (var ship in Object.FindObjectsByType<NetworkShipController>(FindObjectsSortMode.None))
+            foreach (var ship in NetworkShipController.ServerShips)
             {
-                if (ship == null || !ship.IsSpawned || !ship.IsServer ||
-                    !ship.TryGetComponent<ShipCannonBattery>(out var battery) || battery.Health <= 0) continue;
+                if (ship == null || !ship.IsSpawned || !ship.IsServer) continue;
+                ship.TryGetComponent<ShipCannonBattery>(out var battery);
                 _targets.Add(new Target { Ship = ship, Battery = battery,
-                    Position = ship.TryGetComponent<Rigidbody>(out var body) ? body.position : ship.transform.position });
-                _observers.Add(ship.transform.position);
+                    Position = ship.SimulationPosition });
+                _observers.Add(ship.SimulationPosition);
             }
             _wind ??= Object.FindFirstObjectByType<NetworkWindController>();
         }
@@ -370,12 +373,17 @@ namespace WaveByWave.Enemies
             var capture = Mathf.Abs(Vector3.Dot(wind, forward));
             var targetSpeed = Mathf.Min(Definition.MaximumSpeed,
                 Definition.BaseSpeed + Definition.WindSpeedBonus * capture);
-            if (brain.Target < 0) targetSpeed *= 0.45f;
+            var radial = brain.Target >= 0 && brain.Target < _targets.Count
+                ? Vector3.ProjectOnPlane(_targets[brain.Target].Position - (Vector3)state.Position, Vector3.up).normalized
+                : Vector3.zero;
+            targetSpeed *= brain.Target < 0 ? 0f : Mathf.Clamp01(Vector3.Dot(forward, brain.DesiredDirection));
             var rate = targetSpeed > brain.Speed ? Definition.Acceleration : Definition.Deceleration;
             brain.Speed = Mathf.MoveTowards(brain.Speed, targetSpeed, rate * deltaTime);
-            var velocity = forward * brain.Speed + wind * Definition.WindDriftSpeed;
+            var velocity = brain.Target < 0 ? Vector3.zero : forward * brain.Speed + wind * Definition.WindDriftSpeed;
+            // Turning around and crosswind cannot carry the pursuer away indefinitely.
+            var outward = Vector3.Dot(velocity, radial);
+            if (outward < 0) velocity -= radial * outward;
             var displacement = velocity * deltaTime;
-            displacement = _fleet.LimitMotion(state.Id, state.Position, displacement);
             displacement = ResolveCollision(state.Id, state.Position, state.Rotation, displacement);
             var next = (Vector3)state.Position + displacement;
 
@@ -388,18 +396,31 @@ namespace WaveByWave.Enemies
                 targetRotation = Quaternion.FromToRotation(Vector3.up, normal) * yaw;
             }
             state.Position = next;
-            state.Rotation = math.slerp(state.Rotation, targetRotation,
+            var previousRotation = state.Rotation;
+            var desiredRotation = math.slerp(state.Rotation, targetRotation,
                 1f - math.exp(-Definition.WaterTiltResponse * deltaTime));
+            state.Rotation = ResolveHullRotation(state.Id, next, previousRotation, desiredRotation);
+            if (math.dot(state.Rotation.value, desiredRotation.value) < 0.99999f)
+                brain.Heading = ((Quaternion)state.Rotation).eulerAngles.y * Mathf.Deg2Rad;
             TryFire(ref state, ref brain, now);
         }
 
         private Vector3 ResolveCollision(int id, Vector3 position, Quaternion rotation, Vector3 displacement)
         {
+            displacement = ResolveHullMotion(id, position, rotation, displacement);
             var distance = displacement.magnitude;
             if (distance < 0.0001f) return displacement;
             var center = position + rotation * Definition.CollisionCenter;
-            var count = Physics.BoxCastNonAlloc(center, Definition.CollisionHalfExtents, displacement / distance,
-                _collisionHits, rotation, distance + Definition.CollisionSkin, Definition.CollisionLayers, QueryTriggerInteraction.Ignore);
+            int count;
+            while (true)
+            {
+                count = Physics.BoxCastNonAlloc(center, Definition.CollisionHalfExtents, displacement / distance,
+                    _collisionHits, rotation, distance + Definition.CollisionSkin, Definition.CollisionLayers, QueryTriggerInteraction.Ignore);
+                if (count < _collisionHits.Length || _collisionHits.Length >= 8192) break;
+                // Ignored fleet colliders must not fill the query buffer and form an
+                // invisible wall. Grow only on saturation and reuse the allocation.
+                Array.Resize(ref _collisionHits, _collisionHits.Length * 2);
+            }
             if (count == _collisionHits.Length) return Vector3.zero;
             var nearest = float.PositiveInfinity;
             for (var i = 0; i < count; i++)
@@ -407,7 +428,8 @@ namespace WaveByWave.Enemies
                 var hit = _collisionHits[i];
                 if (hit.collider == null || hit.collider.GetComponentInParent<WaterObject>() != null) continue;
                 var view = hit.collider.GetComponentInParent<EnemyShipView>();
-                if (view != null) continue; // Fleet contacts use accepted poses in the spatial index.
+                if (view != null || hit.collider.GetComponentInParent<NetworkShipController>() != null ||
+                    hit.collider.GetComponentInParent<NetworkPlayerController>() != null) continue;
                 if (hit.distance < nearest) nearest = hit.distance;
             }
             if (float.IsPositiveInfinity(nearest)) return displacement;
@@ -420,7 +442,7 @@ namespace WaveByWave.Enemies
             if (brain.Target < 0 || brain.Target >= _targets.Count || now < brain.NextFire ||
                 brain.TargetDistance > Definition.FireRange || _projectiles.Count >= 128) return;
             var target = _targets[brain.Target];
-            if (target.Ship == null || target.Battery == null || target.Battery.Health <= 0) return;
+            if (target.Ship == null) return;
             var rotation = (Quaternion)state.Rotation;
             var right = rotation * Vector3.right;
             var toTarget = target.Position - (Vector3)state.Position;
@@ -598,6 +620,7 @@ namespace WaveByWave.Enemies
                 DotsEnemyRuntime.Instance?.DespawnGroup(DotsEnemyRuntime.CrewGroupForShip(id));
             }
             manager.SetComponentData(entity, state);
+            CachePhysicsFrame(state);
             return true;
         }
 
@@ -615,7 +638,8 @@ namespace WaveByWave.Enemies
         {
             if (Definition.CrewCount == 0) return true;
             var skeletons = DotsEnemyRuntime.EnsureInstance();
-            return skeletons != null && skeletons.SpawnCrewOnShip(id, _crewPositions,
+            if (skeletons == null || skeletons.Catalog == null || !EnsureCrewPositions(skeletons.Catalog)) return false;
+            return skeletons.SpawnCrewOnShip(id, _crewPositions,
                 Definition.CrewCombatType, seed);
         }
 
@@ -629,16 +653,14 @@ namespace WaveByWave.Enemies
         public bool TryGetPhysicsFrame(int id, out Matrix4x4 frame)
             => _physicsFrames.TryGetValue(id, out frame);
 
-        public Vector3 LimitPlayerMotion(Vector3 position, Vector3 displacement, float hullRadius)
+        private void CachePhysicsFrame(DotsEnemyShipState state)
         {
-            var accepted = _fleet.LimitMotion(0, position, displacement, hullRadius);
-            accepted.y = displacement.y;
-            return accepted;
-        }
-
-        private void CachePhysicsFrame(DotsEnemyShipState state) => _physicsFrames[state.Id] =
-            Matrix4x4.TRS(state.Position, state.Rotation,
+            _physicsFrames[state.Id] = Matrix4x4.TRS(state.Position, state.Rotation,
                 Definition.ViewPrefab != null ? Definition.ViewPrefab.transform.localScale : Vector3.one);
+            if (state.Health > 0) _collisionPoses[state.Id] = new RigidTransform(state.Rotation, state.Position);
+            else _collisionPoses.Remove(state.Id);
+            CollisionRevision++;
+        }
 
         private static float DeltaAngle(float current, float target) =>
             math.atan2(math.sin(target - current), math.cos(target - current));
@@ -652,10 +674,13 @@ namespace WaveByWave.Enemies
                 _serverWorld.EntityManager.DestroyEntity(_ships);
             _byId.Clear();
             _physicsFrames.Clear();
+            _collisionPoses.Clear();
+            CollisionRevision++;
             _views.Clear();
             _spawns.Clear();
             _projectiles.Clear();
             _fleet.Clear();
+            ReleaseCollisionGeometry();
             _nextSimulation = 0;
         }
 

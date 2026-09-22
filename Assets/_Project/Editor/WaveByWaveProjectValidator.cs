@@ -210,6 +210,10 @@ namespace WaveByWave.Editor
             if (manager.NetworkConfig.TickRate != physicsTickRate)
                 throw new InvalidOperationException(
                     $"Network tick rate ({manager.NetworkConfig.TickRate}) must match physics ({physicsTickRate}).");
+            if (SteamNetcodeBootstrap.ConfiguredSimulationTickRate != physicsTickRate)
+                throw new InvalidOperationException(
+                    $"DOTS NetCode simulation rate ({SteamNetcodeBootstrap.ConfiguredSimulationTickRate}) " +
+                    $"must match physics ({physicsTickRate}).");
         }
 
         private static void ValidateOcean()

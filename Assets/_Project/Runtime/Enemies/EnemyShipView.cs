@@ -119,8 +119,16 @@ namespace WaveByWave.Enemies
         {
             var positions = new List<Vector3>(Mathf.Max(0, requestedCount));
             if (crewSlots != null)
-                for (var i = 0; i < requestedCount && i < crewSlots.Length; i++)
+                for (var i = 0; positions.Count < requestedCount && i < crewSlots.Length; i++)
                     if (crewSlots[i] != null) positions.Add(transform.InverseTransformPoint(crewSlots[i].transform.position));
+            // A slot is a spawn point, not a one-person capacity. Reuse authored points
+            // for the whole crew; crowd separation spreads them after spawning.
+            var authoredCount = positions.Count;
+            if (authoredCount > 0)
+            {
+                while (positions.Count < requestedCount) positions.Add(positions[positions.Count % authoredCount]);
+                return positions;
+            }
             definition ??= _definition;
             var half = definition != null ? definition.CollisionHalfExtents : new Vector3(3, 1.5f, 7);
             var center = definition != null ? definition.CollisionCenter : new Vector3(0, 1, 0);
@@ -135,7 +143,7 @@ namespace WaveByWave.Enemies
                 var rows = Mathf.Max(1, Mathf.CeilToInt(requestedCount / (float)columns));
                 var z = Mathf.Lerp(-half.z * 0.55f, half.z * 0.55f,
                     rows == 1 ? 0.5f : row / (float)(rows - 1));
-                positions.Add(new Vector3(x, center.y + half.y + 0.04f, z));
+                positions.Add(new Vector3(center.x + x, center.y + half.y + 0.04f, center.z + z));
             }
             return positions;
         }

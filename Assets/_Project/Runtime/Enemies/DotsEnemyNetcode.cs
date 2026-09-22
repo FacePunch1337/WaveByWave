@@ -38,6 +38,7 @@ namespace WaveByWave.Enemies
         public float NextAttack;
         public float StrikeAt;
         public float LastSurfaceTime;
+        public float LocomotionIdleTime;
         public float3 Knockback;
         public float3 Separation;
         public byte Attacking;
@@ -76,7 +77,6 @@ namespace WaveByWave.Enemies
         [ReadOnly] public NativeArray<DotsEnemyState> Bodies;
         [ReadOnly] public NativeParallelMultiHashMap<int, int> CrowdGrid;
         public float Time;
-        public float RadiusSquared;
         public float CrowdCellSize;
         public float CrowdRadius;
         private void Execute(in DotsEnemyState state, ref DotsEnemyBrain brain)
@@ -86,7 +86,10 @@ namespace WaveByWave.Enemies
             brain.Separation = float3.zero;
             brain.TargetDistance = float.MaxValue;
             if (state.Health <= 0 || state.StunUntil > Time) return;
-            var best = RadiusSquared;
+            // Target intent is global. Distance, water and the current supporting surface must
+            // never make a living skeleton forget the nearest living player. Traversability is
+            // handled later by surface following, including lateral movement along an edge.
+            var best = float.MaxValue;
             for (var i = 0; i < Targets.Length; i++)
             {
                 var delta = Targets[i].Position - state.Position;
@@ -163,8 +166,7 @@ namespace WaveByWave.Enemies
             if (runtime != null && runtime.CanSimulate) runtime.TickServer(this);
         }
 
-        public void Seek(NativeArray<EnemyTarget> targets, float now, float radius,
-            float crowdRadius)
+        public void Seek(NativeArray<EnemyTarget> targets, float now, float crowdRadius)
         {
             using var bodies = _enemyQuery.ToComponentDataArray<DotsEnemyState>(Allocator.TempJob);
             var cellSize = math.max(0.01f, crowdRadius);
@@ -178,7 +180,7 @@ namespace WaveByWave.Enemies
             Dependency = new EnemySeekJob
                 {
                     Targets = targets, Bodies = bodies, CrowdGrid = crowdGrid,
-                    Time = now, RadiusSquared = radius * radius,
+                    Time = now,
                     CrowdCellSize = cellSize, CrowdRadius = crowdRadius
                 }
                 .ScheduleParallel(Dependency);

@@ -39,7 +39,6 @@ namespace WaveByWave.Enemies
         public float Speed;
         public float LastTick;
         public float NextFire;
-        public float3 Separation;
         public byte OrbitSide;
         public byte CrewSpawned;
     }
@@ -74,25 +73,20 @@ namespace WaveByWave.Enemies
     internal partial struct EnemyShipSteeringJob : IJobEntity
     {
         [ReadOnly] public NativeArray<EnemyShipTarget> Targets;
-        [ReadOnly] public NativeArray<DotsEnemyShipState> Bodies;
-        [ReadOnly] public NativeParallelMultiHashMap<int, int> Grid;
-        public float TargetRadiusSquared;
         public float PreferredRange;
         public float RangeBand;
         public float OrbitWeight;
         public float RangeWeight;
-        public float AvoidanceRadius;
-        public float AvoidanceStrength;
 
         private void Execute(in DotsEnemyShipState state, ref DotsEnemyShipBrain brain)
         {
             brain.Target = -1;
             brain.TargetDistance = float.MaxValue;
             brain.DesiredDirection = float3.zero;
-            brain.Separation = float3.zero;
             if (state.Health <= 0) return;
 
-            var best = TargetRadiusSquared;
+            // Player ships are registered targets, not discovered by a proximity query.
+            var best = float.PositiveInfinity;
             var radial = float3.zero;
             for (var i = 0; i < Targets.Length; i++)
             {
@@ -110,46 +104,14 @@ namespace WaveByWave.Enemies
             {
                 var side = brain.OrbitSide == 0 ? -1f : 1f;
                 var tangent = new float3(-radial.z, 0, radial.x) * side;
-                var correction = math.clamp((brain.TargetDistance - PreferredRange) /
-                    math.max(0.1f, RangeBand), -1f, 1f);
-                brain.DesiredDirection = math.normalizesafe(tangent * OrbitWeight +
-                    radial * (correction * RangeWeight));
+                var broadsideBlend = math.saturate((PreferredRange - brain.TargetDistance) /
+                    math.max(0.1f, RangeBand));
+                // Closing pressure never changes sign. Broadside alignment only starts
+                // close to the player; neither range correction nor neighbours repel us.
+                brain.DesiredDirection = math.normalizesafe(tangent * (OrbitWeight * broadsideBlend) +
+                    radial * math.max(0.5f, RangeWeight));
             }
-
-            if (AvoidanceRadius <= 0) return;
-            var cellSize = math.max(0.1f, AvoidanceRadius);
-            var cell = (int2)math.floor(state.Position.xz / cellSize);
-            var radiusSq = AvoidanceRadius * AvoidanceRadius;
-            var separation = float3.zero;
-            for (var z = -1; z <= 1; z++)
-            for (var x = -1; x <= 1; x++)
-            {
-                if (!Grid.TryGetFirstValue(CellKey(cell + new int2(x, z)), out var index, out var iterator)) continue;
-                do
-                {
-                    var other = Bodies[index];
-                    if (other.Id == state.Id || other.Health <= 0 || other.Scene != state.Scene) continue;
-                    var away = state.Position - other.Position;
-                    away.y = 0;
-                    var distanceSq = math.lengthsq(away);
-                    if (distanceSq >= radiusSq) continue;
-                    if (distanceSq < 0.0001f)
-                    {
-                        var angle = (math.hash(new int2(state.Id, other.Id)) & 65535u) *
-                            (math.PI * 2f / 65535f);
-                        away = new float3(math.cos(angle), 0, math.sin(angle));
-                    }
-                    else away /= math.sqrt(distanceSq);
-                    separation += away * (1f - math.sqrt(math.max(0f, distanceSq)) / AvoidanceRadius);
-                }
-                while (Grid.TryGetNextValue(out index, ref iterator));
-            }
-            brain.Separation = math.normalizesafe(separation) * math.saturate(math.length(separation));
-            brain.DesiredDirection = math.normalizesafe(brain.DesiredDirection +
-                brain.Separation * AvoidanceStrength, brain.DesiredDirection);
         }
-
-        public static int CellKey(int2 cell) => unchecked(cell.x * 73856093 ^ cell.y * 19349663);
     }
 
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
@@ -171,28 +133,13 @@ namespace WaveByWave.Enemies
 
         public void Steer(NativeArray<EnemyShipTarget> targets, EnemyShipDefinition definition)
         {
-            using var bodies = _query.ToComponentDataArray<DotsEnemyShipState>(Allocator.TempJob);
-            var cellSize = math.max(definition.AvoidanceRadius, 2f *
-                (definition.CollisionHalfExtents.magnitude + definition.CollisionCenter.magnitude + definition.CollisionSkin) + 2f);
-            using var grid = new NativeParallelMultiHashMap<int, int>(math.max(1, bodies.Length), Allocator.TempJob);
-            for (var i = 0; i < bodies.Length; i++)
-            {
-                if (bodies[i].Health <= 0) continue;
-                var cell = (int2)math.floor(bodies[i].Position.xz / cellSize);
-                grid.Add(EnemyShipSteeringJob.CellKey(cell), i);
-            }
             Dependency = new EnemyShipSteeringJob
             {
                 Targets = targets,
-                Bodies = bodies,
-                Grid = grid,
-                TargetRadiusSquared = definition.TargetSearchRadius * definition.TargetSearchRadius,
                 PreferredRange = definition.PreferredBroadsideRange,
                 RangeBand = definition.RangeCorrectionBand,
                 OrbitWeight = definition.OrbitWeight,
-                RangeWeight = definition.RangeCorrectionWeight,
-                AvoidanceRadius = cellSize,
-                AvoidanceStrength = definition.AvoidanceStrength
+                RangeWeight = definition.RangeCorrectionWeight
             }.ScheduleParallel(Dependency);
             Dependency.Complete();
         }

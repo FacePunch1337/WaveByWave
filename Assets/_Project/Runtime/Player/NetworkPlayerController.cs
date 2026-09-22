@@ -372,6 +372,9 @@ namespace WaveByWave.Player
                 return;
             }
 
+            // OnNetworkSpawn may activate the owner camera before NGO exposes LocalClient.PlayerObject.
+            // Disable scene previews immediately so two AudioListeners never overlap for those frames.
+            ScenePreviewCamera.DisableAll();
             _camera.gameObject.SetActive(true);
             _camera.SetTarget(cameraTarget, transform);
             HideOwnerBodyFromCamera();
@@ -586,7 +589,6 @@ namespace WaveByWave.Player
             var capsuleYOffset = bodyCollider.center.y;
             body.isKinematic = true;
             body.interpolation = RigidbodyInterpolation.None;
-            body.angularVelocity = Vector3.zero;
 
             _useKccMotor = true;
             _kccMotor.CharacterController = this;

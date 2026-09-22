@@ -19,7 +19,7 @@ MonoBehaviour:
   WaterImpactPrefab: {fileID: 1402041941817024963, guid: ade152f810abc93439076107c5a46d15, type: 3}
   DeathEffectPrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
   WaterProfile: {fileID: 11400000, guid: 1ca4610f5bf9e2f4bb39535503a79eeb, type: 2}
-  MaximumHealth: 500
+  MaximumHealth: 100
   CollisionCenter: {x: 0, y: 1.2, z: 0}
   CollisionHalfExtents: {x: 3.2, y: 1.5, z: 7.5}
   CollisionSkin: 0.15
@@ -37,7 +37,7 @@ MonoBehaviour:
   WaterTiltResponse: 2.8
   WaterlineOffset: 0
   WaterSampleSize: {x: 6, y: 15}
-  PreferredBroadsideRange: 32
+  PreferredBroadsideRange: 20
   RangeCorrectionBand: 12
   OrbitWeight: 1
   RangeCorrectionWeight: 1.25
@@ -52,11 +52,8 @@ MonoBehaviour:
   ProjectileDamage: 34
   CannonHeight: 1.8
   CannonSideOffset: 3.2
-  AvoidanceRadius: 15
-  AvoidanceStrength: 1.6
   MaximumShips: 1000
   SpawnsPerFrame: 2
-  TargetSearchRadius: 350
   SimulationRate: 20
   DistantSimulationRate: 5
   DetailedSimulationDistance: 100

@@ -21,6 +21,18 @@ namespace WaveByWave.UI
             if (manager == null || manager.LocalClient?.PlayerObject == null)
                 return;
 
+            Disable();
+        }
+
+        public static void DisableAll()
+        {
+            foreach (var preview in FindObjectsByType<ScenePreviewCamera>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                preview.Disable();
+        }
+
+        private void Disable()
+        {
             if (_camera != null)
                 _camera.enabled = false;
             if (_listener != null)

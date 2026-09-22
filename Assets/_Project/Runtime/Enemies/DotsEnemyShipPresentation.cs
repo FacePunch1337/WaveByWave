@@ -59,6 +59,10 @@ namespace WaveByWave.Enemies
                 (_camera != null || runtime.CanSimulate);
             _fleet.Begin(_camera);
             var createBudget = Mathf.Max(1, _definition.ViewCreationsPerFrame);
+            var maximumObjects = Mathf.Max(0, _definition.MaximumPhysicsViews);
+            var objectCount = 0;
+            foreach (var cached in Views.Values)
+                if (cached.Object != null) objectCount++;
             var blend = 1f - Mathf.Exp(-12f * Time.unscaledDeltaTime);
             using var states = _query.ToComponentDataArray<DotsEnemyShipState>(Allocator.Temp);
             foreach (var state in states)
@@ -75,7 +79,10 @@ namespace WaveByWave.Enemies
                 var viewDistance = Mathf.Max(_definition.PhysicsViewDistance, _definition.FireRange + 25f);
                 // Hysteresis avoids repeatedly creating/destroying a hull at the distance boundary.
                 if (view.Object != null) viewDistance += 30f;
-                var needsObject = !instanceDistant || distanceSq <= viewDistance * viewDistance;
+                var insideViewDistance = distanceSq <= viewDistance * viewDistance;
+                var overCapacity = instanceDistant && view.Object != null && objectCount > maximumObjects;
+                var needsObject = !instanceDistant || insideViewDistance &&
+                    (view.Object != null || objectCount < maximumObjects);
                 if (needsObject && view.Object == null && createBudget > 0)
                 {
                     createBudget--;
@@ -84,6 +91,7 @@ namespace WaveByWave.Enemies
                     if (component == null) { Object.Destroy(instance); continue; }
                     component.Initialize(state.Id, _definition);
                     view.Object = component;
+                    objectCount++;
                     runtime.RegisterView(state.Id, component);
                     var age = runtime.Now - state.ShotStarted;
                     if (state.ShotRevision != 0 && age >= 0 && age <= _definition.ProjectileLifetime)
@@ -94,10 +102,11 @@ namespace WaveByWave.Enemies
                                 (state.ImpactFlags & 1) != 0, (state.ImpactFlags & 2) != 0, state.ImpactAt);
                     }
                 }
-                else if (!needsObject && view.Object != null)
+                else if ((!needsObject || overCapacity) && view.Object != null)
                 {
                     Object.Destroy(view.Object.gameObject);
                     view.Object = null;
+                    objectCount--;
                 }
                 view.Seen = _generation;
                 if (math.distancesq(view.Position, state.Position) > 400f)

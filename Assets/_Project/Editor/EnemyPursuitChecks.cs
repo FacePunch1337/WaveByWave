@@ -121,8 +121,8 @@ namespace WaveByWave.Editor
                 animation = (EnemyAnimationState)locomotion.Invoke(null, args);
                 idleTime = (float)args[7];
             }
-            Check(animation == EnemyAnimationState.Run,
-                "Pursuit animation flickered to idle while surface progress was intermittent.");
+            Check(animation == EnemyAnimationState.Idle,
+                "A blocked skeleton kept running despite evaluated zero movement.");
             for (var frame = 0; frame < 6; frame++)
             {
                 object[] args = { animation, false, false, 0f, 0.05f, true, false, idleTime };
@@ -132,14 +132,23 @@ namespace WaveByWave.Editor
             Check(animation == EnemyAnimationState.Idle,
                 "Skeleton did not return to idle after movement intent ended.");
 
-            var limit = typeof(DotsEnemyRuntime).GetMethod("LimitCrowdStep", flags);
+            var instanceFlags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var limit = typeof(DotsEnemyRuntime).GetMethod("LimitCrowdStep", instanceFlags);
+            var buildIndex = typeof(DotsEnemyRuntime).GetMethod("BuildMovementCrowdIndex", instanceFlags);
+            var root = new GameObject("Crowd movement check");
+            root.SetActive(false);
+            var runtime = root.AddComponent<DotsEnemyRuntime>();
             var bodies = new NativeArray<DotsEnemyState>(1, Allocator.Temp);
             try
             {
                 bodies[0] = new DotsEnemyState { Id = 2, Health = 60, SupportId = 7,
                     Position = new float3(1, 0, 0) };
-                Vector3 Step(Vector3 from, Vector3 to, ulong support = 7) => (Vector3)limit.Invoke(null,
-                    new object[] { 1, support, from, to, bodies, 0.82f, 0.4f, 1.7f });
+                Vector3 Step(Vector3 from, Vector3 to, ulong support = 7)
+                {
+                    buildIndex.Invoke(runtime, new object[] { bodies, 0.82f, 0.4f });
+                    return (Vector3)limit.Invoke(runtime,
+                        new object[] { 1, support, from, to, bodies, 0.82f, 0.4f, 1.7f });
+                }
                 var stopped = Step(Vector3.zero, new Vector3(0.5f, 10, 0));
                 Check(stopped.x < 0.17f && stopped.y == 10,
                     "Crowd limiter allowed entry into personal space or mixed vertical correction into XZ.");
@@ -152,7 +161,7 @@ namespace WaveByWave.Editor
                 Check(Mathf.Abs(Step(Vector3.zero, new Vector3(0.1f, 0, 0)).x) < 0.001f,
                     "An overlapping skeleton was allowed to compress the crowd further.");
             }
-            finally { bodies.Dispose(); }
+            finally { bodies.Dispose(); Object.DestroyImmediate(root); }
         }
 
         private static void CheckRenderBounds()

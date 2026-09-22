@@ -418,6 +418,8 @@ namespace WaveByWave.Editor
         public override void OnInspectorGUI()
         {
             DrawDefaultInspector();
+            if (!((DotsEnemyCatalog)target).CanSpawnType(EnemyCombatType.Random))
+                EditorGUILayout.HelpBox("All skeleton types are disabled. No new skeletons will spawn until a type is enabled.", MessageType.Warning);
             EditorGUILayout.HelpBox("Source prefab and attachment changes are baked before Play Mode. You can also bake manually below. Runtime uses ECS + GPU animation; no Animator or NavMesh.", MessageType.Info);
             using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
                 if (GUILayout.Button("Bake prefab meshes and animation textures"))

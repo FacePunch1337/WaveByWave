@@ -12,6 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 57f2c2e6d3b9c6644bec30f69242f62e, type: 3}
   m_Name: SkeletonEnemyCatalog
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Enemies.DotsEnemyCatalog
+  EnableMeleeSpawns: 1
+  EnablePistolSpawns: 0
+  EnableRifleSpawns: 0
   BakingRigPrefab: {fileID: 1629863784232484, guid: 41f29d2a96eebaa45bdec0a88b56b620, type: 3}
   PartSources:
   - Category: 0
@@ -1576,10 +1579,10 @@ MonoBehaviour:
   StepHeight: 10
   MaximumDrop: 10
   SurfaceVerticalSpeed: 4
-  BodyRadius: 0.4
+  BodyRadius: 0.1
   BodyHeight: 1.7
-  CrowdSeparationRadius: 0.82
-  CrowdSeparationStrength: 0.9
+  CrowdSeparationRadius: 0
+  CrowdSeparationStrength: 0
   SurfaceProbesPerFrame: 256
   IgnoredObstacleWidth: 3
   SurfaceLayers:

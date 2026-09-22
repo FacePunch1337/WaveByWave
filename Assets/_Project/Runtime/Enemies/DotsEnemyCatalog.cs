@@ -92,6 +92,14 @@ namespace WaveByWave.Enemies
         fileName = "SkeletonEnemyCatalog")]
     public sealed class DotsEnemyCatalog : ScriptableObject
     {
+        [Header("Enabled skeleton types (new spawns only)")]
+        [Tooltip("Allow melee skeletons in new spawns, including the admin panel and ship crews. Existing skeletons are unaffected.")]
+        public bool EnableMeleeSpawns = true;
+        [Tooltip("Allow pistol skeletons in new spawns. Disable both Pistol and Rifle to spawn only melee skeletons.")]
+        public bool EnablePistolSpawns = true;
+        [Tooltip("Allow rifle skeletons in new spawns. Explicit spawn points for a disabled type are skipped.")]
+        public bool EnableRifleSpawns = true;
+
         [Header("Editor baking sources")]
         [Tooltip("A clean skeleton prefab supplies the shared humanoid rig used while baking clips.")]
         public GameObject BakingRigPrefab;
@@ -168,6 +176,41 @@ namespace WaveByWave.Enemies
 
         public bool IsBaked => BakedParts.Count > 0 && BakedParts[0].Mesh != null;
         public float Duration(EnemyAnimationState state) => Mathf.Max(0.1f, Clip(state) != null ? Clip(state).length : 1f);
+
+        private int SpawnTypeMask(EnemyCombatType requested)
+        {
+            var enabled = (EnableMeleeSpawns ? 1 : 0) | (EnablePistolSpawns ? 2 : 0) |
+                (EnableRifleSpawns ? 4 : 0);
+            var allowed = requested switch
+            {
+                EnemyCombatType.Melee => 1,
+                EnemyCombatType.Pistol => 2,
+                EnemyCombatType.Rifle => 4,
+                EnemyCombatType.Random => 7,
+                EnemyCombatType.Ranged => 6,
+                _ => 0
+            };
+            return enabled & allowed;
+        }
+
+        public bool CanSpawnType(EnemyCombatType requested) => SpawnTypeMask(requested) != 0;
+
+        public bool TrySelectSpawnType(EnemyCombatType requested, ref Unity.Mathematics.Random random,
+            out EnemyCombatType type)
+        {
+            type = default;
+            var mask = SpawnTypeMask(requested);
+            var count = (mask & 1) + ((mask >> 1) & 1) + ((mask >> 2) & 1);
+            if (count == 0) return false;
+            var selected = count == 1 ? 0 : random.NextInt(count);
+            for (var i = 0; i < 3; i++)
+            {
+                if ((mask & (1 << i)) == 0 || selected-- != 0) continue;
+                type = (EnemyCombatType)i;
+                return true;
+            }
+            return false;
+        }
 
         public AnimationClip Clip(EnemyAnimationState state) => state switch
         {

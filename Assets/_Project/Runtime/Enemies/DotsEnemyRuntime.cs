@@ -46,6 +46,8 @@ namespace WaveByWave.Enemies
             public Entity Entity;
             public float DeltaTime;
             public bool WantsToMove;
+            public RaycastHit Ground;
+            public int ContinuityStart, ContinuityCount;
         }
         private readonly List<EnemySpawnPoint> _points = new();
         private readonly HashSet<EnemySpawnPoint> _activated = new();
@@ -66,8 +68,10 @@ namespace WaveByWave.Enemies
         private bool _wasServer;
         private NativeArray<RaycastCommand> _groundCommands;
         private NativeArray<RaycastHit> _groundResults;
+        private NativeArray<RaycastCommand> _continuityCommands;
+        private NativeArray<RaycastHit> _continuityResults;
         private const int GroundHitsPerProbe = 8;
-        private int _probeCapacity;
+        private int _probeCapacity, _continuityCapacity;
         public int StressCount { get; private set; }
         public int AliveCount => _byId.Count;
         public float Now => NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening
@@ -165,37 +169,35 @@ namespace WaveByWave.Enemies
             ActivatePoints(targets);
             SpawnBatch();
             var manager = _serverWorld.EntityManager;
-            using (var entities = _enemies.ToEntityArray(Allocator.Temp))
-                foreach (var entity in entities)
-                {
-                    var state = manager.GetComponentData<DotsEnemyState>(entity);
-                    if (state.Scene != _scene) { _remove.Add(entity); continue; }
-                    Carry(ref state);
-                    manager.SetComponentData(entity, state);
-                }
-            system.Seek(targets, now, Catalog.CrowdSeparationRadius, Catalog.BodyHeight * 0.75f);
-            using (var entities = _enemies.ToEntityArray(Allocator.Temp))
+            using var entities = _enemies.ToEntityArray(Allocator.Temp);
+            foreach (var entity in entities)
             {
-                StressCount = 0;
-                foreach (var entity in entities)
-                {
-                    var state = manager.GetComponentData<DotsEnemyState>(entity);
-                    var brain = manager.GetComponentData<DotsEnemyBrain>(entity);
-                    if (state.Scene != _scene) continue;
-                    if (state.Health <= 0)
-                    {
-                        _surfaceTransfers.Remove(state.Id);
-                        if (now > state.DeathAt + 1f) _remove.Add(entity);
-                        continue;
-                    }
-                    if (brain.SpawnGroup == -1) StressCount++;
-                    FaceTarget(ref state, brain, Mathf.Min(Time.unscaledDeltaTime, 0.2f), now);
-                    TickCombat(ref state, ref brain, now);
-                    manager.SetComponentData(entity, state);
-                    manager.SetComponentData(entity, brain);
-                }
-                MoveBatch(entities, now);
+                var state = manager.GetComponentData<DotsEnemyState>(entity);
+                if (state.Scene != _scene) { _remove.Add(entity); continue; }
+                if (state.SupportId == 0 || state.Health <= 0) continue;
+                Carry(ref state);
+                manager.SetComponentData(entity, state);
             }
+            system.Seek(targets, now, Catalog.CrowdSeparationRadius, Catalog.BodyHeight * 0.75f);
+            StressCount = 0;
+            foreach (var entity in entities)
+            {
+                var state = manager.GetComponentData<DotsEnemyState>(entity);
+                var brain = manager.GetComponentData<DotsEnemyBrain>(entity);
+                if (state.Scene != _scene) continue;
+                if (state.Health <= 0)
+                {
+                    _surfaceTransfers.Remove(state.Id);
+                    if (now > state.DeathAt + 1f) _remove.Add(entity);
+                    continue;
+                }
+                if (brain.SpawnGroup == -1) StressCount++;
+                FaceTarget(ref state, brain, Mathf.Min(Time.unscaledDeltaTime, 0.2f), now);
+                TickCombat(ref state, ref brain, now);
+                manager.SetComponentData(entity, state);
+                manager.SetComponentData(entity, brain);
+            }
+            MoveBatch(entities, now);
             foreach (var entity in _remove)
                 if (manager.Exists(entity))
                 {
@@ -287,17 +289,21 @@ namespace WaveByWave.Enemies
             while (budget-- > 0 && _spawns.Count > 0 && _byId.Count < Catalog.MaximumEnemies)
             {
                 var request = _spawns[0];
+                // Disabled requests must not block the queue or waste ground probes.
+                if (!Catalog.CanSpawnType(request.Type))
+                {
+                    _spawns.RemoveAt(0);
+                    continue;
+                }
                 var center = request.Point != null ? request.Point.transform.position :
                     request.FollowPlayer != null ? Feet(request.FollowPlayer) : request.Center;
                 var angle = request.Random.NextFloat(0, math.PI * 2);
                 var distance = math.sqrt(request.Random.NextFloat()) * request.Radius;
                 var candidate = center + new Vector3(math.cos(angle), 0, math.sin(angle)) * distance;
                 request.Attempts++;
-                if (TryGround(candidate + Vector3.up * 0.6f, 100f, out var hit))
+                if (TryGround(candidate + Vector3.up * 0.6f, 100f, out var hit) &&
+                    Catalog.TrySelectSpawnType(request.Type, ref request.Random, out var type))
                 {
-                    var type = request.Type == EnemyCombatType.Random
-                        ? (EnemyCombatType)request.Random.NextInt(0, 3) : request.Type == EnemyCombatType.Ranged
-                            ? (EnemyCombatType)request.Random.NextInt(1, 3) : request.Type;
                     var state = new DotsEnemyState
                     {
                         Id = _nextId++, Seed = request.Random.NextUInt() | 1u, Scene = _scene, CombatType = type,
@@ -401,6 +407,7 @@ namespace WaveByWave.Enemies
             using var crowdBodies = _enemies.ToComponentDataArray<DotsEnemyState>(Allocator.Temp);
             _crowdIndices.Clear();
             for (var body = 0; body < crowdBodies.Length; body++) _crowdIndices[crowdBodies[body].Id] = body;
+            BuildMovementCrowdIndex(crowdBodies, Catalog.CrowdSeparationRadius, Catalog.BodyRadius);
             var count = Mathf.Min(entities.Length, Catalog.SurfaceProbesPerFrame);
             EnsureProbeCapacity(count);
             _probes.Clear();
@@ -415,6 +422,7 @@ namespace WaveByWave.Enemies
                 var dt = Mathf.Clamp(now - brain.LastSurfaceTime, 0, 0.2f);
                 if (dt < 0.02f) continue;
                 brain.LastSurfaceTime = now;
+                state.MovementUpdatedAt = now;
                 if (AdvanceSurfaceTransfer(ref state, ref brain, dt, now))
                 {
                     UpdateCrowdSnapshot(crowdBodies, state);
@@ -469,24 +477,58 @@ namespace WaveByWave.Enemies
             // enemies themselves have no physics colliders or pairwise separation forces.
             RaycastCommand.ScheduleBatch(_groundCommands.GetSubArray(0, count),
                 _groundResults.GetSubArray(0, count * GroundHitsPerProbe), 32, GroundHitsPerProbe).Complete();
+            // Interior ground samples used to issue individual PhysX queries on the main
+            // thread. Collect them once and run the entire corridor batch on workers.
+            var continuityCount = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var probe = _probes[i];
+                probe.Ground = SelectBatchGround(_groundResults, i * GroundHitsPerProbe, false);
+                probe.ContinuityStart = continuityCount;
+                if (probe.Ground.collider != null)
+                {
+                    var from = manager.GetComponentData<DotsEnemyState>(probe.Entity).Position;
+                    probe.ContinuityCount = Mathf.Max(0, GroundPathSteps(from, probe.Ground.point) - 1);
+                    continuityCount += probe.ContinuityCount;
+                }
+                _probes[i] = probe;
+            }
+            if (continuityCount > 0)
+            {
+                EnsureContinuityCapacity(continuityCount);
+                foreach (var probe in _probes)
+                {
+                    if (probe.ContinuityCount == 0) continue;
+                    Vector3 from = manager.GetComponentData<DotsEnemyState>(probe.Entity).Position;
+                    for (var sample = 0; sample < probe.ContinuityCount; sample++)
+                    {
+                        var point = Vector3.Lerp(from, probe.Ground.point,
+                            (sample + 1f) / (probe.ContinuityCount + 1f));
+                        _continuityCommands[probe.ContinuityStart + sample] = new RaycastCommand(
+                            point + Vector3.up * (Catalog.StepHeight + 0.08f), Vector3.down,
+                            query, Catalog.StepHeight + Catalog.MaximumDrop + 0.1f);
+                    }
+                }
+                RaycastCommand.ScheduleBatch(_continuityCommands.GetSubArray(0, continuityCount),
+                    _continuityResults.GetSubArray(0, continuityCount * GroundHitsPerProbe),
+                    32, GroundHitsPerProbe).Complete();
+            }
             for (var i = 0; i < count; i++)
             {
                 var probe = _probes[i];
                 var state = manager.GetComponentData<DotsEnemyState>(probe.Entity);
                 var brain = manager.GetComponentData<DotsEnemyBrain>(probe.Entity);
-                var ground = default(RaycastHit);
-                for (var h = 0; h < GroundHitsPerProbe; h++)
+                state.MovementUpdatedAt = now;
+                var ground = probe.Ground;
+                for (var sample = 0; sample < probe.ContinuityCount; sample++)
                 {
-                    var hit = _groundResults[i * GroundHitsPerProbe + h];
-                    if (hit.collider == null) break;
-                    if (ground.collider != null && hit.distance >= ground.distance) continue;
-                    // A steep rock face or a tree above the ground must not hide the actual floor.
-                    if (ValidSolid(hit.collider) && !IsIslandDecoration(hit.collider) && Walkable(hit)) ground = hit;
+                    if (SelectBatchGround(_continuityResults,
+                            (probe.ContinuityStart + sample) * GroundHitsPerProbe, true).collider != null) continue;
+                    ground = default;
+                    break;
                 }
                 var movedDistance = 0f;
                 var movementEvaluated = true;
-                if (ground.collider != null && !HasContinuousGround(state.Position, ground.point))
-                    ground = default;
                 if (ground.collider == null && brain.Target >= 0 && brain.Target < _players.Count && brain.Attacking == 0 &&
                     state.StunUntil <= now)
                 {
@@ -538,6 +580,31 @@ namespace WaveByWave.Enemies
                 manager.SetComponentData(probe.Entity, brain);
             }
         }
+        private void EnsureContinuityCapacity(int count)
+        {
+            if (_continuityCapacity >= count) return;
+            if (_continuityCommands.IsCreated) _continuityCommands.Dispose();
+            if (_continuityResults.IsCreated) _continuityResults.Dispose();
+            _continuityCapacity = math.ceilpow2(Mathf.Max(16, count));
+            _continuityCommands = new NativeArray<RaycastCommand>(_continuityCapacity, Allocator.Persistent);
+            _continuityResults = new NativeArray<RaycastHit>(_continuityCapacity * GroundHitsPerProbe, Allocator.Persistent);
+        }
+
+        private RaycastHit SelectBatchGround(NativeArray<RaycastHit> results, int first, bool ignoreMinor)
+        {
+            var ground = default(RaycastHit);
+            for (var h = 0; h < GroundHitsPerProbe; h++)
+            {
+                var hit = results[first + h];
+                if (hit.collider == null) break;
+                if (ground.collider != null && hit.distance >= ground.distance) continue;
+                if (ValidSolid(hit.collider) &&
+                    !(ignoreMinor ? IsMinorObstacle(hit.collider) : IsIslandDecoration(hit.collider)) && Walkable(hit))
+                    ground = hit;
+            }
+            return ground;
+        }
+
         private static bool ValidSolid(Collider collider) => collider != null && !collider.isTrigger &&
             collider.GetComponentInParent<WaterObject>() == null &&
             collider.GetComponentInParent<NetworkPlayerController>() == null &&
@@ -659,6 +726,12 @@ namespace WaveByWave.Enemies
                 !AttachServer() || Catalog == null || !Catalog.IsBaked) return false;
             var group = CrewGroupForShip(shipId);
             if (_crewGroups.Contains(group)) return true;
+            if (!Catalog.CanSpawnType(combatType))
+            {
+                // Intentionally disabled crews are handled, not retried every ship tick.
+                _crewGroups.Add(group);
+                return true;
+            }
             if (_byId.Count + localPositions.Count > Catalog.MaximumEnemies) return false;
             var manager = _serverWorld.EntityManager;
             using var prefabQuery = manager.CreateEntityQuery(typeof(DotsEnemyPrefab));
@@ -671,11 +744,7 @@ namespace WaveByWave.Enemies
             foreach (var localPosition in localPositions)
             {
                 if (_byId.Count >= Catalog.MaximumEnemies) break;
-                var type = combatType == EnemyCombatType.Random
-                    ? (EnemyCombatType)random.NextInt(0, 3)
-                    : combatType == EnemyCombatType.Ranged
-                        ? (EnemyCombatType)random.NextInt(1, 3)
-                        : combatType;
+                if (!Catalog.TrySelectSpawnType(combatType, ref random, out var type)) break;
                 var localRotation = Quaternion.Euler(0f, random.NextFloat(0f, 360f), 0f);
                 var state = new DotsEnemyState
                 {
@@ -851,7 +920,10 @@ namespace WaveByWave.Enemies
         {
             if (_groundCommands.IsCreated) _groundCommands.Dispose();
             if (_groundResults.IsCreated) _groundResults.Dispose();
+            if (_continuityCommands.IsCreated) _continuityCommands.Dispose();
+            if (_continuityResults.IsCreated) _continuityResults.Dispose();
             _probeCapacity = 0;
+            _continuityCapacity = 0;
         }
         private void OnDestroy()
         {

@@ -23,6 +23,7 @@ namespace WaveByWave.Enemies
         [GhostField] public ulong SupportId;
         [GhostField(Quantization = 1000)] public float3 LocalPosition;
         [GhostField(Quantization = 1000)] public quaternion LocalRotation;
+        [GhostField(Quantization = 1000)] public float MovementUpdatedAt;
         [GhostField] public uint HitRevision;
         [GhostField(Quantization = 1000)] public float StunUntil;
         [GhostField(Quantization = 1000)] public float DeathAt;
@@ -70,12 +71,34 @@ namespace WaveByWave.Enemies
         }
     }
 
+    public struct EnemyCrowdBody
+    {
+        public int Id, Scene;
+        public ulong SupportId;
+        public float3 Position;
+    }
+
+    [BurstCompile]
+    public partial struct EnemyBuildCrowdGridJob : IJobEntity
+    {
+        public NativeParallelMultiHashMap<int2, EnemyCrowdBody>.ParallelWriter CrowdGrid;
+        public float CellSize;
+
+        private void Execute(in DotsEnemyState state)
+        {
+            if (state.Health <= 0) return;
+            CrowdGrid.Add((int2)math.floor(state.Position.xz / CellSize), new EnemyCrowdBody
+            {
+                Id = state.Id, Scene = state.Scene, SupportId = state.SupportId, Position = state.Position
+            });
+        }
+    }
+
     [BurstCompile]
     public partial struct EnemySeekJob : IJobEntity
     {
         [ReadOnly] public NativeArray<EnemyTarget> Targets;
-        [ReadOnly] public NativeArray<DotsEnemyState> Bodies;
-        [ReadOnly] public NativeParallelMultiHashMap<int, int> CrowdGrid;
+        [ReadOnly] public NativeParallelMultiHashMap<int2, EnemyCrowdBody> CrowdGrid;
         public float Time;
         public float CrowdCellSize;
         public float CrowdRadius;
@@ -91,6 +114,7 @@ namespace WaveByWave.Enemies
             // never make a living skeleton forget the nearest living player. Traversability is
             // handled later by surface following, including lateral movement along an edge.
             var best = float.MaxValue;
+            var bestDelta = float3.zero;
             for (var i = 0; i < Targets.Length; i++)
             {
                 var delta = Targets[i].Position - state.Position;
@@ -98,8 +122,12 @@ namespace WaveByWave.Enemies
                 if (distance >= best) continue;
                 best = distance;
                 brain.Target = Targets[i].Index;
-                brain.TargetDistance = math.sqrt(distance);
-                brain.Direction = math.normalizesafe(new float3(delta.x, 0, delta.z));
+                bestDelta = delta;
+            }
+            if (brain.Target >= 0)
+            {
+                brain.TargetDistance = math.sqrt(best);
+                brain.Direction = math.normalizesafe(new float3(bestDelta.x, 0, bestDelta.z));
             }
 
             if (CrowdRadius <= 0 || CrowdCellSize <= 0) return;
@@ -109,12 +137,11 @@ namespace WaveByWave.Enemies
             for (var z = -1; z <= 1; z++)
             for (var x = -1; x <= 1; x++)
             {
-                var key = CellKey(cell + new int2(x, z));
-                if (!CrowdGrid.TryGetFirstValue(key, out var index, out var iterator)) continue;
+                var key = cell + new int2(x, z);
+                if (!CrowdGrid.TryGetFirstValue(key, out var other, out var iterator)) continue;
                 do
                 {
-                    var other = Bodies[index];
-                    if (other.Id == state.Id || other.Health <= 0 || other.Scene != state.Scene ||
+                    if (other.Id == state.Id || other.Scene != state.Scene ||
                         other.SupportId != state.SupportId || math.abs(other.Position.y - state.Position.y) > CrowdVerticalRange)
                         continue;
                     var delta = new float3(state.Position.x - other.Position.x, 0,
@@ -141,14 +168,12 @@ namespace WaveByWave.Enemies
                     }
                     separation += away * (1f - distance / CrowdRadius);
                 }
-                while (CrowdGrid.TryGetNextValue(out index, ref iterator));
+                while (CrowdGrid.TryGetNextValue(out other, ref iterator));
             }
             var magnitude = math.length(separation);
             brain.Separation = magnitude > 0.0001f
                 ? separation / magnitude * math.saturate(magnitude) : float3.zero;
         }
-
-        public static int CellKey(int2 cell) => unchecked(cell.x * 73856093 ^ cell.y * 19349663);
     }
 
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
@@ -157,6 +182,7 @@ namespace WaveByWave.Enemies
     public partial class EnemyServerSystem : SystemBase
     {
         private EntityQuery _enemyQuery;
+        private NativeParallelMultiHashMap<int2, EnemyCrowdBody> _crowdGrid;
 
         protected override void OnCreate()
         {
@@ -171,24 +197,36 @@ namespace WaveByWave.Enemies
 
         public void Seek(NativeArray<EnemyTarget> targets, float now, float crowdRadius, float crowdVerticalRange)
         {
-            using var bodies = _enemyQuery.ToComponentDataArray<DotsEnemyState>(Allocator.TempJob);
+            var count = _enemyQuery.CalculateEntityCount();
+            if (count == 0) return;
+            // Reuse native storage; the grid contains only data needed for separation,
+            // not a full copy of every enemy's replicated state.
+            Dependency.Complete();
+            if (!_crowdGrid.IsCreated)
+                _crowdGrid = new NativeParallelMultiHashMap<int2, EnemyCrowdBody>(
+                    math.ceilpow2(math.max(16, count)), Allocator.Persistent);
+            _crowdGrid.Clear();
+            if (_crowdGrid.Capacity < count) _crowdGrid.Capacity = math.ceilpow2(count);
             var cellSize = math.max(0.01f, crowdRadius);
-            using var crowdGrid = new NativeParallelMultiHashMap<int, int>(math.max(1, bodies.Length), Allocator.TempJob);
-            for (var i = 0; i < bodies.Length; i++)
+            Dependency = new EnemyBuildCrowdGridJob
             {
-                if (bodies[i].Health <= 0) continue;
-                var cell = (int2)math.floor(bodies[i].Position.xz / cellSize);
-                crowdGrid.Add(EnemySeekJob.CellKey(cell), i);
-            }
+                CrowdGrid = _crowdGrid.AsParallelWriter(), CellSize = cellSize
+            }.ScheduleParallel(_enemyQuery, Dependency);
             Dependency = new EnemySeekJob
                 {
-                    Targets = targets, Bodies = bodies, CrowdGrid = crowdGrid,
+                    Targets = targets, CrowdGrid = _crowdGrid,
                     Time = now,
                     CrowdCellSize = cellSize, CrowdRadius = crowdRadius,
                     CrowdVerticalRange = crowdVerticalRange
                 }
-                .ScheduleParallel(Dependency);
+                .ScheduleParallel(_enemyQuery, Dependency);
             Dependency.Complete();
+        }
+
+        protected override void OnDestroy()
+        {
+            Dependency.Complete();
+            if (_crowdGrid.IsCreated) _crowdGrid.Dispose();
         }
     }
 }

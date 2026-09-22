@@ -3,6 +3,7 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.NetCode;
+using UnityEngine;
 
 namespace WaveByWave.Enemies
 {
@@ -53,12 +54,14 @@ namespace WaveByWave.Enemies
     {
         protected override void OnUpdate()
         {
+            var definition = Resources.Load<EnemyShipDefinition>("EnemyShipDefinition");
             var prefab = EntityManager.CreateEntity(typeof(DotsEnemyShipState), typeof(DotsEnemyShipBrain));
             GhostPrefabCreation.ConvertToGhostPrefab(EntityManager, prefab, new GhostPrefabCreation.Config
             {
                 Name = "WaveByWave.EnemyShip.v1",
                 Importance = 40,
-                MaxSendRate = 20,
+                MaxSendRate = (byte)(definition != null
+                    ? Mathf.Clamp(definition.NetworkSendRate, 1, 20) : 10),
                 SupportedGhostModes = GhostModeMask.Interpolated,
                 DefaultGhostMode = GhostMode.Interpolated,
                 OptimizationMode = GhostOptimizationMode.Dynamic,

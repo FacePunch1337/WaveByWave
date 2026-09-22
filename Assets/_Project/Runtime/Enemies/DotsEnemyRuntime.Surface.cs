@@ -16,16 +16,57 @@ namespace WaveByWave.Enemies
             public bool Returning;
         }
         private readonly Dictionary<int, SurfaceTransfer> _surfaceTransfers = new();
+        private readonly Dictionary<int2, List<int>> _movementCrowdGrid = new();
+        private readonly Stack<List<int>> _movementCrowdPool = new();
+        private float _movementCrowdCellSize = 1f;
 
         private static float SmoothSurfaceHeight(float current, float target, float speed, float deltaTime) =>
             Mathf.MoveTowards(current, target, Mathf.Max(0.1f, speed) * deltaTime);
 
-        private void UpdateCrowdSnapshot(NativeArray<DotsEnemyState> bodies, DotsEnemyState state)
+        private void BuildMovementCrowdIndex(NativeArray<DotsEnemyState> bodies,
+            float configuredDistance, float bodyRadius)
         {
-            if (_crowdIndices.TryGetValue(state.Id, out var index)) bodies[index] = state;
+            foreach (var list in _movementCrowdGrid.Values)
+            {
+                list.Clear();
+                _movementCrowdPool.Push(list);
+            }
+            _movementCrowdGrid.Clear();
+            _movementCrowdCellSize = math.max(0.1f,
+                math.max(configuredDistance, bodyRadius * 2f + 0.04f));
+            for (var i = 0; i < bodies.Length; i++)
+            {
+                if (bodies[i].Health <= 0) continue;
+                AddMovementCrowdBody(i, bodies[i].Position.xz);
+            }
         }
 
-        private static Vector3 LimitCrowdStep(int id, ulong support, Vector3 from, Vector3 desired,
+        private void AddMovementCrowdBody(int index, float2 position)
+        {
+            var cell = (int2)math.floor(position / _movementCrowdCellSize);
+            if (!_movementCrowdGrid.TryGetValue(cell, out var list))
+            {
+                list = _movementCrowdPool.Count > 0 ? _movementCrowdPool.Pop() : new List<int>(8);
+                _movementCrowdGrid.Add(cell, list);
+            }
+            list.Add(index);
+        }
+
+        private void UpdateCrowdSnapshot(NativeArray<DotsEnemyState> bodies, DotsEnemyState state)
+        {
+            if (!_crowdIndices.TryGetValue(state.Id, out var index)) return;
+            var previous = bodies[index];
+            var oldCell = (int2)math.floor(previous.Position.xz / _movementCrowdCellSize);
+            var newCell = (int2)math.floor(state.Position.xz / _movementCrowdCellSize);
+            if (math.any(oldCell != newCell))
+            {
+                if (_movementCrowdGrid.TryGetValue(oldCell, out var oldList)) oldList.Remove(index);
+                AddMovementCrowdBody(index, state.Position.xz);
+            }
+            bodies[index] = state;
+        }
+
+        private Vector3 LimitCrowdStep(int id, ulong support, Vector3 from, Vector3 desired,
             NativeArray<DotsEnemyState> bodies, float configuredDistance, float bodyRadius, float bodyHeight)
         {
             var minimum = Mathf.Max(configuredDistance, bodyRadius * 2f + 0.04f);
@@ -40,30 +81,37 @@ namespace WaveByWave.Enemies
             var startedInside = false;
             var oldNearestSq = float.PositiveInfinity;
             var newNearestSq = float.PositiveInfinity;
-            for (var i = 0; i < bodies.Length; i++)
+            var minimumCell = (int2)math.floor((math.min(start, end) - minimum) / _movementCrowdCellSize);
+            var maximumCell = (int2)math.floor((math.max(start, end) + minimum) / _movementCrowdCellSize);
+            for (var y = minimumCell.y; y <= maximumCell.y; y++)
+            for (var x = minimumCell.x; x <= maximumCell.x; x++)
             {
-                var other = bodies[i];
-                if (other.Id == id || other.Health <= 0 || other.SupportId != support ||
-                    math.abs(other.Position.y - from.y) > bodyHeight * 0.75f) continue;
-                var center = other.Position.xz;
-                var oldOffset = start - center;
-                var newOffset = end - center;
-                var oldSq = math.lengthsq(oldOffset);
-                var newSq = math.lengthsq(newOffset);
-                if (oldSq < minimumSq - 0.0001f)
+                if (!_movementCrowdGrid.TryGetValue(new int2(x, y), out var neighbours)) continue;
+                foreach (var index in neighbours)
                 {
-                    startedInside = true;
-                    oldNearestSq = math.min(oldNearestSq, oldSq);
-                    newNearestSq = math.min(newNearestSq, newSq);
-                    continue;
+                    var other = bodies[index];
+                    if (other.Id == id || other.Health <= 0 || other.SupportId != support ||
+                        math.abs(other.Position.y - from.y) > bodyHeight * 0.75f) continue;
+                    var center = other.Position.xz;
+                    var oldOffset = start - center;
+                    var newOffset = end - center;
+                    var oldSq = math.lengthsq(oldOffset);
+                    var newSq = math.lengthsq(newOffset);
+                    if (oldSq < minimumSq - 0.0001f)
+                    {
+                        startedInside = true;
+                        oldNearestSq = math.min(oldNearestSq, oldSq);
+                        newNearestSq = math.min(newNearestSq, newSq);
+                        continue;
+                    }
+                    // Sweep the horizontal movement against the neighbour's exclusion circle.
+                    var b = 2f * math.dot(oldOffset, step);
+                    var c = oldSq - minimumSq;
+                    var discriminant = b * b - 4f * lengthSq * c;
+                    if (discriminant < 0) continue;
+                    var entry = (-b - math.sqrt(discriminant)) / (2f * lengthSq);
+                    if (entry >= 0 && entry <= maxFraction) maxFraction = entry;
                 }
-                // Sweep the horizontal movement against the neighbour's exclusion circle.
-                var b = 2f * math.dot(oldOffset, step);
-                var c = oldSq - minimumSq;
-                var discriminant = b * b - 4f * lengthSq * c;
-                if (discriminant < 0) continue;
-                var entry = (-b - math.sqrt(discriminant)) / (2f * lengthSq);
-                if (entry >= 0 && entry <= maxFraction) maxFraction = entry;
             }
             // Existing spawn overlap may only improve; this lets a stack spread out but
             // never lets pursuit compress it further.
@@ -109,12 +157,16 @@ namespace WaveByWave.Enemies
         {
             if (brain.Target < 0 || state.StunUntil > now || brain.Attacking != 0 ||
                 math.lengthsq(brain.Direction) < 0.0001f) return;
-            var up = TryGetSurfaceFrame(state.SupportId, true, out var frame)
-                ? frame.rotation * Vector3.up : Vector3.up;
+            var hasSurface = TryGetSurfaceFrame(state.SupportId, true, out var frame);
+            var surfaceRotation = hasSurface ? frame.rotation : Quaternion.identity;
+            var up = surfaceRotation * Vector3.up;
             var forward = Vector3.ProjectOnPlane(brain.Direction, up);
             state.Rotation = math.slerp(state.Rotation, quaternion.LookRotationSafe(forward, up),
                 1f - math.exp(-12f * deltaTime));
-            UpdateLocal(ref state);
+            // Facing changes only rotation. Avoid resolving the same platform again and
+            // inverting its full matrix for every passenger on every frame.
+            state.LocalRotation = Quaternion.Inverse(surfaceRotation) * (Quaternion)state.Rotation;
+            if (!hasSurface) state.LocalPosition = state.Position;
         }
 
         private static int NextSurfaceCursor(int cursor, int probes, int population, int edgeBudget) =>
@@ -133,11 +185,15 @@ namespace WaveByWave.Enemies
             TryGround(feet + Vector3.up * (Catalog.StepHeight + 0.08f),
                 Catalog.StepHeight + Catalog.MaximumDrop + 0.1f, out hit);
 
+        private static int GroundPathSteps(Vector3 from, Vector3 to) =>
+            Mathf.CeilToInt(new Vector2(to.x - from.x, to.z - from.z).magnitude / 0.12f);
+
         private bool HasContinuousGround(Vector3 from, Vector3 to)
         {
             // Validate the interior as well as the destination: a long frame must not
             // let a skeleton walk across water simply because the opposite deck is hit.
-            var steps = Mathf.CeilToInt(Vector3.Distance(from, to) / 0.12f);
+            // Vertical feet adjustment does not cross more water/ground cells.
+            var steps = GroundPathSteps(from, to);
             for (var i = 1; i < steps; i++)
                 if (!GroundAt(Vector3.Lerp(from, to, i / (float)steps), out _)) return false;
             return true;

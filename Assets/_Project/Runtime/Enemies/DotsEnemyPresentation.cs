@@ -27,26 +27,56 @@ namespace WaveByWave.Enemies
     public struct EnemyPartOwner : IComponentData { public Entity Root; public byte Orbit; }
 
     [BurstCompile]
-    internal partial struct EnemyRenderJob : IJobEntity
+    internal struct EnemyRenderJob : IJobChunk
     {
         [ReadOnly] public ComponentLookup<EnemyVisualPose> Poses;
-        private void Execute(ref LocalToWorld transform, ref WorldRenderBounds worldBounds,
-            in RenderBounds renderBounds, ref EnemyFrameProperty animation, in EnemyPartOwner owner)
+        [ReadOnly] public ComponentTypeHandle<EnemyPartOwner> Owners;
+        [ReadOnly] public ComponentTypeHandle<RenderBounds> LocalBounds;
+        public ComponentTypeHandle<LocalToWorld> Transforms;
+        public ComponentTypeHandle<EnemyFrameProperty> Animations;
+        public ComponentTypeHandle<WorldRenderBounds> WorldBounds;
+        public ComponentTypeHandle<ChunkWorldRenderBounds> ChunkBounds;
+
+        public void Execute(in ArchetypeChunk chunk, int unfilteredChunkIndex,
+            bool useEnabledMask, in v128 chunkEnabledMask)
         {
-            if (!Poses.TryGetComponent(owner.Root, out var pose)) return;
-            transform.Value = pose.Matrix;
-            animation.Value = pose.Frame;
-            if (owner.Orbit == 0)
+            var owners = chunk.GetNativeArray(ref Owners);
+            var transforms = chunk.GetNativeArray(ref Transforms);
+            var animations = chunk.GetNativeArray(ref Animations);
+            var localBounds = chunk.GetNativeArray(ref LocalBounds);
+            var worldBounds = chunk.GetNativeArray(ref WorldBounds);
+            var combined = MinMaxAABB.Empty;
+            for (var i = 0; i < chunk.Count; i++)
             {
-                worldBounds.Value = AABB.Transform(transform.Value, StableRenderBounds(renderBounds.Value));
-                return;
+                var owner = owners[i];
+                if (!Poses.TryGetComponent(owner.Root, out var pose))
+                { combined.Encapsulate(worldBounds[i].Value); continue; }
+                var matrix = pose.Matrix;
+                var animation = pose.Frame;
+                if (owner.Orbit != 0)
+                {
+                    animation = float4.zero;
+                    if (pose.Stunned != 0)
+                    {
+                        var phase = pose.Time * 4 + (owner.Orbit - 1) * math.PI * 2 / 3;
+                        var local = new float3(math.cos(phase) * 0.28f,
+                            1.15f + math.sin(phase * 2) * 0.03f, math.sin(phase) * 0.28f);
+                        matrix = math.mul(matrix, float4x4.TRS(local, quaternion.RotateY(phase), new float3(0.05f)));
+                    }
+                    else
+                    {
+                        matrix.c0 = matrix.c1 = matrix.c2 = float4.zero;
+                    }
+                }
+                transforms[i] = new LocalToWorld { Value = matrix };
+                animations[i] = new EnemyFrameProperty { Value = animation };
+                var bounds = AABB.Transform(matrix, localBounds[i].Value);
+                worldBounds[i] = new WorldRenderBounds { Value = bounds };
+                combined.Encapsulate(bounds);
             }
-            var phase = pose.Time * 4 + (owner.Orbit - 1) * math.PI * 2 / 3;
-            var local = new float3(math.cos(phase) * 0.28f, 1.15f + math.sin(phase * 2) * 0.03f, math.sin(phase) * 0.28f);
-            transform.Value = math.mul(pose.Matrix, float4x4.TRS(local, quaternion.RotateY(phase),
-                new float3(pose.Stunned != 0 ? 0.05f : 0)));
-            animation.Value = float4.zero;
-            worldBounds.Value = AABB.Transform(transform.Value, StableRenderBounds(renderBounds.Value));
+            // The ship's rendered pose is final only in LateUpdate. Publish both bounds
+            // here, in the same pass as the matrices, so culling never uses an older pose.
+            chunk.SetChunkComponentData(ref ChunkBounds, new ChunkWorldRenderBounds { Value = combined });
         }
 
         internal static AABB StableRenderBounds(AABB source)
@@ -55,22 +85,6 @@ namespace WaveByWave.Enemies
             // bounds large enough for the whole animated skeleton, not its bind-pose fragment.
             source.Extents = math.max(source.Extents, new float3(1.25f, 1.5f, 1.25f));
             return source;
-        }
-    }
-
-    [BurstCompile]
-    internal struct EnemyRenderChunkBoundsJob : IJobChunk
-    {
-        [ReadOnly] public ComponentTypeHandle<WorldRenderBounds> WorldBounds;
-        public ComponentTypeHandle<ChunkWorldRenderBounds> ChunkBounds;
-
-        public void Execute(in ArchetypeChunk chunk, int unfilteredChunkIndex,
-            bool useEnabledMask, in v128 chunkEnabledMask)
-        {
-            var bounds = chunk.GetNativeArray(ref WorldBounds);
-            var combined = MinMaxAABB.Empty;
-            for (var i = 0; i < bounds.Length; i++) combined.Encapsulate(bounds[i].Value);
-            chunk.SetChunkComponentData(ref ChunkBounds, new ChunkWorldRenderBounds { Value = combined });
         }
     }
 
@@ -86,19 +100,22 @@ namespace WaveByWave.Enemies
         {
             All = new[]
             {
-                ComponentType.ReadOnly<EnemyPartOwner>(), ComponentType.ReadWrite<LocalToWorld>(),
-                ComponentType.ReadOnly<RenderBounds>(), ComponentType.ReadWrite<WorldRenderBounds>(),
-                ComponentType.ChunkComponent<ChunkWorldRenderBounds>()
+                ComponentType.ReadOnly<EnemyPartOwner>(), ComponentType.ReadOnly<RenderBounds>(),
+                ComponentType.ReadWrite<LocalToWorld>(), ComponentType.ReadWrite<EnemyFrameProperty>(),
+                ComponentType.ReadWrite<WorldRenderBounds>(), ComponentType.ChunkComponent<ChunkWorldRenderBounds>()
             }
         });
 
         protected override void OnUpdate()
         {
-            Dependency = new EnemyRenderJob { Poses = GetComponentLookup<EnemyVisualPose>(true) }
-                .ScheduleParallel(Dependency);
-            Dependency = new EnemyRenderChunkBoundsJob
+            Dependency = new EnemyRenderJob
             {
-                WorldBounds = GetComponentTypeHandle<WorldRenderBounds>(true),
+                Poses = GetComponentLookup<EnemyVisualPose>(true),
+                Owners = GetComponentTypeHandle<EnemyPartOwner>(true),
+                LocalBounds = GetComponentTypeHandle<RenderBounds>(true),
+                Transforms = GetComponentTypeHandle<LocalToWorld>(),
+                Animations = GetComponentTypeHandle<EnemyFrameProperty>(),
+                WorldBounds = GetComponentTypeHandle<WorldRenderBounds>(),
                 ChunkBounds = GetComponentTypeHandle<ChunkWorldRenderBounds>()
             }.ScheduleParallel(_parts, Dependency);
             Dependency.Complete();
@@ -111,8 +128,12 @@ namespace WaveByWave.Enemies
         {
             public Entity Root;
             public readonly List<Entity> Parts = new();
+            public List<Entity> Stars;
             public float3 Position;
             public quaternion Rotation;
+            public float3 MoveFrom, MoveTo;
+            public float MovementUpdatedAt, MoveStarted, MoveDuration;
+            public bool HasMovementSample;
             public ulong Support;
             public uint Hit;
             public float FlashUntil;
@@ -130,12 +151,19 @@ namespace WaveByWave.Enemies
             public GameObject Prefab;
             public float Until;
         }
+        private struct SurfaceFrame
+        {
+            public Matrix4x4 Matrix;
+            public bool Valid;
+        }
         private static readonly Dictionary<int, View> Views = new();
         private static readonly Dictionary<int, Template> Templates = new();
         private static readonly List<Material> Materials = new();
         private static readonly List<int> Removed = new();
         private static readonly List<Smoke> Smokes = new();
         private static readonly List<int> Selected = new();
+        private static readonly Stack<Entity> StarPool = new();
+        private static readonly Dictionary<ulong, SurfaceFrame> SurfaceFrames = new();
         private static World _world, _source;
         private static EntityQuery _query;
         private static DotsEnemyCatalog _catalog;
@@ -167,8 +195,13 @@ namespace WaveByWave.Enemies
             using var states = _query.ToComponentDataArray<DotsEnemyState>(Allocator.Temp);
             var manager = world.EntityManager;
             var now = runtime.Now;
+            var renderTime = Time.unscaledTime;
             var blend = 1f - Mathf.Exp(-18f * Time.unscaledDeltaTime);
             var creationBudget = Mathf.Clamp(_catalog.SpawnsPerFrame, 1, 512);
+            var clips = _catalog.BakedParts[0].Clips;
+            // Only share frames within this LateUpdate, after ship presentation is final.
+            // Never reuse last frame's ship pose or the server's physics pose here.
+            SurfaceFrames.Clear();
             foreach (var state in states)
             {
                 if (state.Id == 0 || state.Scene != scene) continue;
@@ -195,20 +228,55 @@ namespace WaveByWave.Enemies
                 {
                     view.Hit = state.HitRevision; view.FlashUntil = Time.unscaledTime + _catalog.DamageFlashDuration;
                 }
-                var hasSurface = runtime.TryGetSurfaceFrame(state.SupportId, false, out var surfaceFrame);
+                var stunned = state.StunUntil > now;
+                UpdateStars(view, stunned);
+                var hasSurface = false;
+                var surfaceFrame = Matrix4x4.identity;
+                if (state.SupportId != 0)
+                {
+                    if (!SurfaceFrames.TryGetValue(state.SupportId, out var cachedFrame))
+                    {
+                        cachedFrame.Valid = runtime.TryGetSurfaceFrame(state.SupportId, false, out cachedFrame.Matrix);
+                        SurfaceFrames.Add(state.SupportId, cachedFrame);
+                    }
+                    hasSurface = cachedFrame.Valid;
+                    surfaceFrame = cachedFrame.Matrix;
+                }
                 var support = hasSurface ? state.SupportId : 0;
                 var position = support != 0 ? state.LocalPosition : state.Position;
                 var rotation = support != 0 ? state.LocalRotation : state.Rotation;
-                if (view.Support != support || math.distancesq(view.Position, position) > 25)
-                { view.Position = position; view.Rotation = rotation; }
+                if (!view.HasMovementSample || view.Support != support || math.distancesq(view.Position, position) > 25)
+                {
+                    view.Position = view.MoveFrom = view.MoveTo = position;
+                    view.Rotation = rotation;
+                    view.MovementUpdatedAt = state.MovementUpdatedAt;
+                    view.MoveStarted = renderTime;
+                    view.MoveDuration = 0f;
+                    view.HasMovementSample = true;
+                }
                 else
-                { view.Position = math.lerp(view.Position, position, blend); view.Rotation = math.slerp(view.Rotation, rotation, blend); }
+                {
+                    // Interpolate accepted steps over their actual update interval. A fixed
+                    // exponential blend reached each endpoint long before the next surface
+                    // turn in a large crowd, producing a repeated dash/stop pattern.
+                    var progress = view.MoveDuration > 0f
+                        ? math.saturate((renderTime - view.MoveStarted) / view.MoveDuration) : 1f;
+                    view.Position = math.lerp(view.MoveFrom, view.MoveTo, progress);
+                    if (state.MovementUpdatedAt != view.MovementUpdatedAt)
+                    {
+                        view.MoveFrom = view.Position;
+                        view.MoveTo = position;
+                        view.MoveDuration = Mathf.Clamp(state.MovementUpdatedAt - view.MovementUpdatedAt, 0.02f, 0.5f);
+                        view.MoveStarted = renderTime;
+                        view.MovementUpdatedAt = state.MovementUpdatedAt;
+                    }
+                    view.Rotation = math.slerp(view.Rotation, rotation, blend);
+                }
                 view.Support = support;
                 var matrix = float4x4.TRS(view.Position, view.Rotation, new float3(_catalog.VisualScale));
                 // Smooth only support-local motion. Never smooth the ship's rendered matrix.
                 if (hasSurface) matrix = math.mul((float4x4)surfaceFrame, matrix);
                 var clipIndex = state.Animation == EnemyAnimationState.Stunned ? 0 : (int)state.Animation;
-                var clips = _catalog.BakedParts[0].Clips;
                 var clip = clips[Mathf.Clamp(clipIndex, 0, clips.Length - 1)];
                 var elapsed = Mathf.Max(0, now - state.AnimationStarted);
                 var loop = state.Animation == EnemyAnimationState.Idle || state.Animation == EnemyAnimationState.Run ||
@@ -224,7 +292,7 @@ namespace WaveByWave.Enemies
                     Frame = new float4(clip.FirstRow + index, clip.FirstRow + Mathf.Min(index + 1, clip.Count - 1),
                         frame - index, Time.unscaledTime < view.FlashUntil ? 1 : 0),
                     Time = Time.time,
-                    Stunned = state.StunUntil > now ? (byte)1 : (byte)0
+                    Stunned = stunned ? (byte)1 : (byte)0
                 });
             }
             Removed.Clear();
@@ -255,15 +323,42 @@ namespace WaveByWave.Enemies
                     view.Parts.Add(entity);
                 }
             }
-            EnsureStar();
-            if (_starTemplate != Entity.Null)
-                for (byte i = 1; i <= 3; i++)
-                {
-                    var entity = manager.Instantiate(_starTemplate);
-                    manager.SetComponentData(entity, new EnemyPartOwner { Root = view.Root, Orbit = i });
-                    view.Parts.Add(entity);
-                }
             return view;
+        }
+
+        private static void UpdateStars(View view, bool stunned)
+        {
+            if (!stunned) { ReleaseStars(view); return; }
+            if (view.Stars != null && view.Stars.Count != 0) return;
+            EnsureStar();
+            if (_starTemplate == Entity.Null) return;
+            view.Stars ??= new List<Entity>(3);
+            var manager = _world.EntityManager;
+            for (byte i = 1; i <= 3; i++)
+            {
+                var entity = StarPool.Count > 0 ? StarPool.Pop() : manager.Instantiate(_starTemplate);
+                manager.SetComponentData(entity, new EnemyPartOwner { Root = view.Root, Orbit = i });
+                manager.SetEnabled(entity, true);
+                view.Stars.Add(entity);
+            }
+        }
+
+        private static void ReleaseStars(View view)
+        {
+            if (view.Stars == null || view.Stars.Count == 0) return;
+            if (_world != null && _world.IsCreated)
+            {
+                var manager = _world.EntityManager;
+                foreach (var entity in view.Stars)
+                {
+                    if (!manager.Exists(entity)) continue;
+                    // Disabled pooled entities are absent from rendering and transform
+                    // jobs, unlike the old always-updated zero-scale stars on every enemy.
+                    manager.SetEnabled(entity, false);
+                    StarPool.Push(entity);
+                }
+            }
+            view.Stars.Clear();
         }
         public static void SelectParts(uint seed, EnemyCombatType type, DotsEnemyCatalog catalog, List<int> selected)
         {
@@ -348,6 +443,9 @@ namespace WaveByWave.Enemies
                 var entity = manager.CreateEntity(typeof(LocalToWorld), typeof(EnemyPartOwner), typeof(EnemyFrameProperty));
                 RenderMeshUtility.AddComponents(entity, manager, description, array,
                     MaterialMeshInfo.FromRenderMeshArrayIndices(sub, 0, sub));
+                var bounds = manager.GetComponentData<RenderBounds>(entity);
+                bounds.Value = EnemyRenderJob.StableRenderBounds(bounds.Value);
+                manager.SetComponentData(entity, bounds);
                 manager.AddComponent<Prefab>(entity);
                 template.Entities.Add(entity);
             }
@@ -402,6 +500,7 @@ namespace WaveByWave.Enemies
         }
         private static void DestroyParts(View view)
         {
+            ReleaseStars(view);
             if (_world != null && _world.IsCreated)
             {
                 foreach (var entity in view.Parts) if (_world.EntityManager.Exists(entity)) _world.EntityManager.DestroyEntity(entity);
@@ -413,6 +512,11 @@ namespace WaveByWave.Enemies
         {
             foreach (var view in Views.Values) DestroyParts(view);
             Views.Clear();
+            if (_world != null && _world.IsCreated)
+                foreach (var entity in StarPool)
+                    if (_world.EntityManager.Exists(entity)) _world.EntityManager.DestroyEntity(entity);
+            StarPool.Clear();
+            SurfaceFrames.Clear();
             foreach (var smoke in Smokes) if (smoke.Object != null) smoke.Object.SetActive(false);
         }
         internal static void Dispose()

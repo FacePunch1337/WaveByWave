@@ -78,6 +78,7 @@ namespace WaveByWave.Enemies
         private int _scene;
         private int _nextId = 1;
         private int _lastFrame = -1;
+        private int _simulationCursor;
         private bool _wasServer;
         private Vector3 _contactBoundsCenter;
         private Vector3 _contactBoundsHalfExtents;
@@ -193,8 +194,7 @@ namespace WaveByWave.Enemies
             var now = Now;
             if (now < _nextSimulation)
             {
-                foreach (var view in _views.Values) if (view != null) view.RestoreSimulationPose();
-                Physics.SyncTransforms();
+                RestorePhysicsViews();
                 SimulateProjectiles();
                 return;
             }
@@ -213,26 +213,35 @@ namespace WaveByWave.Enemies
             var manager = _serverWorld.EntityManager;
             using (var entities = _ships.ToEntityArray(Allocator.Temp))
             {
-                foreach (var entity in entities)
+                var entityCount = entities.Length;
+                var budget = Mathf.Min(entityCount,
+                    Mathf.Clamp(Definition.SimulationBudgetPerTick, 16, 512));
+                var start = entityCount > 0 ? _simulationCursor % entityCount : 0;
+                var scanned = 0;
+                var simulated = 0;
+                while (scanned < entityCount && simulated < budget)
                 {
+                    var entity = entities[(start + scanned) % entityCount];
+                    scanned++;
                     var state = manager.GetComponentData<DotsEnemyShipState>(entity);
                     var brain = manager.GetComponentData<DotsEnemyShipBrain>(entity);
                     if (state.Scene != _scene) { _remove.Add(entity); continue; }
+                    if (!SimulationDue(state, brain, now)) continue;
                     if (state.Health > 0 && brain.CrewSpawned == 0 && EnsureCrew(state.Id, state.Seed))
                         brain.CrewSpawned = 1;
-                    Simulate(entity, ref state, ref brain);
+                    Simulate(entity, ref state, ref brain, now);
+                    simulated++;
                     if (state.Health > 0) _fleet.Set(state.Id, state.Position.xz);
                     manager.SetComponentData(entity, state);
                     manager.SetComponentData(entity, brain);
                     CachePhysicsFrame(state);
                     if (_views.TryGetValue(state.Id, out var view) && view != null)
-                    {
                         view.SetSimulationPose(state.Position, state.Rotation);
-                        view.RestoreSimulationPose();
-                    }
                 }
+                if (entityCount > 0) _simulationCursor = (start + scanned) % entityCount;
+                else _simulationCursor = 0;
             }
-            Physics.SyncTransforms();
+            RestorePhysicsViews();
             SimulateProjectiles();
             foreach (var entity in _remove)
             {
@@ -367,14 +376,19 @@ namespace WaveByWave.Enemies
             return true;
         }
 
-        private void Simulate(Entity entity, ref DotsEnemyShipState state, ref DotsEnemyShipBrain brain)
+        private bool SimulationDue(in DotsEnemyShipState state, in DotsEnemyShipBrain brain, float now)
         {
-            var now = Now;
             var near = DistanceToObserversSquared(state.Position) <=
                 Definition.DetailedSimulationDistance * Definition.DetailedSimulationDistance;
-            var interval = 1f / Mathf.Max(1, Definition.DistantSimulationRate);
-            if (state.Health > 0 && !near && now - brain.LastTick < interval) return;
-            var deltaTime = Mathf.Clamp(now - brain.LastTick, 0f, Mathf.Max(0.1f, interval * 2f));
+            var rate = state.Health > 0 && near
+                ? Definition.SimulationRate : Definition.DistantSimulationRate;
+            return now - brain.LastTick >= 1f / Mathf.Max(1, rate) - 0.0001f;
+        }
+
+        private void Simulate(Entity entity, ref DotsEnemyShipState state,
+            ref DotsEnemyShipBrain brain, float now)
+        {
+            var deltaTime = Mathf.Clamp(now - brain.LastTick, 0f, 1f);
             brain.LastTick = now;
             if (deltaTime <= 0f) return;
             if (state.Health <= 0)
@@ -696,6 +710,18 @@ namespace WaveByWave.Enemies
             return best;
         }
 
+        private void RestorePhysicsViews()
+        {
+            var restored = false;
+            foreach (var view in _views.Values)
+            {
+                if (view == null) continue;
+                view.RestoreSimulationPose();
+                restored = true;
+            }
+            if (restored) Physics.SyncTransforms();
+        }
+
         public bool TryGetPhysicsFrame(int id, out Matrix4x4 frame)
             => _physicsFrames.TryGetValue(id, out frame);
 
@@ -728,6 +754,7 @@ namespace WaveByWave.Enemies
             _fleet.Clear();
             ReleaseCollisionGeometry();
             _nextSimulation = 0;
+            _simulationCursor = 0;
         }
 
         private void OnDestroy()

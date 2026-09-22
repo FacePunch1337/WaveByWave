@@ -71,8 +71,14 @@ namespace WaveByWave.Enemies
         [Header("Fleet performance")]
         [Range(5, 60)] public int SimulationRate = 20;
         [Range(1, 20)] public int DistantSimulationRate = 5;
+        [Range(16, 512), Tooltip("Maximum ships allowed to run water, collision and firing queries during one fleet tick. Remaining ships stay active and are updated fairly on later ticks.")]
+        public int SimulationBudgetPerTick = 128;
+        [Range(1, 20), Tooltip("Maximum Network for Entities snapshot rate for ships. Visual interpolation remains frame-rate independent.")]
+        public int NetworkSendRate = 10;
         [Min(30f)] public float DetailedSimulationDistance = 100f;
         [Min(30f)] public float PhysicsViewDistance = 100f;
+        [Range(0, 256), Tooltip("Maximum full GameObject views with Rigidbody and MeshCollider. Additional ships remain visible through GPU instancing and still simulate as DOTS entities.")]
+        public int MaximumPhysicsViews = 64;
         [Range(1, 32)] public int ViewCreationsPerFrame = 2;
         [Tooltip("Render distant hulls in instanced batches using the authored prefab meshes.")]
         public bool InstanceDistantShips = true;
@@ -90,6 +96,7 @@ namespace WaveByWave.Enemies
             CollisionHalfExtents = Vector3.Max(CollisionHalfExtents, Vector3.one * 0.1f);
             MaximumContactPushSpeed = Mathf.Max(0.1f, MaximumContactPushSpeed);
             ContactPushDamping = Mathf.Max(0.1f, ContactPushDamping);
+            DistantSimulationRate = Mathf.Min(DistantSimulationRate, SimulationRate);
             MaximumSpeed = Mathf.Max(BaseSpeed, MaximumSpeed);
             FireRange = Mathf.Max(PreferredBroadsideRange, FireRange);
             WaterSampleSize = Vector2.Max(WaterSampleSize, Vector2.one * 0.1f);

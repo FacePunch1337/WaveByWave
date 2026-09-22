@@ -77,6 +77,14 @@ namespace WaveByWave.Enemies
     }
 
     [Serializable]
+    public sealed class EnemyBakedVariant
+    {
+        public EnemyCombatType CombatType;
+        public uint Seed;
+        public EnemyBakedPart Visual;
+    }
+
+    [Serializable]
     public sealed class EnemyPartSource
     {
         public EnemyBakedPartCategory Category;
@@ -113,6 +121,11 @@ namespace WaveByWave.Enemies
         [Range(4, 30)] public int BakeFramesPerSecond = 12;
 
         [Header("Runtime presentation")]
+        [Tooltip("Use editor-baked whole skeletons. Falls back to modular parts until variants have been baked.")]
+        public bool UseCombinedVariants = true;
+        [Range(1, 32)] public int CombinedVariantsPerType = 8;
+        public List<EnemyBakedVariant> CombinedVariants = new();
+        [HideInInspector] public string CombinedSourceHash;
         public List<EnemyBakedPart> BakedParts = new();
         [HideInInspector] public string BakeSourceHash;
         public GameObject SpawnSmokePrefab;
@@ -154,6 +167,8 @@ namespace WaveByWave.Enemies
         public float CrowdSeparationRadius = 0.82f;
         [Range(0f, 2f), Tooltip("How strongly nearby enemies move apart while still pursuing their target.")]
         public float CrowdSeparationStrength = 0.9f;
+        [Range(0.3f, 4f), Tooltip("Distance in metres used to anticipate a blocked crowd corridor. Larger values start flanking earlier; this is not a target detection radius.")]
+        public float CrowdAvoidanceLookAhead = 1.5f;
         [Range(16, 2048)] public int SurfaceProbesPerFrame = 256;
         [Min(0f), Tooltip("Ignore static props up to this horizontal width for ground probes and enemy sight. Island decorations are always ignored; terrain and moving platforms are preserved. Zero disables size-based filtering.")]
         public float IgnoredObstacleWidth = 3f;
@@ -166,6 +181,24 @@ namespace WaveByWave.Enemies
         public float SurfaceTransferHeight = 1f;
         [Range(1, 128), Tooltip("Maximum edge/adjacent-surface searches per frame, shared fairly between enemies.")]
         public int EdgeSearchesPerFrame = 32;
+
+        [Header("Performance diagnostics (live toggles)")]
+        [Tooltip("Use the baked deck map when available. Off uses the existing collider/PhysX movement path; a physical ship view is required for that fallback. Applies to existing bots without rebaking.")]
+        public bool UseBakedDeckNavigation = true;
+        [Tooltip("Choose a persistent flank around nearby enemies. Off skips avoidance decisions. Does not disable pursuit or change target detection.")]
+        public bool EnableCrowdAvoidance = true;
+        [Tooltip("Calculate soft neighbour repulsion. Independent of hard contacts and avoidance. The neighbour search is already disabled when Crowd Separation Radius is zero.")]
+        public bool EnableCrowdSeparation = true;
+        [Tooltip("Build the hard-contact grid and limit steps against other bots. Off skips both costs and allows skeletons to overlap; soft separation and avoidance remain independent.")]
+        public bool EnableCrowdCollisions = true;
+        [Tooltip("Check intermediate ground samples on the collider/PhysX movement path. Off still checks the destination, but can allow cutting across water/gaps. Baked deck connectivity is unaffected.")]
+        public bool EnableSurfaceContinuityChecks = true;
+        [Tooltip("Search lateral directions along a blocked surface edge, on both baked decks and colliders. Off stops this search; crowd avoidance is a separate toggle.")]
+        public bool EnableSurfaceEdgeFollowing = true;
+        [Tooltip("Search for walking transfers across water/air gaps. Off skips new searches; bots already crossing return to their departure surface without teleporting.")]
+        public bool EnableSurfaceTransfers = true;
+        [Tooltip("Allow enemy attacks, including their visibility checks and damage. Off cancels an ongoing attack. Incoming damage, stuns, pursuit and surface movement still work.")]
+        public bool EnableCombat = true;
 
         [Header("Network for Entities")]
         [Range(1, 512)] public int SpawnsPerFrame = 32;

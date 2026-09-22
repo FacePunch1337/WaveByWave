@@ -7,6 +7,7 @@ Shader "WaveByWave/EnemyVertexAnimation"
         _PositionFrames("Baked vertex positions", 2D) = "black" {}
         _NormalFrames("Baked vertex normals", 2D) = "white" {}
         _EnemyFrame("Frame A, Frame B, blend, white flash", Vector) = (0,0,0,0)
+        _UseVertexColor("Combined mesh material colors", Float) = 0
     }
     SubShader
     {
@@ -21,6 +22,7 @@ Shader "WaveByWave/EnemyVertexAnimation"
             float4 _BaseMap_ST;
             float4 _BaseColor;
             float4 _EnemyFrame;
+            float _UseVertexColor;
         CBUFFER_END
         #ifdef UNITY_DOTS_INSTANCING_ENABLED
         UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
@@ -33,6 +35,7 @@ Shader "WaveByWave/EnemyVertexAnimation"
             float4 positionOS : POSITION;
             float2 uv : TEXCOORD0;
             float2 vertexLookup : TEXCOORD3;
+            float4 color : COLOR;
             UNITY_VERTEX_INPUT_INSTANCE_ID
         };
         struct Varyings
@@ -43,6 +46,7 @@ Shader "WaveByWave/EnemyVertexAnimation"
             float3 positionWS : TEXCOORD2;
             half fog : TEXCOORD3;
             half flash : TEXCOORD4;
+            half4 tint : TEXCOORD5;
             UNITY_VERTEX_OUTPUT_STEREO
         };
         void Animate(Attributes input, out float3 position, out float3 normal)
@@ -67,6 +71,7 @@ Shader "WaveByWave/EnemyVertexAnimation"
             output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
             output.fog = ComputeFogFactor(output.positionCS.z);
             output.flash = _EnemyFrame.w;
+            output.tint = lerp(float4(1,1,1,1), input.color, _UseVertexColor);
             return output;
         }
         ENDHLSL
@@ -87,7 +92,7 @@ Shader "WaveByWave/EnemyVertexAnimation"
             {
                 half3 normal = normalize(input.normalWS);
                 Light light = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
-                half3 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).rgb * _BaseColor.rgb;
+                half3 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).rgb * _BaseColor.rgb * input.tint.rgb;
                 half3 color = albedo * (SampleSH(normal) + light.color * saturate(dot(normal, light.direction)) *
                     light.shadowAttenuation * light.distanceAttenuation);
                 color = lerp(color, half3(1,1,1), input.flash);

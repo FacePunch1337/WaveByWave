@@ -344,6 +344,9 @@ namespace WaveByWave.Editor
                 if (output.Count == 0) throw new InvalidOperationException("No enemy meshes were baked.");
                 catalog.BakedParts = output;
                 catalog.BakeSourceHash = SourceHash(catalog);
+                catalog.CombinedVariants.Clear();
+                // Combined variants are explicit derived assets, never assembled during gameplay.
+                if (catalog.UseCombinedVariants) EnemyCombinedVariantBaker.Bake(catalog);
                 EditorUtility.SetDirty(catalog);
                 AssetDatabase.SaveAssets();
                 Debug.Log($"[Enemies] Baked {output.Count} mesh parts, {rows} animation rows. Runtime uses NFE ghosts and GPU vertex animation.");
@@ -415,15 +418,38 @@ namespace WaveByWave.Editor
     [CustomEditor(typeof(DotsEnemyCatalog))]
     public sealed class DotsEnemyCatalogEditor : UnityEditor.Editor
     {
+        private string _combinedHash;
+        private bool _dirty = true;
+        private void MarkDirty() { _dirty = true; Repaint(); }
+        private void OnEnable() => EditorApplication.projectChanged += MarkDirty;
+        private void OnDisable() => EditorApplication.projectChanged -= MarkDirty;
         public override void OnInspectorGUI()
         {
-            DrawDefaultInspector();
+            if (DrawDefaultInspector()) _dirty = true;
             if (!((DotsEnemyCatalog)target).CanSpawnType(EnemyCombatType.Random))
                 EditorGUILayout.HelpBox("All skeleton types are disabled. No new skeletons will spawn until a type is enabled.", MessageType.Warning);
             EditorGUILayout.HelpBox("Source prefab and attachment changes are baked before Play Mode. You can also bake manually below. Runtime uses ECS + GPU animation; no Animator or NavMesh.", MessageType.Info);
             using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
+            {
                 if (GUILayout.Button("Bake prefab meshes and animation textures"))
                     EnemyContentSetup.Bake((DotsEnemyCatalog)target);
+                if (GUILayout.Button("Bake combined skeleton variants"))
+                    EnemyCombinedVariantBaker.Bake((DotsEnemyCatalog)target);
+            }
+            var catalog = (DotsEnemyCatalog)target;
+            EditorGUILayout.HelpBox("Performance diagnostics: переключатели действуют на существующих скелетов во время игры, без повторного спавна. Отключайте по одному и возвращайте перед следующей проверкой. На клиенте без сервера переключатели серверного движения не влияют на симуляцию.", MessageType.Info);
+            if (!catalog.EnableCrowdCollisions || !catalog.EnableSurfaceContinuityChecks)
+                EditorGUILayout.HelpBox("Диагностика отключила защиту движения: без Crowd Collisions скелеты могут пересекаться; без Surface Continuity Checks физическая ветка может срезать путь через воду. Запечённая карта палубы сохраняет свои проверки связности.", MessageType.Warning);
+            if (catalog.EnableCrowdSeparation && catalog.CrowdSeparationRadius <= 0)
+                EditorGUILayout.HelpBox("Мягкое расхождение уже отключено нулевым Crowd Separation Radius. Для текущего каталога отдельно сравните Crowd Avoidance и Crowd Collisions.", MessageType.Info);
+            if (catalog.UseCombinedVariants && catalog.CombinedVariants.Count == 0)
+                EditorGUILayout.HelpBox("Combined variants have not been baked. Runtime will use the original modular skeletons until you bake them.", MessageType.Warning);
+            else if (catalog.UseCombinedVariants)
+            {
+                if (_dirty) { _combinedHash = EnemyCombinedVariantBaker.SourceHash(catalog); _dirty = false; }
+                if (_combinedHash != catalog.CombinedSourceHash)
+                    EditorGUILayout.HelpBox("Combined variants are out of date. Bake again after changing appearance or variant count.", MessageType.Warning);
+            }
         }
     }
 }

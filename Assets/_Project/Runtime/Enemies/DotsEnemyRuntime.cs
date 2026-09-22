@@ -170,21 +170,18 @@ namespace WaveByWave.Enemies
             SpawnBatch();
             var manager = _serverWorld.EntityManager;
             using var entities = _enemies.ToEntityArray(Allocator.Temp);
-            foreach (var entity in entities)
-            {
-                var state = manager.GetComponentData<DotsEnemyState>(entity);
-                if (state.Scene != _scene) { _remove.Add(entity); continue; }
-                if (state.SupportId == 0 || state.Health <= 0) continue;
-                Carry(ref state);
-                manager.SetComponentData(entity, state);
-            }
-            system.Seek(targets, now, Catalog.CrowdSeparationRadius, Catalog.BodyHeight * 0.75f);
+            system.CarryPassengers(this, _scene);
+            system.Seek(targets, now, Catalog.CrowdSeparationRadius, Catalog.BodyHeight * 0.75f,
+                Catalog.EnableCrowdAvoidance ? Mathf.Clamp(Catalog.CrowdAvoidanceLookAhead, 0.3f, 4f) : 0,
+                Catalog.BodyRadius, Catalog.MoveSpeed, Catalog.MeleeRange * 0.82f,
+                Catalog.EnableCrowdSeparation);
+            system.FaceTargets(now, Mathf.Min(Time.unscaledDeltaTime, 0.2f), _scene);
             StressCount = 0;
             foreach (var entity in entities)
             {
                 var state = manager.GetComponentData<DotsEnemyState>(entity);
                 var brain = manager.GetComponentData<DotsEnemyBrain>(entity);
-                if (state.Scene != _scene) continue;
+                if (state.Scene != _scene) { _remove.Add(entity); continue; }
                 if (state.Health <= 0)
                 {
                     _surfaceTransfers.Remove(state.Id);
@@ -192,7 +189,6 @@ namespace WaveByWave.Enemies
                     continue;
                 }
                 if (brain.SpawnGroup == -1) StressCount++;
-                FaceTarget(ref state, brain, Mathf.Min(Time.unscaledDeltaTime, 0.2f), now);
                 TickCombat(ref state, ref brain, now);
                 manager.SetComponentData(entity, state);
                 manager.SetComponentData(entity, brain);
@@ -339,6 +335,16 @@ namespace WaveByWave.Enemies
                 return;
             }
             if (state.Animation == EnemyAnimationState.Stunned) SetAnimation(ref state, EnemyAnimationState.Idle);
+            if (!Catalog.EnableCombat)
+            {
+                if (brain.Attacking != 0)
+                {
+                    brain.Attacking = 0;
+                    brain.StrikeAt = 0;
+                    SetAnimation(ref state, EnemyAnimationState.Idle);
+                }
+                return;
+            }
             if (brain.Attacking != 0)
             {
                 if (brain.StrikeAt > 0 && now >= brain.StrikeAt)
@@ -404,10 +410,16 @@ namespace WaveByWave.Enemies
         {
             if (entities.Length == 0) return;
             var manager = _serverWorld.EntityManager;
-            using var crowdBodies = _enemies.ToComponentDataArray<DotsEnemyState>(Allocator.Temp);
+            _deckMaps.Clear();
+            using var crowdBodies = Catalog.EnableCrowdCollisions
+                ? _enemies.ToComponentDataArray<DotsEnemyState>(Allocator.Temp)
+                : new NativeArray<DotsEnemyState>(0, Allocator.Temp);
             _crowdIndices.Clear();
-            for (var body = 0; body < crowdBodies.Length; body++) _crowdIndices[crowdBodies[body].Id] = body;
-            BuildMovementCrowdIndex(crowdBodies, Catalog.CrowdSeparationRadius, Catalog.BodyRadius);
+            if (Catalog.EnableCrowdCollisions)
+            {
+                for (var body = 0; body < crowdBodies.Length; body++) _crowdIndices[crowdBodies[body].Id] = body;
+                BuildMovementCrowdIndex(crowdBodies, Catalog.CrowdSeparationRadius, Catalog.BodyRadius);
+            }
             var count = Mathf.Min(entities.Length, Catalog.SurfaceProbesPerFrame);
             EnsureProbeCapacity(count);
             _probes.Clear();
@@ -430,7 +442,7 @@ namespace WaveByWave.Enemies
                     manager.SetComponentData(entity, brain);
                     continue;
                 }
-                var direction = brain.Direction;
+                var direction = Catalog.EnableCrowdAvoidance ? brain.CrowdDirection : brain.Direction;
                 var stoppingDistance = Catalog.MeleeRange * 0.82f;
                 if (brain.Attacking != 0 || brain.TargetDistance <= stoppingDistance)
                     direction = float3.zero;
@@ -461,6 +473,12 @@ namespace WaveByWave.Enemies
                     manager.SetComponentData(entity, brain);
                     continue;
                 }
+                if (MoveOnBakedDeck(ref state, ref brain, displacement, dt, wantsToMove, now, crowdBodies, ref edgeSearchesRemaining))
+                {
+                    manager.SetComponentData(entity, state);
+                    manager.SetComponentData(entity, brain);
+                    continue;
+                }
                 if (IsShipSurface(state.SupportId) && ResolveSurface(state.SupportId) == null) continue;
                 Vector3 from = state.Position;
                 var to = from + (Vector3)displacement;
@@ -485,7 +503,7 @@ namespace WaveByWave.Enemies
                 var probe = _probes[i];
                 probe.Ground = SelectBatchGround(_groundResults, i * GroundHitsPerProbe, false);
                 probe.ContinuityStart = continuityCount;
-                if (probe.Ground.collider != null)
+                if (probe.Ground.collider != null && Catalog.EnableSurfaceContinuityChecks)
                 {
                     var from = manager.GetComponentData<DotsEnemyState>(probe.Entity).Position;
                     probe.ContinuityCount = Mathf.Max(0, GroundPathSteps(from, probe.Ground.point) - 1);
@@ -529,7 +547,8 @@ namespace WaveByWave.Enemies
                 }
                 var movedDistance = 0f;
                 var movementEvaluated = true;
-                if (ground.collider == null && brain.Target >= 0 && brain.Target < _players.Count && brain.Attacking == 0 &&
+                if (ground.collider == null && (Catalog.EnableSurfaceTransfers || Catalog.EnableSurfaceEdgeFollowing) &&
+                    brain.Target >= 0 && brain.Target < _players.Count && brain.Attacking == 0 &&
                     state.StunUntil <= now)
                 {
                     if (edgeSearchesRemaining > 0)

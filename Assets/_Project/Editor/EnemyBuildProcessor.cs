@@ -14,6 +14,8 @@ namespace WaveByWave.Editor
             if (catalog == null) throw new BuildFailedException("Skeleton enemy catalog is missing. Create it via Tools/Wave by Wave/Enemies.");
             if (!catalog.IsBaked || catalog.BakeSourceHash != EnemyContentSetup.SourceHash(catalog))
                 EnemyContentSetup.Bake(catalog);
+            if (catalog.UseCombinedVariants && catalog.CombinedSourceHash != EnemyCombinedVariantBaker.SourceHash(catalog))
+                EnemyCombinedVariantBaker.Bake(catalog);
         }
     }
 }

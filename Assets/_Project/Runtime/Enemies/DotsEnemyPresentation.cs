@@ -4,6 +4,7 @@ using Unity.Burst;
 using Unity.Burst.Intrinsics;
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.NetCode;
 using Unity.Rendering;
@@ -95,6 +96,11 @@ namespace WaveByWave.Enemies
     public partial class EnemyRenderSystem : SystemBase
     {
         private EntityQuery _parts;
+        private NativeArray<EnemyVisualUpdate> _updates;
+        private float _now, _scale;
+
+        public void SetFrame(NativeArray<EnemyVisualUpdate> updates, float now, float scale)
+        { _updates = updates; _now = now; _scale = scale; }
 
         protected override void OnCreate() => _parts = GetEntityQuery(new EntityQueryDesc
         {
@@ -108,6 +114,14 @@ namespace WaveByWave.Enemies
 
         protected override void OnUpdate()
         {
+            Dependency = new EnemyVisualPoseJob
+            {
+                Updates = _updates,
+                Interpolations = GetComponentLookup<EnemyVisualInterpolation>(),
+                Poses = GetComponentLookup<EnemyVisualPose>(),
+                Now = _now, RenderTime = UnityEngine.Time.unscaledTime, EffectTime = UnityEngine.Time.time,
+                RotationBlend = 1f - math.exp(-18f * UnityEngine.Time.unscaledDeltaTime), Scale = _scale
+            }.Schedule(_updates.Length, 64, Dependency);
             Dependency = new EnemyRenderJob
             {
                 Poses = GetComponentLookup<EnemyVisualPose>(true),
@@ -129,12 +143,6 @@ namespace WaveByWave.Enemies
             public Entity Root;
             public readonly List<Entity> Parts = new();
             public List<Entity> Stars;
-            public float3 Position;
-            public quaternion Rotation;
-            public float3 MoveFrom, MoveTo;
-            public float MovementUpdatedAt, MoveStarted, MoveDuration;
-            public bool HasMovementSample;
-            public ulong Support;
             public uint Hit;
             public float FlashUntil;
             public int Seen;
@@ -158,12 +166,14 @@ namespace WaveByWave.Enemies
         }
         private static readonly Dictionary<int, View> Views = new();
         private static readonly Dictionary<int, Template> Templates = new();
+        private static readonly Dictionary<int, Template> CombinedTemplates = new();
         private static readonly List<Material> Materials = new();
         private static readonly List<int> Removed = new();
         private static readonly List<Smoke> Smokes = new();
         private static readonly List<int> Selected = new();
         private static readonly Stack<Entity> StarPool = new();
         private static readonly Dictionary<ulong, SurfaceFrame> SurfaceFrames = new();
+        private static NativeList<EnemyVisualUpdate> VisualUpdates;
         private static World _world, _source;
         private static EntityQuery _query;
         private static DotsEnemyCatalog _catalog;
@@ -193,10 +203,9 @@ namespace WaveByWave.Enemies
             _generation++;
             _smokesThisFrame = 0;
             using var states = _query.ToComponentDataArray<DotsEnemyState>(Allocator.Temp);
-            var manager = world.EntityManager;
             var now = runtime.Now;
-            var renderTime = Time.unscaledTime;
-            var blend = 1f - Mathf.Exp(-18f * Time.unscaledDeltaTime);
+            if (!VisualUpdates.IsCreated) VisualUpdates = new NativeList<EnemyVisualUpdate>(256, Allocator.Persistent);
+            VisualUpdates.Clear();
             var creationBudget = Mathf.Clamp(_catalog.SpawnsPerFrame, 1, 512);
             var clips = _catalog.BakedParts[0].Clips;
             // Only share frames within this LateUpdate, after ship presentation is final.
@@ -245,53 +254,18 @@ namespace WaveByWave.Enemies
                 var support = hasSurface ? state.SupportId : 0;
                 var position = support != 0 ? state.LocalPosition : state.Position;
                 var rotation = support != 0 ? state.LocalRotation : state.Rotation;
-                if (!view.HasMovementSample || view.Support != support || math.distancesq(view.Position, position) > 25)
-                {
-                    view.Position = view.MoveFrom = view.MoveTo = position;
-                    view.Rotation = rotation;
-                    view.MovementUpdatedAt = state.MovementUpdatedAt;
-                    view.MoveStarted = renderTime;
-                    view.MoveDuration = 0f;
-                    view.HasMovementSample = true;
-                }
-                else
-                {
-                    // Interpolate accepted steps over their actual update interval. A fixed
-                    // exponential blend reached each endpoint long before the next surface
-                    // turn in a large crowd, producing a repeated dash/stop pattern.
-                    var progress = view.MoveDuration > 0f
-                        ? math.saturate((renderTime - view.MoveStarted) / view.MoveDuration) : 1f;
-                    view.Position = math.lerp(view.MoveFrom, view.MoveTo, progress);
-                    if (state.MovementUpdatedAt != view.MovementUpdatedAt)
-                    {
-                        view.MoveFrom = view.Position;
-                        view.MoveTo = position;
-                        view.MoveDuration = Mathf.Clamp(state.MovementUpdatedAt - view.MovementUpdatedAt, 0.02f, 0.5f);
-                        view.MoveStarted = renderTime;
-                        view.MovementUpdatedAt = state.MovementUpdatedAt;
-                    }
-                    view.Rotation = math.slerp(view.Rotation, rotation, blend);
-                }
-                view.Support = support;
-                var matrix = float4x4.TRS(view.Position, view.Rotation, new float3(_catalog.VisualScale));
-                // Smooth only support-local motion. Never smooth the ship's rendered matrix.
-                if (hasSurface) matrix = math.mul((float4x4)surfaceFrame, matrix);
                 var clipIndex = state.Animation == EnemyAnimationState.Stunned ? 0 : (int)state.Animation;
                 var clip = clips[Mathf.Clamp(clipIndex, 0, clips.Length - 1)];
-                var elapsed = Mathf.Max(0, now - state.AnimationStarted);
                 var loop = state.Animation == EnemyAnimationState.Idle || state.Animation == EnemyAnimationState.Run ||
                            state.Animation == EnemyAnimationState.Stunned;
-                var duration = state.AnimationDuration > 0 ? state.AnimationDuration : clip.Duration;
-                // Add deterministic phase only to loops. Attacks must match the server's strike time.
-                var phase = loop ? Mathf.Repeat(elapsed / duration + (state.Seed % 997) / 997f, 1) : Mathf.Clamp01(elapsed / duration);
-                var frame = phase * (clip.Count - 1);
-                var index = Mathf.FloorToInt(frame);
-                manager.SetComponentData(view.Root, new EnemyVisualPose
+                VisualUpdates.Add(new EnemyVisualUpdate
                 {
-                    Matrix = matrix,
-                    Frame = new float4(clip.FirstRow + index, clip.FirstRow + Mathf.Min(index + 1, clip.Count - 1),
-                        frame - index, Time.unscaledTime < view.FlashUntil ? 1 : 0),
-                    Time = Time.time,
+                    Root = view.Root, Position = position, Rotation = rotation, Support = support,
+                    Surface = surfaceFrame, Seed = state.Seed, SampleTime = state.MovementUpdatedAt,
+                    AnimationStarted = state.AnimationStarted,
+                    Duration = state.AnimationDuration > 0 ? state.AnimationDuration : clip.Duration,
+                    FirstRow = clip.FirstRow, FrameCount = clip.Count, FlashUntil = view.FlashUntil,
+                    Loop = loop ? (byte)1 : (byte)0,
                     Stunned = stunned ? (byte)1 : (byte)0
                 });
             }
@@ -301,7 +275,9 @@ namespace WaveByWave.Enemies
             foreach (var id in Removed) Views.Remove(id);
             // SystemBase.Update refreshes input dependencies and publishes output dependencies.
             // Calling a custom method directly bypasses that lifecycle and races LocalToWorldSystem.
-            _world.GetOrCreateSystemManaged<EnemyRenderSystem>().Update();
+            var renderSystem = _world.GetOrCreateSystemManaged<EnemyRenderSystem>();
+            renderSystem.SetFrame(VisualUpdates.AsArray(), now, _catalog.VisualScale);
+            renderSystem.Update();
             foreach (var smoke in Smokes)
                 if (smoke.Object != null && smoke.Object.activeSelf && Time.unscaledTime >= smoke.Until)
                     smoke.Object.SetActive(false);
@@ -309,21 +285,46 @@ namespace WaveByWave.Enemies
         private static View Create(DotsEnemyState state)
         {
             var manager = _world.EntityManager;
-            var view = new View { Root = manager.CreateEntity(typeof(EnemyVisualPose)), Position = state.Position,
-                Rotation = state.Rotation, Hit = state.HitRevision };
+            var view = new View { Root = manager.CreateEntity(typeof(EnemyVisualPose), typeof(EnemyVisualInterpolation)),
+                Hit = state.HitRevision };
+            if (_catalog.UseCombinedVariants)
+            {
+                var count = 0;
+                foreach (var variant in _catalog.CombinedVariants)
+                    if (variant.CombatType == state.CombatType && variant.Visual?.Mesh != null) count++;
+                // Spawn seeds are always odd; skip that fixed bit so every variant is reachable.
+                var chosen = count > 0 ? (int)((state.Seed >> 1) % (uint)count) : -1;
+                for (var i = 0; chosen >= 0 && i < _catalog.CombinedVariants.Count; i++)
+                {
+                    var variant = _catalog.CombinedVariants[i];
+                    if (variant.CombatType != state.CombatType || variant.Visual?.Mesh == null || chosen-- != 0) continue;
+                    if (!CombinedTemplates.TryGetValue(i, out var combined))
+                    {
+                        combined = CreateTemplate(variant.Visual, -1);
+                        CombinedTemplates.Add(i, combined);
+                    }
+                    InstantiateParts(combined, view);
+                    return view;
+                }
+            }
             SelectParts(state.Seed, state.CombatType, _catalog, Selected);
             var skin = (int)(state.Seed % (uint)Mathf.Max(1, _catalog.SkeletonMaterials.Length));
             foreach (var index in Selected)
             {
-                var template = GetTemplate(index, skin);
-                foreach (var source in template.Entities)
-                {
-                    var entity = manager.Instantiate(source);
-                    manager.SetComponentData(entity, new EnemyPartOwner { Root = view.Root });
-                    view.Parts.Add(entity);
-                }
+                InstantiateParts(GetTemplate(index, skin), view);
             }
             return view;
+        }
+
+        private static void InstantiateParts(Template template, View view)
+        {
+            var manager = _world.EntityManager;
+            foreach (var source in template.Entities)
+            {
+                var entity = manager.Instantiate(source);
+                manager.SetComponentData(entity, new EnemyPartOwner { Root = view.Root });
+                view.Parts.Add(entity);
+            }
         }
 
         private static void UpdateStars(View view, bool stunned)
@@ -417,11 +418,18 @@ namespace WaveByWave.Enemies
             var key = index * 16 + skin;
             if (Templates.TryGetValue(key, out var template)) return template;
             var part = _catalog.BakedParts[index];
+            template = CreateTemplate(part, skin);
+            Templates.Add(key, template);
+            return template;
+        }
+
+        private static Template CreateTemplate(EnemyBakedPart part, int skin)
+        {
             var materials = new Material[part.Materials.Length];
             for (var i = 0; i < materials.Length; i++)
             {
                 var material = new Material(part.Materials[i]) { enableInstancing = true };
-                if (part.Category == EnemyBakedPartCategory.Body && skin < _catalog.SkeletonMaterials.Length)
+                if (part.Category == EnemyBakedPartCategory.Body && skin >= 0 && skin < _catalog.SkeletonMaterials.Length)
                 {
                     var source = _catalog.SkeletonMaterials[skin];
                     if (source != null)
@@ -434,7 +442,7 @@ namespace WaveByWave.Enemies
                 Materials.Add(material);
             }
             var array = new RenderMeshArray(materials, new[] { part.Mesh });
-            template = new Template();
+            var template = new Template();
             var manager = _world.EntityManager;
             var description = new RenderMeshDescription(ShadowCastingMode.On, true,
                 MotionVectorGenerationMode.ForceNoMotion, 0, uint.MaxValue, LightProbeUsage.Off);
@@ -449,7 +457,6 @@ namespace WaveByWave.Enemies
                 manager.AddComponent<Prefab>(entity);
                 template.Entities.Add(entity);
             }
-            Templates.Add(key, template);
             return template;
         }
         private static void EnsureStar()
@@ -522,16 +529,20 @@ namespace WaveByWave.Enemies
         internal static void Dispose()
         {
             Clear();
+            if (VisualUpdates.IsCreated) VisualUpdates.Dispose();
             if (_world != null && _world.IsCreated)
             {
                 foreach (var template in Templates.Values)
+                    foreach (var entity in template.Entities)
+                        if (_world.EntityManager.Exists(entity)) _world.EntityManager.DestroyEntity(entity);
+                foreach (var template in CombinedTemplates.Values)
                     foreach (var entity in template.Entities)
                         if (_world.EntityManager.Exists(entity)) _world.EntityManager.DestroyEntity(entity);
                 if (_world.EntityManager.Exists(_starTemplate)) _world.EntityManager.DestroyEntity(_starTemplate);
             }
             foreach (var material in Materials) if (material != null) Object.Destroy(material);
             foreach (var smoke in Smokes) if (smoke.Object != null) Object.Destroy(smoke.Object);
-            Smokes.Clear(); Materials.Clear(); Templates.Clear();
+            Smokes.Clear(); Materials.Clear(); Templates.Clear(); CombinedTemplates.Clear();
             if (_source != null && _source.IsCreated) _query.Dispose();
             _starTemplate = Entity.Null; _world = _source = null; _catalog = null;
         }

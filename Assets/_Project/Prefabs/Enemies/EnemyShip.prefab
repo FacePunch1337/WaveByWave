@@ -44,6 +44,7 @@ GameObject:
   - component: {fileID: 1176390443375547655}
   - component: {fileID: 7683712604946452441}
   - component: {fileID: 8641512229338036060}
+  - component: {fileID: 4115826564490745275}
   m_Layer: 0
   m_Name: EnemyShip
   m_TagString: Untagged
@@ -136,6 +137,27 @@ MonoBehaviour:
   - {fileID: 1446993805546293021}
   contactBoundsCenter: {x: 0, y: 2, z: 0}
   contactBoundsSize: {x: 4, y: 1.25, z: 12}
+--- !u!114 &4115826564490745275
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1751487147457462807}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e680eed7733347068bb557f09482d3f3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Enemies.EnemyDeckNavigation
+  Data: {fileID: 11400000, guid: 55c07f15a19d43b48a55b69c84188a1e, type: 2}
+  Sources: []
+  CellSize: 0.1
+  AgentRadius: 0.1
+  AgentHeight: 1.7
+  MaximumSlope: 70
+  StepHeight: 1
+  MaximumDrop: 10
+  ShowNavigation: 1
 --- !u!1 &2589143271361849380
 GameObject:
   m_ObjectHideFlags: 0

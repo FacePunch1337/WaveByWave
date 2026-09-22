@@ -329,6 +329,706 @@ MonoBehaviour:
   PistolAttackClip: {fileID: 7400000, guid: 94df15d499fae2b4ebfaf77ea3ffd486, type: 3}
   RifleAttackClip: {fileID: 7400000, guid: 4e8c3d69685e706468ca63d3f25136a8, type: 3}
   BakeFramesPerSecond: 12
+  UseCombinedVariants: 1
+  CombinedVariantsPerType: 8
+  CombinedVariants:
+  - CombatType: 0
+    Seed: 2785323351
+    Visual:
+      Name: Skeleton_Melee_00
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: f53ec64b0e51c9e4aa911d9430344dc4, type: 2}
+      Positions: {fileID: -1685336677908127835, guid: f53ec64b0e51c9e4aa911d9430344dc4, type: 2}
+      Normals: {fileID: 5962905202072463960, guid: f53ec64b0e51c9e4aa911d9430344dc4, type: 2}
+      Materials:
+      - {fileID: 3160350054041657913, guid: f53ec64b0e51c9e4aa911d9430344dc4, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 0
+    Seed: 1906689719
+    Visual:
+      Name: Skeleton_Melee_01
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: f58d6157b2d63294581e1c4cc87dcb93, type: 2}
+      Positions: {fileID: -4695967928133580117, guid: f58d6157b2d63294581e1c4cc87dcb93, type: 2}
+      Normals: {fileID: -3167389909502786650, guid: f58d6157b2d63294581e1c4cc87dcb93, type: 2}
+      Materials:
+      - {fileID: 8795110886019598202, guid: f58d6157b2d63294581e1c4cc87dcb93, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 0
+    Seed: 1028056085
+    Visual:
+      Name: Skeleton_Melee_02
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: c991c0ffadf3acf4fa8c212f501c49c7, type: 2}
+      Positions: {fileID: -565807650723530323, guid: c991c0ffadf3acf4fa8c212f501c49c7, type: 2}
+      Normals: {fileID: -7151069208160206167, guid: c991c0ffadf3acf4fa8c212f501c49c7, type: 2}
+      Materials:
+      - {fileID: -7939641129022867776, guid: c991c0ffadf3acf4fa8c212f501c49c7, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 0
+    Seed: 149422453
+    Visual:
+      Name: Skeleton_Melee_03
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 8de0e6dc51656cd47952211de7b2735f, type: 2}
+      Positions: {fileID: 2200960826957412258, guid: 8de0e6dc51656cd47952211de7b2735f, type: 2}
+      Normals: {fileID: 5081830678184443409, guid: 8de0e6dc51656cd47952211de7b2735f, type: 2}
+      Materials:
+      - {fileID: 7109243640377102567, guid: 8de0e6dc51656cd47952211de7b2735f, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 0
+    Seed: 3565756115
+    Visual:
+      Name: Skeleton_Melee_04
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: a0d68c989c0981042a3ffee22cd82547, type: 2}
+      Positions: {fileID: -2801933258114256376, guid: a0d68c989c0981042a3ffee22cd82547, type: 2}
+      Normals: {fileID: -5140295924753692615, guid: a0d68c989c0981042a3ffee22cd82547, type: 2}
+      Materials:
+      - {fileID: 1763076905906183130, guid: a0d68c989c0981042a3ffee22cd82547, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 0
+    Seed: 2687122483
+    Visual:
+      Name: Skeleton_Melee_05
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 87a5d44e4e2eb1e438a6ccb1be900743, type: 2}
+      Positions: {fileID: -7399407505512642794, guid: 87a5d44e4e2eb1e438a6ccb1be900743, type: 2}
+      Normals: {fileID: -2321609518825998224, guid: 87a5d44e4e2eb1e438a6ccb1be900743, type: 2}
+      Materials:
+      - {fileID: -749950549739752427, guid: 87a5d44e4e2eb1e438a6ccb1be900743, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 0
+    Seed: 1808488849
+    Visual:
+      Name: Skeleton_Melee_06
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 19684252e3262c241ac6861192204dc0, type: 2}
+      Positions: {fileID: 7686135688127885967, guid: 19684252e3262c241ac6861192204dc0, type: 2}
+      Normals: {fileID: -7152548790256771640, guid: 19684252e3262c241ac6861192204dc0, type: 2}
+      Materials:
+      - {fileID: -5904536486014003378, guid: 19684252e3262c241ac6861192204dc0, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 0
+    Seed: 929855217
+    Visual:
+      Name: Skeleton_Melee_07
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: b0caa81b973f5a144945c890088dfc34, type: 2}
+      Positions: {fileID: 8230032750272963816, guid: b0caa81b973f5a144945c890088dfc34, type: 2}
+      Normals: {fileID: 4714383377378984227, guid: b0caa81b973f5a144945c890088dfc34, type: 2}
+      Materials:
+      - {fileID: -6110711433078468638, guid: b0caa81b973f5a144945c890088dfc34, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 1
+    Seed: 3933758729
+    Visual:
+      Name: Skeleton_Pistol_00
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 1b7a246e652d8c546a4b87ab84b2a08c, type: 2}
+      Positions: {fileID: -63568478562748492, guid: 1b7a246e652d8c546a4b87ab84b2a08c, type: 2}
+      Normals: {fileID: 7660106137280302769, guid: 1b7a246e652d8c546a4b87ab84b2a08c, type: 2}
+      Materials:
+      - {fileID: -6864097240312526434, guid: 1b7a246e652d8c546a4b87ab84b2a08c, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 1
+    Seed: 3055125095
+    Visual:
+      Name: Skeleton_Pistol_01
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 567a306c48002d74a8cc88a8704fa702, type: 2}
+      Positions: {fileID: 6398657816848414919, guid: 567a306c48002d74a8cc88a8704fa702, type: 2}
+      Normals: {fileID: -6548652105596082108, guid: 567a306c48002d74a8cc88a8704fa702, type: 2}
+      Materials:
+      - {fileID: 7609574301959259213, guid: 567a306c48002d74a8cc88a8704fa702, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 1
+    Seed: 2176491463
+    Visual:
+      Name: Skeleton_Pistol_02
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 0d2f685995344614e98f0a710584f94d, type: 2}
+      Positions: {fileID: 1910469907926361859, guid: 0d2f685995344614e98f0a710584f94d, type: 2}
+      Normals: {fileID: 6733993780383591554, guid: 0d2f685995344614e98f0a710584f94d, type: 2}
+      Materials:
+      - {fileID: -8039127135064381071, guid: 0d2f685995344614e98f0a710584f94d, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 1
+    Seed: 1297857829
+    Visual:
+      Name: Skeleton_Pistol_03
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 7d3386b1969643940ac704a1410608d8, type: 2}
+      Positions: {fileID: 3327874131318551547, guid: 7d3386b1969643940ac704a1410608d8, type: 2}
+      Normals: {fileID: -3631511850439481303, guid: 7d3386b1969643940ac704a1410608d8, type: 2}
+      Materials:
+      - {fileID: 2570219737717247583, guid: 7d3386b1969643940ac704a1410608d8, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 1
+    Seed: 419224197
+    Visual:
+      Name: Skeleton_Pistol_04
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 431a7c2b43625914188f6ef86878553a, type: 2}
+      Positions: {fileID: -8822584432778671310, guid: 431a7c2b43625914188f6ef86878553a, type: 2}
+      Normals: {fileID: 8110312191142040227, guid: 431a7c2b43625914188f6ef86878553a, type: 2}
+      Materials:
+      - {fileID: -1177192135565766515, guid: 431a7c2b43625914188f6ef86878553a, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 1
+    Seed: 3835557859
+    Visual:
+      Name: Skeleton_Pistol_05
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 27f31397eef3d63448333d1847a72935, type: 2}
+      Positions: {fileID: 1323183699022778290, guid: 27f31397eef3d63448333d1847a72935, type: 2}
+      Normals: {fileID: 3776769156308995729, guid: 27f31397eef3d63448333d1847a72935, type: 2}
+      Materials:
+      - {fileID: -1212236165445869909, guid: 27f31397eef3d63448333d1847a72935, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 1
+    Seed: 2956924227
+    Visual:
+      Name: Skeleton_Pistol_06
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 77af4e5f15ad3b648a02ceb3be2a1c28, type: 2}
+      Positions: {fileID: 6766270809975803145, guid: 77af4e5f15ad3b648a02ceb3be2a1c28, type: 2}
+      Normals: {fileID: -4291225875583729334, guid: 77af4e5f15ad3b648a02ceb3be2a1c28, type: 2}
+      Materials:
+      - {fileID: 1631955525479848100, guid: 77af4e5f15ad3b648a02ceb3be2a1c28, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 1
+    Seed: 2078290593
+    Visual:
+      Name: Skeleton_Pistol_07
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: e17c5e04a8503ea4e9960aac149ea0de, type: 2}
+      Positions: {fileID: 2129941461232877552, guid: e17c5e04a8503ea4e9960aac149ea0de, type: 2}
+      Normals: {fileID: -4535587422638147253, guid: e17c5e04a8503ea4e9960aac149ea0de, type: 2}
+      Materials:
+      - {fileID: 8442743864024625498, guid: e17c5e04a8503ea4e9960aac149ea0de, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 2
+    Seed: 787226809
+    Visual:
+      Name: Skeleton_Rifle_00
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 25ec1ca8b12266b4e87358c3ac802525, type: 2}
+      Positions: {fileID: 6674195364004329441, guid: 25ec1ca8b12266b4e87358c3ac802525, type: 2}
+      Normals: {fileID: -508525485776841606, guid: 25ec1ca8b12266b4e87358c3ac802525, type: 2}
+      Materials:
+      - {fileID: 6079174790922741061, guid: 25ec1ca8b12266b4e87358c3ac802525, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 2
+    Seed: 4203560473
+    Visual:
+      Name: Skeleton_Rifle_01
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: d5b4473672333d540b80e4e71896d41c, type: 2}
+      Positions: {fileID: -1784464281594437314, guid: d5b4473672333d540b80e4e71896d41c, type: 2}
+      Normals: {fileID: 3672073469995410098, guid: d5b4473672333d540b80e4e71896d41c, type: 2}
+      Materials:
+      - {fileID: -362803652890559248, guid: d5b4473672333d540b80e4e71896d41c, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 2
+    Seed: 3324926839
+    Visual:
+      Name: Skeleton_Rifle_02
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 5c194947d107fad40ace3645ab130146, type: 2}
+      Positions: {fileID: -2143442187351008020, guid: 5c194947d107fad40ace3645ab130146, type: 2}
+      Normals: {fileID: 9196838757129166948, guid: 5c194947d107fad40ace3645ab130146, type: 2}
+      Materials:
+      - {fileID: 2770699802894915316, guid: 5c194947d107fad40ace3645ab130146, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 2
+    Seed: 2446293207
+    Visual:
+      Name: Skeleton_Rifle_03
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 7fbdaba8ac7f2b445991a24b9161178d, type: 2}
+      Positions: {fileID: -5916637798408681210, guid: 7fbdaba8ac7f2b445991a24b9161178d, type: 2}
+      Normals: {fileID: 6967795732011819202, guid: 7fbdaba8ac7f2b445991a24b9161178d, type: 2}
+      Materials:
+      - {fileID: 8544965963870088449, guid: 7fbdaba8ac7f2b445991a24b9161178d, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 2
+    Seed: 1567659573
+    Visual:
+      Name: Skeleton_Rifle_04
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 63200d813ea880f44a3b2bbea6181059, type: 2}
+      Positions: {fileID: -7529590625156037087, guid: 63200d813ea880f44a3b2bbea6181059, type: 2}
+      Normals: {fileID: -922086376581026689, guid: 63200d813ea880f44a3b2bbea6181059, type: 2}
+      Materials:
+      - {fileID: -507721702559078852, guid: 63200d813ea880f44a3b2bbea6181059, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 2
+    Seed: 689025941
+    Visual:
+      Name: Skeleton_Rifle_05
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 1c6ecaffb77aa3049ba576c34f93a41e, type: 2}
+      Positions: {fileID: 2576499969257134513, guid: 1c6ecaffb77aa3049ba576c34f93a41e, type: 2}
+      Normals: {fileID: 3817351850632963052, guid: 1c6ecaffb77aa3049ba576c34f93a41e, type: 2}
+      Materials:
+      - {fileID: 7815941445520676813, guid: 1c6ecaffb77aa3049ba576c34f93a41e, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 2
+    Seed: 4105359603
+    Visual:
+      Name: Skeleton_Rifle_06
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 0b61e798b9540784e95fbc2fdd2e6913, type: 2}
+      Positions: {fileID: 2417598493044282470, guid: 0b61e798b9540784e95fbc2fdd2e6913, type: 2}
+      Normals: {fileID: 9129693193363234001, guid: 0b61e798b9540784e95fbc2fdd2e6913, type: 2}
+      Materials:
+      - {fileID: 1662881264823018509, guid: 0b61e798b9540784e95fbc2fdd2e6913, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  - CombatType: 2
+    Seed: 3226725971
+    Visual:
+      Name: Skeleton_Rifle_07
+      Category: 0
+      Pair: 0
+      SourceIndex: 0
+      BodySlot: 
+      Mesh: {fileID: 4300000, guid: 1bf62fc002b779748b7db20f11f6e8c8, type: 2}
+      Positions: {fileID: 2330613263380016520, guid: 1bf62fc002b779748b7db20f11f6e8c8, type: 2}
+      Normals: {fileID: 2529085981292398546, guid: 1bf62fc002b779748b7db20f11f6e8c8, type: 2}
+      Materials:
+      - {fileID: -2484302123439885885, guid: 1bf62fc002b779748b7db20f11f6e8c8, type: 2}
+      Clips:
+      - FirstRow: 0
+        Count: 13
+        Duration: 1
+      - FirstRow: 13
+        Count: 9
+        Duration: 0.6666667
+      - FirstRow: 22
+        Count: 14
+        Duration: 1.000001
+      - FirstRow: 36
+        Count: 16
+        Duration: 1.2000008
+      - FirstRow: 52
+        Count: 17
+        Duration: 1.2999992
+  CombinedSourceHash: 42bb137f74484813c59d96fd2eb661f8
   BakedParts:
   - Name: Enemy_0_Hand_Left
     Category: 0
@@ -1583,6 +2283,7 @@ MonoBehaviour:
   BodyHeight: 1.7
   CrowdSeparationRadius: 0
   CrowdSeparationStrength: 0
+  CrowdAvoidanceLookAhead: 1.5
   SurfaceProbesPerFrame: 256
   IgnoredObstacleWidth: 3
   SurfaceLayers:
@@ -1592,6 +2293,14 @@ MonoBehaviour:
   MaximumSurfaceGap: 3
   SurfaceTransferHeight: 10
   EdgeSearchesPerFrame: 32
+  UseBakedDeckNavigation: 1
+  EnableCrowdAvoidance: 0
+  EnableCrowdSeparation: 0
+  EnableCrowdCollisions: 0
+  EnableSurfaceContinuityChecks: 0
+  EnableSurfaceEdgeFollowing: 0
+  EnableSurfaceTransfers: 1
+  EnableCombat: 1
   SpawnsPerFrame: 32
   MaximumEnemies: 6000
   LootDrops:

@@ -54,7 +54,7 @@ namespace WaveByWave.Enemies
 
         private void UpdateCrowdSnapshot(NativeArray<DotsEnemyState> bodies, DotsEnemyState state)
         {
-            if (!_crowdIndices.TryGetValue(state.Id, out var index)) return;
+            if (!bodies.IsCreated || !_crowdIndices.TryGetValue(state.Id, out var index)) return;
             var previous = bodies[index];
             var oldCell = (int2)math.floor(previous.Position.xz / _movementCrowdCellSize);
             var newCell = (int2)math.floor(state.Position.xz / _movementCrowdCellSize);
@@ -69,6 +69,7 @@ namespace WaveByWave.Enemies
         private Vector3 LimitCrowdStep(int id, ulong support, Vector3 from, Vector3 desired,
             NativeArray<DotsEnemyState> bodies, float configuredDistance, float bodyRadius, float bodyHeight)
         {
+            if (!bodies.IsCreated || Catalog != null && !Catalog.EnableCrowdCollisions) return desired;
             var minimum = Mathf.Max(configuredDistance, bodyRadius * 2f + 0.04f);
             if (minimum <= 0) return desired;
             var start = new float2(from.x, from.z);
@@ -106,6 +107,9 @@ namespace WaveByWave.Enemies
                     }
                     // Sweep the horizontal movement against the neighbour's exclusion circle.
                     var b = 2f * math.dot(oldOffset, step);
+                    // At exact contact, a tangent/outward step separates the bodies. The
+                    // quadratic's zero root must not turn this valid slide into a full stop.
+                    if (b >= 0) continue;
                     var c = oldSq - minimumSq;
                     var discriminant = b * b - 4f * lengthSq * c;
                     if (discriminant < 0) continue;
@@ -127,6 +131,12 @@ namespace WaveByWave.Enemies
         private void UpdateLocomotion(ref DotsEnemyState state, ref DotsEnemyBrain brain,
             float distance, float deltaTime, bool evaluated, bool wantsToMove, float now)
         {
+            // Only actual relative movement counts. Carrying on waves and deferred surface
+            // probes must not report a successful flank or an impassable one respectively.
+            if (evaluated)
+                brain.CrowdBlockedTime = wantsToMove && brain.Attacking == 0 && state.StunUntil <= now &&
+                    distance < Mathf.Max(0.004f, Catalog.MoveSpeed * deltaTime * 0.15f)
+                    ? brain.CrowdBlockedTime + deltaTime : 0;
             var animation = ResolveLocomotionAnimation(state.Animation, brain.Attacking != 0,
                 state.StunUntil > now, distance, deltaTime, evaluated, wantsToMove,
                 ref brain.LocomotionIdleTime);
@@ -158,15 +168,8 @@ namespace WaveByWave.Enemies
             if (brain.Target < 0 || state.StunUntil > now || brain.Attacking != 0 ||
                 math.lengthsq(brain.Direction) < 0.0001f) return;
             var hasSurface = TryGetSurfaceFrame(state.SupportId, true, out var frame);
-            var surfaceRotation = hasSurface ? frame.rotation : Quaternion.identity;
-            var up = surfaceRotation * Vector3.up;
-            var forward = Vector3.ProjectOnPlane(brain.Direction, up);
-            state.Rotation = math.slerp(state.Rotation, quaternion.LookRotationSafe(forward, up),
-                1f - math.exp(-12f * deltaTime));
-            // Facing changes only rotation. Avoid resolving the same platform again and
-            // inverting its full matrix for every passenger on every frame.
-            state.LocalRotation = Quaternion.Inverse(surfaceRotation) * (Quaternion)state.Rotation;
-            if (!hasSurface) state.LocalPosition = state.Position;
+            EnemyFacing.Apply(ref state, brain, hasSurface ? (quaternion)frame.rotation : quaternion.identity,
+                hasSurface, deltaTime, now);
         }
 
         private static int NextSurfaceCursor(int cursor, int probes, int population, int edgeBudget) =>
@@ -190,6 +193,7 @@ namespace WaveByWave.Enemies
 
         private bool HasContinuousGround(Vector3 from, Vector3 to)
         {
+            if (!Catalog.EnableSurfaceContinuityChecks) return true;
             // Validate the interior as well as the destination: a long frame must not
             // let a skeleton walk across water simply because the opposite deck is hit.
             // Vertical feet adjustment does not cross more water/ground cells.
@@ -208,6 +212,7 @@ namespace WaveByWave.Enemies
 
         private bool TryBeginSurfaceTransfer(DotsEnemyState state, Vector3 target)
         {
+            if (!Catalog.EnableSurfaceTransfers) return false;
             var maximumGap = Mathf.Clamp(Catalog.MaximumSurfaceGap, 0f, 5f);
             if (maximumGap <= 0 || !TransferGroundAt(state.Position, out var source)) return false;
             Vector3 from = source.point;
@@ -289,7 +294,7 @@ namespace WaveByWave.Enemies
             var gap = Vector3.ProjectOnPlane(SurfacePoint(transfer.From.SupportId, transfer.EdgeFromLocal, false) -
                 SurfacePoint(transfer.To.SupportId, transfer.EdgeToLocal, false), Vector3.up).magnitude;
             // Revalidate moving decks. No stale bridge to a ship that has sailed away.
-            var valid = !transfer.Returning && transfer.Source != null && transfer.Source.enabled && transfer.Source.gameObject.activeInHierarchy &&
+            var valid = Catalog.EnableSurfaceTransfers && !transfer.Returning && transfer.Source != null && transfer.Source.enabled && transfer.Source.gameObject.activeInHierarchy &&
                 transfer.Landing != null && transfer.Landing.enabled && transfer.Landing.gameObject.activeInHierarchy &&
                 Catalog.MaximumSurfaceGap > 0 && gap <= Mathf.Clamp(Catalog.MaximumSurfaceGap, 0f, 5f) + 0.005f &&
                 height <= Catalog.SurfaceTransferHeight;
@@ -328,6 +333,7 @@ namespace WaveByWave.Enemies
         private bool TryFollowEdge(DotsEnemyState state, Vector3 target, float deltaTime, out RaycastHit best)
         {
             best = default;
+            if (!Catalog.EnableSurfaceEdgeFollowing) return false;
             Vector3 from = state.Position;
             var toTarget = Vector3.ProjectOnPlane(target - from, Vector3.up);
             var direction = toTarget.normalized;

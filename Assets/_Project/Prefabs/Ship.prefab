@@ -51240,6 +51240,7 @@ GameObject:
   - component: {fileID: 5320100916160012370}
   - component: {fileID: 5574653032040607}
   - component: {fileID: 9300090006}
+  - component: {fileID: 7465706967556627686}
   m_Layer: 0
   m_Name: Ship
   m_TagString: Untagged
@@ -51502,6 +51503,27 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   maximumHealth: 400
+--- !u!114 &7465706967556627686
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5248081386866439349}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e680eed7733347068bb557f09482d3f3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Enemies.EnemyDeckNavigation
+  Data: {fileID: 11400000, guid: 942a1dda025b7f746894ae2207777fd0, type: 2}
+  Sources: []
+  CellSize: 0.2
+  AgentRadius: 0.10000001
+  AgentHeight: 1.7000002
+  MaximumSlope: 70
+  StepHeight: 0.45
+  MaximumDrop: 2
+  ShowNavigation: 1
 --- !u!1 &5255303147192302173
 GameObject:
   m_ObjectHideFlags: 0

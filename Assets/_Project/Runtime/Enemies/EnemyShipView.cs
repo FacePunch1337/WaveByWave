@@ -15,6 +15,12 @@ namespace WaveByWave.Enemies
         [SerializeField] private EnemyShipHardpoint[] hardpoints;
         [SerializeField] private EnemyShipCrewSlot[] crewSlots;
 
+        [Header("DOTS ship contact bounds")]
+        [SerializeField, Tooltip("Center of the lightweight ship-contact box in prefab-local coordinates.")]
+        private Vector3 contactBoundsCenter = new(0f, 1.2f, 0f);
+        [SerializeField, Tooltip("Full size of the lightweight ship-contact box. This replaces mesh collision for ship-to-ship movement.")]
+        private Vector3 contactBoundsSize = new(6.4f, 3f, 15f);
+
         private readonly Dictionary<uint, EnemyShipProjectileVisual> _shots = new();
         private MaterialPropertyBlock _properties;
         private EnemyShipDefinition _definition;
@@ -27,6 +33,8 @@ namespace WaveByWave.Enemies
         private bool _hasSimulationPose;
 
         public int ShipId { get; private set; }
+        public Vector3 ContactBoundsCenter => contactBoundsCenter;
+        public Vector3 ContactBoundsHalfExtents => contactBoundsSize * 0.5f;
         public Matrix4x4 SimulationFrame => _hasSimulationPose
             ? Matrix4x4.TRS(_simulationPosition, _simulationRotation, transform.lossyScale)
             : transform.localToWorldMatrix;
@@ -48,6 +56,20 @@ namespace WaveByWave.Enemies
         private void Awake()
         {
             _properties = new MaterialPropertyBlock();
+        }
+
+        private void OnValidate() => contactBoundsSize = new Vector3(
+            Mathf.Max(0.1f, Mathf.Abs(contactBoundsSize.x)),
+            Mathf.Max(0.1f, Mathf.Abs(contactBoundsSize.y)),
+            Mathf.Max(0.1f, Mathf.Abs(contactBoundsSize.z)));
+
+        private void OnDrawGizmosSelected()
+        {
+            var previous = Gizmos.matrix;
+            Gizmos.matrix = transform.localToWorldMatrix;
+            Gizmos.color = new Color(1f, 0.45f, 0.08f, 0.9f);
+            Gizmos.DrawWireCube(contactBoundsCenter, contactBoundsSize);
+            Gizmos.matrix = previous;
         }
 
         public void Initialize(int id, EnemyShipDefinition definition)

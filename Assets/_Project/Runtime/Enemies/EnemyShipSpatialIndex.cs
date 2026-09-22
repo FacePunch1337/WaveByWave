@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace WaveByWave.Enemies
 {
-    // Broad phase only. Cells/circles never stop motion; authored colliders decide contact.
+    // Broad phase only. Cells/circles never stop motion; oriented DOTS boxes decide contact.
     internal sealed class EnemyShipSpatialIndex
     {
         private readonly Dictionary<int2, List<int>> _cells = new();

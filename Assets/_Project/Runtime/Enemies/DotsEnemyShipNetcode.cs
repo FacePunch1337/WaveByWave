@@ -37,6 +37,7 @@ namespace WaveByWave.Enemies
         public float TargetDistance;
         public float Heading;
         public float Speed;
+        public float3 PushVelocity;
         public float LastTick;
         public float NextFire;
         public byte OrbitSide;

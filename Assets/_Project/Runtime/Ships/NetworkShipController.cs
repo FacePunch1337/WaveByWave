@@ -18,6 +18,10 @@ namespace WaveByWave.Ships
         private static readonly List<NetworkShipController> ServerShipRegistry = new();
         internal static IReadOnlyList<NetworkShipController> ServerShips => ServerShipRegistry;
         internal Vector3 SimulationPosition => body.position;
+        internal Vector3 ContactBoundsCenter => _geometryCollision != null
+            ? _geometryCollision.HullCenter : Vector3.zero;
+        internal Vector3 ContactBoundsHalfExtents => _geometryCollision != null
+            ? _geometryCollision.HullHalfSize : Vector3.one;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetServerShipRegistry() => ServerShipRegistry.Clear();
@@ -417,8 +421,10 @@ namespace WaveByWave.Ships
                 var fleet = WaveByWave.Enemies.DotsEnemyShipRuntime.Instance;
                 var hasFleet = fleet != null && fleet.CanSimulate;
                 var fleetReady = _geometryCollision.SetFleetObstacles(
-                    hasFleet ? fleet.Definition.ViewPrefab : null,
+                    hasFleet ? fleet.ContactBoundsCenter : Vector3.zero,
+                    hasFleet ? fleet.ContactBoundsHalfExtents : Vector3.zero,
                     hasFleet ? fleet.CollisionPoses : null, hasFleet ? fleet.CollisionRevision : 0);
+                var incomingVelocity = _linearVelocity;
                 var resolved = fleetReady
                     ? _geometryCollision.ResolveMotion(_collisionStartPosition,
                         _collisionStartRotation, _linearVelocity, _angularVelocity, deltaTime)
@@ -428,6 +434,16 @@ namespace WaveByWave.Ships
                 rotation = resolved.Rotation;
                 _linearVelocity = resolved.Velocity;
                 _angularVelocity = resolved.AngularVelocity;
+                if (hasFleet && _geometryCollision.TryGetFleetContact(out var enemyId, out var contactNormal))
+                {
+                    var planarNormal = Vector3.ProjectOnPlane(contactNormal, Vector3.up).normalized;
+                    var impactSpeed = Mathf.Max(0f, -Vector3.Dot(
+                        Vector3.ProjectOnPlane(incomingVelocity, Vector3.up), planarNormal));
+                    if (impactSpeed > 0.01f)
+                        fleet.ApplyPlayerContactPush(enemyId, -planarNormal * Mathf.Min(
+                            fleet.Definition.MaximumContactPushSpeed,
+                            impactSpeed * fleet.Definition.ContactPushStrength));
+                }
 
                 var tilt = Quaternion.FromToRotation(Vector3.up, rotation * Vector3.up);
                 var yawForward = Quaternion.Inverse(tilt) * (rotation * Vector3.forward);
@@ -472,6 +488,17 @@ namespace WaveByWave.Ships
             denominator = 1f + 2f * buoyancyDamping * omega * deltaTime + omega * omega * deltaTime * deltaTime;
             _angularVelocity.x = (_angularVelocity.x + omega * omega * tiltError.x * deltaTime) / denominator;
             _angularVelocity.z = (_angularVelocity.z + omega * omega * tiltError.z * deltaTime) / denominator;
+        }
+
+        internal void ApplyEnemyContactPush(Vector3 velocity, float maximumPushSpeed)
+        {
+            if (!IsServer) return;
+            velocity.y = 0f;
+            var vertical = _linearVelocity.y;
+            var planar = Vector3.ProjectOnPlane(_linearVelocity, Vector3.up) + velocity;
+            planar = Vector3.ClampMagnitude(planar,
+                Mathf.Max(maximumSpeed, maximumPushSpeed));
+            _linearVelocity = planar + Vector3.up * vertical;
         }
 
         public Vector3 GetPlanarPointVelocity(Vector3 worldPoint)

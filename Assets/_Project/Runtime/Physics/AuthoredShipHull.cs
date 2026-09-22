@@ -9,7 +9,7 @@ using Collider = Unity.Physics.Collider;
 
 namespace WaveByWave.Collision
 {
-    // An immutable query copy of the authored colliders, shared by every DOTS vessel.
+    // An immutable query copy of authored geometry used only to validate crew spawn surfaces.
     // Child blobs are copied into the compound and released immediately.
     internal static class AuthoredShipHull
     {

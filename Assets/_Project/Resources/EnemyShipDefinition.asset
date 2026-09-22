@@ -18,7 +18,7 @@ MonoBehaviour:
   ImpactEffectPrefab: {fileID: 8210145221990291125, guid: 2f58c8616dce4ee4095bf677be6a8c6c, type: 3}
   WaterImpactPrefab: {fileID: 1402041941817024963, guid: ade152f810abc93439076107c5a46d15, type: 3}
   DeathEffectPrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
-  WaterProfile: {fileID: 11400000, guid: 1ca4610f5bf9e2f4bb39535503a79eeb, type: 2}
+  WaterProfile: {fileID: 11400000, guid: 07fa768fab398d34ea0cb010bc30e496, type: 2}
   MaximumHealth: 100
   CollisionCenter: {x: 0, y: 1.2, z: 0}
   CollisionHalfExtents: {x: 3.2, y: 1.5, z: 7.5}
@@ -26,6 +26,9 @@ MonoBehaviour:
   CollisionLayers:
     serializedVersion: 2
     m_Bits: 4294967295
+  ContactPushStrength: 0.45
+  MaximumContactPushSpeed: 3
+  ContactPushDamping: 2.2
   BaseSpeed: 2.4
   MaximumSpeed: 5.8
   Acceleration: 1.4

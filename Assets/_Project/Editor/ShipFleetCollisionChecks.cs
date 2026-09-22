@@ -22,7 +22,7 @@ namespace WaveByWave.Editor
                 throw new InvalidOperationException("Run fleet checks outside Play Mode.");
             CheckTargeting();
             CheckContacts();
-            Debug.Log("[Fleet checks] PASS: registered distant targets and authored collider contacts.");
+            Debug.Log("[Fleet checks] PASS: registered distant targets and DOTS box contacts.");
         }
 
         private static void Require(bool condition, string message)
@@ -76,7 +76,10 @@ namespace WaveByWave.Editor
                 {
                     [1] = new RigidTransform(quaternion.identity, origin + Vector3.right * 7)
                 };
-                Require(solver.SetFleetObstacles(enemy, poses, 1), "Fleet geometry failed to initialize.");
+                var boundsCenter = Vector3.zero;
+                var boundsHalfExtents = new Vector3(1, 1, 6);
+                Require(solver.SetFleetObstacles(boundsCenter, boundsHalfExtents, poses, 1),
+                    "Fleet geometry failed to initialize.");
                 var clear = solver.ResolveMotion(origin, Quaternion.identity, Vector3.right * 2, Vector3.zero, 1);
                 Require(Mathf.Abs(clear.Position.x - origin.x - 2) < 0.02f,
                     "A five-metre visible gap blocked motion before collider contact.");
@@ -84,16 +87,19 @@ namespace WaveByWave.Editor
                 Require(contact.Blocked && contact.Position.x - origin.x > 4.8f && contact.Position.x - origin.x <= 5.02f,
                     "Broadside contact did not match the authored collider width.");
                 poses[1] = new RigidTransform(quaternion.RotateY(math.PI / 2), origin + Vector3.right * 10);
-                Require(solver.SetFleetObstacles(enemy, poses, 2), "Rotated pose update failed.");
+                Require(solver.SetFleetObstacles(boundsCenter, boundsHalfExtents, poses, 2),
+                    "Rotated pose update failed.");
                 contact = solver.ResolveMotion(origin, Quaternion.identity, Vector3.right * 10, Vector3.zero, 1);
                 Require(contact.Blocked && contact.Position.x - origin.x > 2.8f && contact.Position.x - origin.x <= 3.02f,
                     "Contact ignored the enemy collider rotation.");
                 poses[1] = new RigidTransform(quaternion.identity, origin + new Vector3(7, 20, 0));
-                Require(solver.SetFleetObstacles(enemy, poses, 3), "Height update failed.");
+                Require(solver.SetFleetObstacles(boundsCenter, boundsHalfExtents, poses, 3),
+                    "Height update failed.");
                 clear = solver.ResolveMotion(origin, Quaternion.identity, Vector3.right * 10, Vector3.zero, 1);
                 Require(Mathf.Abs(clear.Position.x - origin.x - 10) < 0.02f, "Vertically separated hulls collided.");
                 poses.Clear();
-                Require(solver.SetFleetObstacles(enemy, poses, 4), "Fleet removal failed.");
+                Require(solver.SetFleetObstacles(boundsCenter, boundsHalfExtents, poses, 4),
+                    "Fleet removal failed.");
                 clear = solver.ResolveMotion(origin, Quaternion.identity, Vector3.right * 10, Vector3.zero, 1);
                 Require(Mathf.Abs(clear.Position.x - origin.x - 10) < 0.02f, "Removed ship left an invisible collider.");
             }

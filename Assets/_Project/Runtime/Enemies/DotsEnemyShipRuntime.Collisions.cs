@@ -7,6 +7,7 @@ using Unity.Physics;
 using UnityEngine;
 using WaveByWave.Collision;
 using WaveByWave.Items;
+using WaveByWave.Ships;
 using Collider = Unity.Physics.Collider;
 
 namespace WaveByWave.Enemies
@@ -15,6 +16,7 @@ namespace WaveByWave.Enemies
     public sealed partial class DotsEnemyShipRuntime
     {
         private BlobAssetReference<Collider> _authoredHull;
+        private BlobAssetReference<Collider> _crewHull;
         private float _authoredHullRadius;
         private bool _hullFailed;
         private readonly List<int> _contactCandidates = new();
@@ -28,7 +30,7 @@ namespace WaveByWave.Enemies
             try
             {
                 var view = Definition.ViewPrefab.GetComponent<EnemyShipView>();
-                _crewPositions = ResolveCrewPositions(_authoredHull,
+                _crewPositions = ResolveCrewPositions(_crewHull,
                     view.GetCrewLocalPositions(Definition.CrewCount, Definition),
                     Definition.ViewPrefab.transform.localScale, catalog.BodyRadius, catalog.MaximumSlope);
             }
@@ -127,25 +129,39 @@ namespace WaveByWave.Enemies
             {
                 if (!_authoredHull.IsCreated)
                 {
-                    _authoredHull = AuthoredShipHull.Create(Definition.ViewPrefab, Definition.CollisionLayers);
-                    var bounds = _authoredHull.Value.CalculateAabb();
-                    _authoredHullRadius = math.length(math.max(math.abs(bounds.Min), math.abs(bounds.Max)));
+                    _authoredHull = Unity.Physics.BoxCollider.Create(new BoxGeometry
+                    {
+                        Center = _contactBoundsCenter,
+                        Size = _contactBoundsHalfExtents * 2f,
+                        Orientation = quaternion.identity,
+                        BevelRadius = 0f
+                    });
+                    _authoredHullRadius = math.length(math.abs((float3)_contactBoundsCenter) +
+                        (float3)_contactBoundsHalfExtents);
                 }
+                if (Definition.CrewCount > 0 && !_crewHull.IsCreated)
+                    _crewHull = AuthoredShipHull.Create(Definition.ViewPrefab, Definition.CollisionLayers);
                 foreach (var target in _targets)
                     if (!_targetHulls.ContainsKey(target.Ship.gameObject))
-                        _targetHulls.Add(target.Ship.gameObject,
-                            AuthoredShipHull.Create(target.Ship.gameObject, Definition.CollisionLayers));
+                        _targetHulls.Add(target.Ship.gameObject, Unity.Physics.BoxCollider.Create(new BoxGeometry
+                        {
+                            Center = target.Ship.ContactBoundsCenter,
+                            Size = target.Ship.ContactBoundsHalfExtents * 2f,
+                            Orientation = quaternion.identity,
+                            BevelRadius = 0f
+                        }));
                 return true;
             }
             catch (Exception exception)
             {
                 _hullFailed = true;
-                Debug.LogError($"[Enemy ships] Cannot prepare authored hull contacts: {exception.Message}");
+                Debug.LogError($"[Enemy ships] Cannot prepare DOTS contact bounds: {exception.Message}");
                 return false;
             }
         }
 
-        private Vector3 ResolveHullMotion(int id, Vector3 position, Quaternion rotation, Vector3 movement)
+        private Vector3 ResolveHullMotion(int id, Vector3 position, Quaternion rotation,
+            Vector3 movement, float deltaTime)
         {
             _fleet.CollectCandidates(id, position, movement, _contactCandidates);
             var accepted = Vector3.zero;
@@ -155,16 +171,35 @@ namespace WaveByWave.Enemies
             {
                 var fraction = 1f;
                 var normal = float3.zero;
+                var contactedEnemy = 0;
+                NetworkShipController contactedPlayer = null;
                 var pose = new RigidTransform(rotation, position + accepted);
                 foreach (var other in _contactCandidates)
                     if (_collisionPoses.TryGetValue(other, out var obstacle))
-                        CastHull(_authoredHull, _authoredHull, pose, obstacle, remaining, ref fraction, ref normal);
+                    {
+                        var candidateFraction = fraction;
+                        var candidateNormal = normal;
+                        CastHull(_authoredHull, _authoredHull, pose, obstacle, remaining,
+                            ref candidateFraction, ref candidateNormal);
+                        if (candidateFraction >= fraction - 0.000001f) continue;
+                        fraction = candidateFraction;
+                        normal = candidateNormal;
+                        contactedEnemy = other;
+                        contactedPlayer = null;
+                    }
                 foreach (var target in _targets)
                     if (_targetHulls.TryGetValue(target.Ship.gameObject, out var hull))
                     {
                         var frame = WorldItem.GetPhysicsFrame(target.Ship.NetworkObject);
+                        var candidateFraction = fraction;
+                        var candidateNormal = normal;
                         CastHull(_authoredHull, hull, pose, new RigidTransform(frame.rotation, (Vector3)frame.GetColumn(3)),
-                            remaining, ref fraction, ref normal);
+                            remaining, ref candidateFraction, ref candidateNormal);
+                        if (candidateFraction >= fraction - 0.000001f) continue;
+                        fraction = candidateFraction;
+                        normal = candidateNormal;
+                        contactedEnemy = 0;
+                        contactedPlayer = target.Ship;
                     }
                 var travel = Mathf.Max(0, fraction - (fraction < 1f ? 0.005f / remaining.magnitude : 0));
                 accepted += remaining * travel;
@@ -172,6 +207,16 @@ namespace WaveByWave.Enemies
                 normal.y = 0;
                 normal = math.normalizesafe(normal);
                 if (math.lengthsq(normal) < 0.01f) break;
+                var impactSpeed = math.max(0f, -math.dot((float3)remaining /
+                    math.max(0.0001f, deltaTime), normal));
+                if (impactSpeed > 0.01f)
+                {
+                    var push = (Vector3)(-normal * math.min(Definition.MaximumContactPushSpeed,
+                        impactSpeed * Definition.ContactPushStrength));
+                    if (contactedEnemy != 0) AddContactPush(contactedEnemy, push);
+                    else contactedPlayer?.ApplyEnemyContactPush(push,
+                        Definition.MaximumContactPushSpeed);
+                }
                 remaining = Vector3.ProjectOnPlane(remaining, normal);
             }
             return accepted;
@@ -238,6 +283,8 @@ namespace WaveByWave.Enemies
         {
             if (_authoredHull.IsCreated) _authoredHull.Dispose();
             _authoredHull = default;
+            if (_crewHull.IsCreated) _crewHull.Dispose();
+            _crewHull = default;
             foreach (var hull in _targetHulls.Values) if (hull.IsCreated) hull.Dispose();
             _targetHulls.Clear();
             _hullFailed = false;

@@ -21,7 +21,7 @@ namespace WaveByWave.Collision
     /// <summary>
     /// Query-only triangle geometry. PhysX continues to support players on deck;
     /// a separate query world prevents its solver from driving the ship. Static
-    /// scenery and authored enemy colliders share the same precise contact solver.
+    /// scenery uses precise geometry while enemy ships use one shared DOTS box.
     /// No mesh cooking, scene searches or managed allocations in ResolveMotion.
     /// </summary>
     [DisallowMultipleComponent]
@@ -48,10 +48,14 @@ namespace WaveByWave.Collision
         private PhysicsWorld _world;
         private readonly List<Unity.Physics.RigidBody> _staticBodies = new();
         private BlobAssetReference<PhysicsCollider> _fleetGeometry;
-        private GameObject _fleetPrefab;
+        private Vector3 _fleetCenter;
+        private Vector3 _fleetHalfExtents;
         private IReadOnlyDictionary<int, RigidTransform> _fleetPoses;
+        private readonly List<int> _fleetIds = new();
         private uint _fleetRevision;
         private bool _fleetGeometryFailed;
+        private int _lastFleetContactId;
+        private Vector3 _lastFleetContactNormal;
         private readonly HashSet<BlobAssetReference<PhysicsCollider>> _obstacleGeometry = new();
         private readonly Dictionary<(Mesh, Vector3, bool), BlobAssetReference<PhysicsCollider>> _meshObstacleCache = new();
         private ShipCollisionMeshLibrary _library;
@@ -62,6 +66,7 @@ namespace WaveByWave.Collision
         private float _skin;
 
         public bool IsReady => _hullNodes.IsCreated && _hasWorld;
+        public Vector3 HullCenter { get; private set; }
         public Vector3 HullHalfSize { get; private set; } = Vector3.one;
 
         private struct HullNode
@@ -221,29 +226,38 @@ namespace WaveByWave.Collision
         }
 
         /// <summary>
-        /// Read the saved collider graph once; share it between all fleet bodies.
+        /// Build one lightweight box once and share it between all fleet bodies.
         /// Only authoritative poses and the native dynamic tree change on fleet ticks.
         /// No proximity search, prefab mutation, or GameObject view is required.
         /// </summary>
-        public bool SetFleetObstacles(GameObject prefab,
+        public bool SetFleetObstacles(Vector3 center, Vector3 halfExtents,
             IReadOnlyDictionary<int, RigidTransform> poses, uint revision)
         {
             if (!IsReady) return false;
-            if (prefab == _fleetPrefab && ReferenceEquals(poses, _fleetPoses) && revision == _fleetRevision)
+            if (center == _fleetCenter && halfExtents == _fleetHalfExtents &&
+                ReferenceEquals(poses, _fleetPoses) && revision == _fleetRevision)
                 return !_fleetGeometryFailed;
             try
             {
-                if (prefab != _fleetPrefab)
+                var boundsChanged = center != _fleetCenter || halfExtents != _fleetHalfExtents;
+                if (boundsChanged)
                 {
+                    if (_fleetGeometry.IsCreated)
+                    {
+                        _obstacleGeometry.Remove(_fleetGeometry);
+                        _fleetGeometry.Dispose();
+                    }
                     _fleetGeometry = default;
                     _fleetGeometryFailed = false;
                 }
-                _fleetPrefab = prefab;
+                _fleetCenter = center;
+                _fleetHalfExtents = halfExtents;
                 _fleetPoses = poses;
                 _fleetRevision = revision;
-                var count = prefab != null && poses != null ? poses.Count : 0;
+                var validBounds = halfExtents.x > 0f && halfExtents.y > 0f && halfExtents.z > 0f;
+                var count = validBounds && poses != null ? poses.Count : 0;
                 if (count > 0 && !_fleetGeometry.IsCreated && !_fleetGeometryFailed)
-                    _fleetGeometry = CreateFleetGeometry(prefab);
+                    _fleetGeometry = CreateFleetGeometry(center, halfExtents);
                 if (_fleetGeometryFailed && count > 0) return false;
                 if (count == 0) _fleetGeometryFailed = false;
 
@@ -256,15 +270,17 @@ namespace WaveByWave.Collision
                 }
                 var dynamicBodies = _world.DynamicBodies;
                 var velocities = _world.MotionVelocities;
+                _fleetIds.Clear();
                 var index = 0;
                 if (count > 0)
-                    foreach (var pose in poses.Values)
+                    foreach (var pair in poses)
                     {
                         dynamicBodies[index] = new Unity.Physics.RigidBody
                         {
-                            Collider = _fleetGeometry, WorldFromBody = pose,
+                            Collider = _fleetGeometry, WorldFromBody = pair.Value,
                             Scale = 1f, Entity = Entity.Null
                         };
+                        _fleetIds.Add(pair.Key);
                         velocities[index++] = default;
                     }
                 RebuildFleetBroadphase(ref _world, layoutChanged);
@@ -286,33 +302,17 @@ namespace WaveByWave.Collision
         private static void RebuildFleetBroadphase(ref PhysicsWorld world, bool rebuildScenery) =>
             world.CollisionWorld.BuildBroadphase(ref world, 0f, float3.zero, rebuildScenery);
 
-        private BlobAssetReference<PhysicsCollider> CreateFleetGeometry(GameObject prefab)
+        private BlobAssetReference<PhysicsCollider> CreateFleetGeometry(Vector3 center, Vector3 halfExtents)
         {
-            var children = new List<CompoundCollider.ColliderBlobInstance>();
-            var root = prefab.transform;
-            var rootRotation = Quaternion.Inverse(root.rotation);
-            foreach (var collider in prefab.GetComponentsInChildren<EngineCollider>())
+            var box = Unity.Physics.BoxCollider.Create(new BoxGeometry
             {
-                if (!collider.enabled || collider.isTrigger ||
-                    (_obstacleLayers & (1 << collider.gameObject.layer)) == 0 ||
-                    UnityEngine.Physics.GetIgnoreLayerCollision(gameObject.layer, collider.gameObject.layer)) continue;
-                var geometry = CreateObstacle(collider);
-                if (!geometry.IsCreated)
-                    throw new NotSupportedException($"Unsupported fleet collider: {collider.name} ({collider.GetType().Name}).");
-                _obstacleGeometry.Add(geometry);
-                children.Add(new CompoundCollider.ColliderBlobInstance
-                {
-                    Collider = geometry,
-                    CompoundFromChild = new RigidTransform(ToQuaternion(rootRotation * collider.transform.rotation),
-                        rootRotation * (collider.transform.position - root.position))
-                });
-            }
-            if (children.Count == 0)
-                throw new InvalidOperationException("Enemy ship prefab has no enabled solid colliders in the ship collision layers.");
-            using var nativeChildren = new NativeArray<CompoundCollider.ColliderBlobInstance>(children.ToArray(), Allocator.Temp);
-            var compound = CompoundCollider.Create(nativeChildren);
-            _obstacleGeometry.Add(compound);
-            return compound;
+                Center = center,
+                Size = halfExtents * 2f,
+                Orientation = quaternion.identity,
+                BevelRadius = 0f
+            });
+            _obstacleGeometry.Add(box);
+            return box;
         }
 
         private void AddIslandObstacles(List<Unity.Physics.RigidBody> bodies)
@@ -363,11 +363,12 @@ namespace WaveByWave.Collision
             {
                 try
                 {
-                    var prefab = _fleetPrefab;
+                    var center = _fleetCenter;
+                    var halfExtents = _fleetHalfExtents;
                     var poses = _fleetPoses;
                     var revision = _fleetRevision;
                     RefreshStaticObstacles();
-                    if (!SetFleetObstacles(prefab, poses, revision))
+                    if (!SetFleetObstacles(center, halfExtents, poses, revision))
                         return new Motion(startPosition, startRotation, false, Vector3.zero, startPosition);
                 }
                 catch (Exception exception)
@@ -380,6 +381,8 @@ namespace WaveByWave.Collision
 
             var position = startPosition;
             var rotation = startRotation;
+            _lastFleetContactId = 0;
+            _lastFleetContactNormal = Vector3.zero;
             var stepTime = Mathf.Max(0f, deltaTime);
             if (stepTime <= 0.000001f)
                 return new Motion(position, rotation, false, Vector3.zero, position, velocity, angularVelocity);
@@ -412,6 +415,7 @@ namespace WaveByWave.Collision
                 blocked = true;
                 normal = hit.SurfaceNormal;
                 point = hit.Position;
+                RecordFleetContact(hit.RigidBodyIndex, normal);
                 _lastContactLeaf = hitLeaf;
                 _cachedContact = new ContactConstraint
                 {
@@ -492,6 +496,20 @@ namespace WaveByWave.Collision
             // Match the held pose. Do not carry an unexecuted contact reaction
             // into the passenger mover or the following propulsion step.
             return new Motion(position, rotation, blocked, normal, point, Vector3.zero, Vector3.zero);
+        }
+
+        private void RecordFleetContact(int bodyIndex, Vector3 normal)
+        {
+            if (bodyIndex < 0 || bodyIndex >= _fleetIds.Count) return;
+            _lastFleetContactId = _fleetIds[bodyIndex];
+            _lastFleetContactNormal = normal;
+        }
+
+        public bool TryGetFleetContact(out int id, out Vector3 normal)
+        {
+            id = _lastFleetContactId;
+            normal = _lastFleetContactNormal;
+            return id != 0;
         }
 
         public static Quaternion IntegrateRotation(Quaternion rotation, Vector3 angularTravel)
@@ -860,6 +878,7 @@ namespace WaveByWave.Collision
                 _queryStack = new NativeArray<int>(nodes.Count, Allocator.Persistent);
                 _patchVertices = new NativeArray<float3>(patchVertices.ToArray(), Allocator.Persistent);
                 var bounds = nodes[0].Bounds.Value.CalculateAabb();
+                HullCenter = bounds.Center;
                 HullHalfSize = bounds.Extents * 0.5f;
                 _radius = math.length(math.max(math.abs(bounds.Min), math.abs(bounds.Max)));
                 _lastContactLeaf = -1;
@@ -1133,10 +1152,14 @@ namespace WaveByWave.Collision
             _meshObstacleCache.Clear();
             _staticBodies.Clear();
             _fleetGeometry = default;
-            _fleetPrefab = null;
+            _fleetCenter = Vector3.zero;
+            _fleetHalfExtents = Vector3.zero;
             _fleetPoses = null;
+            _fleetIds.Clear();
             _fleetRevision = 0;
             _fleetGeometryFailed = false;
+            _lastFleetContactId = 0;
+            _lastFleetContactNormal = Vector3.zero;
         }
 
         public void Release()

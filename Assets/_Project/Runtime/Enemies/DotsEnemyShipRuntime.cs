@@ -79,6 +79,8 @@ namespace WaveByWave.Enemies
         private int _nextId = 1;
         private int _lastFrame = -1;
         private bool _wasServer;
+        private Vector3 _contactBoundsCenter;
+        private Vector3 _contactBoundsHalfExtents;
         private const float ProjectileStep = 1f / 60f;
 
         public int AliveCount => _byId.Count;
@@ -110,7 +112,30 @@ namespace WaveByWave.Enemies
             _water?.Dispose();
             _water = new EquipmentWaterQuery(Definition != null ? Definition.WaterProfile : null);
             _crewPositions = null;
+            RefreshContactBounds();
         }
+
+        private void RefreshContactBounds()
+        {
+            if (Definition == null) return;
+            var center = Definition.CollisionCenter;
+            var halfExtents = Definition.CollisionHalfExtents;
+            if (Definition.ViewPrefab != null &&
+                Definition.ViewPrefab.TryGetComponent<EnemyShipView>(out var view))
+            {
+                center = view.ContactBoundsCenter;
+                halfExtents = view.ContactBoundsHalfExtents;
+            }
+            var scale = Definition.ViewPrefab != null
+                ? Definition.ViewPrefab.transform.localScale : Vector3.one;
+            _contactBoundsCenter = Vector3.Scale(center, scale);
+            _contactBoundsHalfExtents = Vector3.Max(Vector3.Scale(halfExtents,
+                new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z))),
+                Vector3.one * 0.05f);
+        }
+
+        internal Vector3 ContactBoundsCenter => _contactBoundsCenter;
+        internal Vector3 ContactBoundsHalfExtents => _contactBoundsHalfExtents;
 
         public void Register(EnemyShipSpawnPoint point)
         {
@@ -330,8 +355,8 @@ namespace WaveByWave.Enemies
         private bool IsSpawnClear(Vector3 position)
         {
             if (!_fleet.IsClear(new float2(position.x, position.z))) return false;
-            var count = Physics.OverlapBoxNonAlloc(position + Definition.CollisionCenter,
-                Definition.CollisionHalfExtents + Vector3.one * Definition.CollisionSkin,
+            var count = Physics.OverlapBoxNonAlloc(position + _contactBoundsCenter,
+                _contactBoundsHalfExtents + Vector3.one * Definition.CollisionSkin,
                 _spawnOverlaps, Quaternion.identity, Definition.CollisionLayers, QueryTriggerInteraction.Ignore);
             if (count == _spawnOverlaps.Length) return false;
             for (var i = 0; i < count; i++)
@@ -379,12 +404,15 @@ namespace WaveByWave.Enemies
             targetSpeed *= brain.Target < 0 ? 0f : Mathf.Clamp01(Vector3.Dot(forward, brain.DesiredDirection));
             var rate = targetSpeed > brain.Speed ? Definition.Acceleration : Definition.Deceleration;
             brain.Speed = Mathf.MoveTowards(brain.Speed, targetSpeed, rate * deltaTime);
-            var velocity = brain.Target < 0 ? Vector3.zero : forward * brain.Speed + wind * Definition.WindDriftSpeed;
+            var pursuitVelocity = brain.Target < 0 ? Vector3.zero :
+                forward * brain.Speed + wind * Definition.WindDriftSpeed;
             // Turning around and crosswind cannot carry the pursuer away indefinitely.
-            var outward = Vector3.Dot(velocity, radial);
-            if (outward < 0) velocity -= radial * outward;
+            var outward = Vector3.Dot(pursuitVelocity, radial);
+            if (outward < 0) pursuitVelocity -= radial * outward;
+            var velocity = pursuitVelocity + (Vector3)brain.PushVelocity;
+            brain.PushVelocity *= math.exp(-Definition.ContactPushDamping * deltaTime);
             var displacement = velocity * deltaTime;
-            displacement = ResolveCollision(state.Id, state.Position, state.Rotation, displacement);
+            displacement = ResolveCollision(state.Id, state.Position, state.Rotation, displacement, deltaTime);
             var next = (Vector3)state.Position + displacement;
 
             var yaw = Quaternion.Euler(0f, brain.Heading * Mathf.Rad2Deg, 0f);
@@ -405,16 +433,17 @@ namespace WaveByWave.Enemies
             TryFire(ref state, ref brain, now);
         }
 
-        private Vector3 ResolveCollision(int id, Vector3 position, Quaternion rotation, Vector3 displacement)
+        private Vector3 ResolveCollision(int id, Vector3 position, Quaternion rotation,
+            Vector3 displacement, float deltaTime)
         {
-            displacement = ResolveHullMotion(id, position, rotation, displacement);
+            displacement = ResolveHullMotion(id, position, rotation, displacement, deltaTime);
             var distance = displacement.magnitude;
             if (distance < 0.0001f) return displacement;
-            var center = position + rotation * Definition.CollisionCenter;
+            var center = position + rotation * _contactBoundsCenter;
             int count;
             while (true)
             {
-                count = Physics.BoxCastNonAlloc(center, Definition.CollisionHalfExtents, displacement / distance,
+                count = Physics.BoxCastNonAlloc(center, _contactBoundsHalfExtents, displacement / distance,
                     _collisionHits, rotation, distance + Definition.CollisionSkin, Definition.CollisionLayers, QueryTriggerInteraction.Ignore);
                 if (count < _collisionHits.Length || _collisionHits.Length >= 8192) break;
                 // Ignored fleet colliders must not fill the query buffer and form an
@@ -632,6 +661,23 @@ namespace WaveByWave.Enemies
         internal void UnregisterView(int id, EnemyShipView view)
         {
             if (_views.TryGetValue(id, out var current) && current == view) _views.Remove(id);
+        }
+
+        internal void ApplyPlayerContactPush(int id, Vector3 velocity)
+            => AddContactPush(id, velocity);
+
+        private void AddContactPush(int id, Vector3 velocity)
+        {
+            if (_serverWorld == null || !_serverWorld.IsCreated ||
+                !_byId.TryGetValue(id, out var entity) ||
+                !_serverWorld.EntityManager.Exists(entity)) return;
+            var manager = _serverWorld.EntityManager;
+            var brain = manager.GetComponentData<DotsEnemyShipBrain>(entity);
+            velocity.y = 0f;
+            var combined = (Vector3)brain.PushVelocity + velocity;
+            brain.PushVelocity = Vector3.ClampMagnitude(combined,
+                Definition.MaximumContactPushSpeed);
+            manager.SetComponentData(entity, brain);
         }
 
         private bool EnsureCrew(int id, uint seed)

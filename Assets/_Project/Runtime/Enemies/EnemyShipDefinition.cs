@@ -24,6 +24,10 @@ namespace WaveByWave.Enemies
         public Vector3 CollisionHalfExtents = new(3.2f, 1.5f, 7.5f);
         [Min(0f)] public float CollisionSkin = 0.15f;
         public LayerMask CollisionLayers = ~0;
+        [Range(0f, 1f), Tooltip("Fraction of inward contact speed transferred to the other ship.")]
+        public float ContactPushStrength = 0.45f;
+        [Min(0.1f)] public float MaximumContactPushSpeed = 3f;
+        [Min(0.1f)] public float ContactPushDamping = 2.2f;
 
         [Header("Sailing")]
         [Min(0.1f)] public float BaseSpeed = 2.4f;
@@ -84,6 +88,8 @@ namespace WaveByWave.Enemies
         private void OnValidate()
         {
             CollisionHalfExtents = Vector3.Max(CollisionHalfExtents, Vector3.one * 0.1f);
+            MaximumContactPushSpeed = Mathf.Max(0.1f, MaximumContactPushSpeed);
+            ContactPushDamping = Mathf.Max(0.1f, ContactPushDamping);
             MaximumSpeed = Mathf.Max(BaseSpeed, MaximumSpeed);
             FireRange = Mathf.Max(PreferredBroadsideRange, FireRange);
             WaterSampleSize = Vector2.Max(WaterSampleSize, Vector2.one * 0.1f);

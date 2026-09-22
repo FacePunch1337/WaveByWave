@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f3a004af57b24c7799d583f8ba2b4e10, type: 3}
   m_Name: PlayerShipNavigation
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Enemies.EnemyDeckNavigationData
-  SourceHash: c20c15931f985a253439e5aa37b55dff
-  Origin: {x: -2.9021094, y: -6.2204514}
+  SourceHash: e459b61a41b3caf6fb908f33a14476ec
+  Origin: {x: -2.9021096, y: -6.2204504}
   CellSize: 0.2
   Width: 29
   Depth: 83
@@ -4838,2864 +4838,2864 @@ MonoBehaviour:
   - FirstNode: 477
     Count: 0
   Nodes:
-  - Position: {x: -1.0021094, y: 3.5603027, z: -5.1204515}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.560303, z: -5.1204505}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 154
     FirstLink: 0
     LinkCount: 2
     Boundary: 1
-  - Position: {x: 0.79789066, y: 3.5603027, z: -5.1204515}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.560303, z: -5.1204505}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 163
     FirstLink: 2
     LinkCount: 2
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603027, z: -4.920451}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.560303, z: -4.92045}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 182
     FirstLink: 4
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603027, z: -4.920451}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.560303, z: -4.92045}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 183
     FirstLink: 8
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.40210935, y: 4.041, z: -4.920451}
+  - Position: {x: -0.4021096, y: 4.041, z: -4.92045}
     Normal: {x: 0, y: 1, z: 0}
     Column: 186
     FirstLink: 12
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -0.20210934, y: 4.041, z: -4.920451}
+  - Position: {x: -0.20210958, y: 4.041, z: -4.92045}
     Normal: {x: 0, y: 1, z: 0}
     Column: 187
     FirstLink: 15
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 4.041, z: -4.920451}
+  - Position: {x: -0.0021095797, y: 4.041, z: -4.92045}
     Normal: {x: 0, y: 1, z: 0}
     Column: 188
     FirstLink: 20
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.19789067, y: 4.041, z: -4.920451}
+  - Position: {x: 0.19789043, y: 4.041, z: -4.92045}
     Normal: {x: 0, y: 1, z: 0}
     Column: 189
     FirstLink: 25
     LinkCount: 3
     Boundary: 1
-  - Position: {x: 0.79789066, y: 3.5603027, z: -4.920451}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.560303, z: -4.92045}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 192
     FirstLink: 28
     LinkCount: 4
     Boundary: 1
-  - Position: {x: 0.99789065, y: 3.5603027, z: -4.920451}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.560303, z: -4.92045}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 193
     FirstLink: 32
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603027, z: -4.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.560303, z: -4.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 211
     FirstLink: 36
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603027, z: -4.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.560303, z: -4.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 212
     FirstLink: 41
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.40210935, y: 4.041, z: -4.7204514}
+  - Position: {x: -0.4021096, y: 4.041, z: -4.7204504}
     Normal: {x: 0, y: 1, z: 0}
     Column: 215
     FirstLink: 46
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.20210934, y: 4.041, z: -4.7204514}
+  - Position: {x: -0.20210958, y: 4.041, z: -4.7204504}
     Normal: {x: 0, y: 1, z: 0}
     Column: 216
     FirstLink: 51
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 4.041, z: -4.7204514}
+  - Position: {x: -0.0021095797, y: 4.041, z: -4.7204504}
     Normal: {x: 0, y: 1, z: 0}
     Column: 217
     FirstLink: 59
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 4.041, z: -4.7204514}
+  - Position: {x: 0.19789043, y: 4.041, z: -4.7204504}
     Normal: {x: 0, y: 1, z: 0}
     Column: 218
     FirstLink: 67
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.79789066, y: 3.5603027, z: -4.7204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.560303, z: -4.7204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 221
     FirstLink: 72
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.99789065, y: 3.5603027, z: -4.7204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.560303, z: -4.7204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 222
     FirstLink: 77
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603027, z: -4.5204515}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.560303, z: -4.5204506}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 240
     FirstLink: 82
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603027, z: -4.5204515}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.560303, z: -4.5204506}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 241
     FirstLink: 87
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.40210935, y: 4.041, z: -4.5204515}
+  - Position: {x: -0.4021096, y: 4.041, z: -4.5204506}
     Normal: {x: 0, y: 1, z: 0}
     Column: 244
     FirstLink: 92
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -0.20210934, y: 4.041, z: -4.5204515}
+  - Position: {x: -0.20210958, y: 4.041, z: -4.5204506}
     Normal: {x: 0, y: 1, z: 0}
     Column: 245
     FirstLink: 95
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 4.041, z: -4.5204515}
+  - Position: {x: -0.0021095797, y: 4.041, z: -4.5204506}
     Normal: {x: 0, y: 1, z: 0}
     Column: 246
     FirstLink: 100
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.19789067, y: 4.041, z: -4.5204515}
+  - Position: {x: 0.19789043, y: 4.041, z: -4.5204506}
     Normal: {x: 0, y: 1, z: 0}
     Column: 247
     FirstLink: 105
     LinkCount: 3
     Boundary: 1
-  - Position: {x: 0.79789066, y: 3.5603027, z: -4.5204515}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.560303, z: -4.5204506}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 250
     FirstLink: 108
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.99789065, y: 3.5603027, z: -4.5204515}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.560303, z: -4.5204506}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 251
     FirstLink: 113
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603027, z: -4.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.560303, z: -4.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 269
     FirstLink: 118
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603027, z: -4.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.560303, z: -4.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 270
     FirstLink: 123
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.79789066, y: 3.5603027, z: -4.3204513}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.560303, z: -4.3204503}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 279
     FirstLink: 128
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.99789065, y: 3.5603027, z: -4.3204513}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.560303, z: -4.3204503}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 280
     FirstLink: 133
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603027, z: -4.1204515}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.560303, z: -4.1204505}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 298
     FirstLink: 138
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603027, z: -4.1204515}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.560303, z: -4.1204505}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 299
     FirstLink: 143
     LinkCount: 6
     Boundary: 1
-  - Position: {x: 0.79789066, y: 3.5603027, z: -4.1204515}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.560303, z: -4.1204505}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 308
     FirstLink: 149
     LinkCount: 6
     Boundary: 1
-  - Position: {x: 0.99789065, y: 3.5603027, z: -4.1204515}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.560303, z: -4.1204505}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 309
     FirstLink: 155
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603025, z: -3.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.5603027, z: -3.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 327
     FirstLink: 160
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603025, z: -3.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.5603027, z: -3.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 328
     FirstLink: 165
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.80210936, y: 3.5603025, z: -3.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.8021096, y: 3.5603027, z: -3.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 329
     FirstLink: 172
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.5978907, y: 3.5603025, z: -3.9204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.59789044, y: 3.5603027, z: -3.9204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 336
     FirstLink: 177
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.79789066, y: 3.5603025, z: -3.9204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.5603027, z: -3.9204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 337
     FirstLink: 182
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.99789065, y: 3.5603025, z: -3.9204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.5603027, z: -3.9204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 338
     FirstLink: 189
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603025, z: -3.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.5603027, z: -3.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 356
     FirstLink: 194
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603025, z: -3.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.5603027, z: -3.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 357
     FirstLink: 199
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 3.5603025, z: -3.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.8021096, y: 3.5603027, z: -3.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 358
     FirstLink: 207
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.6021094, y: 3.5603025, z: -3.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.6021096, y: 3.5603027, z: -3.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 359
     FirstLink: 214
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.40210935, y: 3.5603025, z: -3.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.4021096, y: 3.5603027, z: -3.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 360
     FirstLink: 220
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.20210934, y: 3.5603025, z: -3.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.20210958, y: 3.5603027, z: -3.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 361
     FirstLink: 225
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 3.5603025, z: -3.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.0021095797, y: 3.5603027, z: -3.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 362
     FirstLink: 230
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.19789067, y: 3.5603025, z: -3.7204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.19789043, y: 3.5603027, z: -3.7204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 363
     FirstLink: 235
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.39789066, y: 3.5603025, z: -3.7204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.39789042, y: 3.5603027, z: -3.7204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 364
     FirstLink: 240
     LinkCount: 6
     Boundary: 1
-  - Position: {x: 0.5978907, y: 3.5603025, z: -3.7204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.59789044, y: 3.5603027, z: -3.7204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 365
     FirstLink: 246
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.79789066, y: 3.5603025, z: -3.7204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.5603027, z: -3.7204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 366
     FirstLink: 253
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 3.5603025, z: -3.7204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.5603027, z: -3.7204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 367
     FirstLink: 261
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603025, z: -3.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.5603027, z: -3.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 385
     FirstLink: 266
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603025, z: -3.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.5603027, z: -3.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 386
     FirstLink: 271
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 3.5603025, z: -3.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.8021096, y: 3.5603027, z: -3.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 387
     FirstLink: 279
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 3.5603025, z: -3.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.6021096, y: 3.5603027, z: -3.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 388
     FirstLink: 287
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 3.5603025, z: -3.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.4021096, y: 3.5603027, z: -3.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 389
     FirstLink: 295
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 3.5603025, z: -3.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.20210958, y: 3.5603027, z: -3.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 390
     FirstLink: 303
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 3.5603025, z: -3.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.0021095797, y: 3.5603027, z: -3.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 391
     FirstLink: 311
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 3.5603025, z: -3.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.19789043, y: 3.5603027, z: -3.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 392
     FirstLink: 319
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 3.5603025, z: -3.5204513}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.39789042, y: 3.5603027, z: -3.5204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 393
     FirstLink: 327
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 3.5603025, z: -3.5204513}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.59789044, y: 3.5603027, z: -3.5204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 394
     FirstLink: 335
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 3.5603025, z: -3.5204513}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.5603027, z: -3.5204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 395
     FirstLink: 343
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 3.5603025, z: -3.5204513}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.5603027, z: -3.5204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 396
     FirstLink: 351
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603025, z: -3.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.5603027, z: -3.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 414
     FirstLink: 356
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603025, z: -3.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.5603027, z: -3.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 415
     FirstLink: 361
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 3.5603025, z: -3.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.8021096, y: 3.5603027, z: -3.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 416
     FirstLink: 369
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 3.5603025, z: -3.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.6021096, y: 3.5603027, z: -3.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 417
     FirstLink: 377
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 3.5603025, z: -3.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.4021096, y: 3.5603027, z: -3.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 418
     FirstLink: 385
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 3.5603025, z: -3.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.20210958, y: 3.5603027, z: -3.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 419
     FirstLink: 393
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 3.5603025, z: -3.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.0021095797, y: 3.5603027, z: -3.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 420
     FirstLink: 401
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 3.5603025, z: -3.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.19789043, y: 3.5603027, z: -3.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 421
     FirstLink: 409
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 3.5603025, z: -3.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.39789042, y: 3.5603027, z: -3.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 422
     FirstLink: 417
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 3.5603025, z: -3.3204513}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.59789044, y: 3.5603027, z: -3.3204503}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 423
     FirstLink: 425
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 3.5603025, z: -3.3204513}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.5603027, z: -3.3204503}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 424
     FirstLink: 433
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 3.5603025, z: -3.3204513}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.5603027, z: -3.3204503}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 425
     FirstLink: 441
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603025, z: -3.1204512}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.5603027, z: -3.1204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 443
     FirstLink: 446
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603025, z: -3.1204512}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.5603027, z: -3.1204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 444
     FirstLink: 451
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 3.5603025, z: -3.1204512}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.8021096, y: 3.5603027, z: -3.1204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 445
     FirstLink: 459
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 3.5603025, z: -3.1204512}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.6021096, y: 3.5603027, z: -3.1204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 446
     FirstLink: 467
     LinkCount: 9
     Boundary: 0
-  - Position: {x: -0.40210935, y: 3.5603025, z: -3.1204512}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.4021096, y: 3.5603027, z: -3.1204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 447
     FirstLink: 476
     LinkCount: 10
     Boundary: 0
-  - Position: {x: -0.20210934, y: 3.5603025, z: -3.1204512}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.20210958, y: 3.5603027, z: -3.1204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 448
     FirstLink: 486
     LinkCount: 11
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 3.5603025, z: -3.1204512}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.0021095797, y: 3.5603027, z: -3.1204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 449
     FirstLink: 497
     LinkCount: 11
     Boundary: 0
-  - Position: {x: 0.19789067, y: 3.5603025, z: -3.1204512}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.19789043, y: 3.5603027, z: -3.1204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 450
     FirstLink: 508
     LinkCount: 10
     Boundary: 0
-  - Position: {x: 0.39789066, y: 3.5603025, z: -3.1204512}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.39789042, y: 3.5603027, z: -3.1204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 451
     FirstLink: 518
     LinkCount: 9
     Boundary: 0
-  - Position: {x: 0.5978907, y: 3.5603025, z: -3.1204512}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.59789044, y: 3.5603027, z: -3.1204503}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 452
     FirstLink: 527
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 3.5603025, z: -3.1204512}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.5603027, z: -3.1204503}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 453
     FirstLink: 535
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 3.5603025, z: -3.1204512}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.5603027, z: -3.1204503}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 454
     FirstLink: 543
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603025, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.5603027, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 472
     FirstLink: 548
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603025, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.5603027, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 473
     FirstLink: 553
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 3.5603025, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.8021096, y: 3.5603027, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 474
     FirstLink: 561
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 3.5603025, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.6021096, y: 3.5603027, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 475
     FirstLink: 569
     LinkCount: 10
     Boundary: 0
-  - Position: {x: -0.40210935, y: 3.464346, z: -2.9204514}
+  - Position: {x: -0.4021096, y: 3.4643462, z: -2.9204504}
     Normal: {x: 0, y: 1, z: 0.00000026230623}
     Column: 476
     FirstLink: 579
     LinkCount: 9
     Boundary: 1
-  - Position: {x: -0.40210935, y: 3.5603025, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.4021096, y: 3.5603027, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 476
     FirstLink: 588
     LinkCount: 9
     Boundary: 1
-  - Position: {x: -0.20210934, y: 3.464346, z: -2.9204514}
+  - Position: {x: -0.20210958, y: 3.4643462, z: -2.9204504}
     Normal: {x: 0, y: 1, z: 0.00000026230623}
     Column: 477
     FirstLink: 597
     LinkCount: 9
     Boundary: 1
-  - Position: {x: -0.20210934, y: 3.5603025, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.20210958, y: 3.5603027, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 477
     FirstLink: 606
     LinkCount: 9
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 3.464346, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000026230614}
+  - Position: {x: -0.0021095797, y: 3.4643462, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000026230623}
     Column: 478
     FirstLink: 615
     LinkCount: 9
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 3.5603025, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.0021095797, y: 3.5603027, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 478
     FirstLink: 624
     LinkCount: 9
     Boundary: 1
-  - Position: {x: 0.19789067, y: 3.464346, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000026230614}
+  - Position: {x: 0.19789043, y: 3.4643462, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000026230623}
     Column: 479
     FirstLink: 633
     LinkCount: 9
     Boundary: 1
-  - Position: {x: 0.19789067, y: 3.5603025, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.19789043, y: 3.5603027, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 479
     FirstLink: 642
     LinkCount: 9
     Boundary: 1
-  - Position: {x: 0.39789066, y: 3.5603025, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.39789042, y: 3.5603027, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 480
     FirstLink: 651
     LinkCount: 10
     Boundary: 0
-  - Position: {x: 0.5978907, y: 3.5603025, z: -2.9204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.59789044, y: 3.5603027, z: -2.9204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 481
     FirstLink: 661
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 3.5603025, z: -2.9204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.5603027, z: -2.9204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 482
     FirstLink: 669
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 3.5603025, z: -2.9204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.5603027, z: -2.9204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 483
     FirstLink: 677
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603025, z: -2.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.5603027, z: -2.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 501
     FirstLink: 682
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603025, z: -2.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.5603027, z: -2.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 502
     FirstLink: 687
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 3.5603025, z: -2.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.8021096, y: 3.5603027, z: -2.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 503
     FirstLink: 695
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 3.5603025, z: -2.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.6021096, y: 3.5603027, z: -2.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 504
     FirstLink: 703
     LinkCount: 11
     Boundary: 0
-  - Position: {x: -0.40210935, y: 3.464346, z: -2.7204514}
+  - Position: {x: -0.4021096, y: 3.4643462, z: -2.7204504}
     Normal: {x: 0, y: 1, z: 0.00000026230623}
     Column: 505
     FirstLink: 714
     LinkCount: 9
     Boundary: 1
-  - Position: {x: -0.40210935, y: 3.5603025, z: -2.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.4021096, y: 3.5603027, z: -2.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 505
     FirstLink: 723
     LinkCount: 9
     Boundary: 1
-  - Position: {x: 0.19789067, y: 3.464346, z: -2.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000026230614}
+  - Position: {x: 0.19789043, y: 3.4643462, z: -2.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000026230623}
     Column: 508
     FirstLink: 732
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.19789067, y: 3.5603025, z: -2.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.19789043, y: 3.5603027, z: -2.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 508
     FirstLink: 739
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.39789066, y: 3.5603025, z: -2.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.39789042, y: 3.5603027, z: -2.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 509
     FirstLink: 746
     LinkCount: 9
     Boundary: 1
-  - Position: {x: 0.5978907, y: 3.5603025, z: -2.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.59789044, y: 3.5603027, z: -2.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 510
     FirstLink: 755
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 3.5603025, z: -2.7204514}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.5603027, z: -2.7204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 511
     FirstLink: 763
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 3.5603025, z: -2.7204514}
-    Normal: {x: -0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.5603027, z: -2.7204504}
+    Normal: {x: -0, y: 1, z: 0.00000006039335}
     Column: 512
     FirstLink: 771
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603025, z: -2.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.5603027, z: -2.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 530
     FirstLink: 776
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603025, z: -2.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.5603027, z: -2.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 531
     FirstLink: 781
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 3.5603025, z: -2.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.8021096, y: 3.5603027, z: -2.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 532
     FirstLink: 789
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 3.5603025, z: -2.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.6021096, y: 3.5603027, z: -2.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 533
     FirstLink: 797
     LinkCount: 10
     Boundary: 0
-  - Position: {x: -0.40210935, y: 3.4643457, z: -2.5204513}
+  - Position: {x: -0.4021096, y: 3.464346, z: -2.5204504}
     Normal: {x: 0, y: 1, z: 0.00000026230623}
     Column: 534
     FirstLink: 807
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.40210935, y: 3.5603025, z: -2.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.4021096, y: 3.5603027, z: -2.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 534
     FirstLink: 813
     LinkCount: 6
     Boundary: 1
-  - Position: {x: 0.39789066, y: 3.5603025, z: -2.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.39789042, y: 3.5603027, z: -2.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 538
     FirstLink: 819
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.5978907, y: 3.5603025, z: -2.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.59789044, y: 3.5603027, z: -2.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 539
     FirstLink: 826
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 3.5603025, z: -2.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.5603027, z: -2.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 540
     FirstLink: 834
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 3.5603025, z: -2.5204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.5603027, z: -2.5204504}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 541
     FirstLink: 842
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 3.5603025, z: -2.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.2021096, y: 3.5603027, z: -2.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 559
     FirstLink: 847
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.0021094, y: 3.5603025, z: -2.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -1.0021096, y: 3.5603027, z: -2.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 560
     FirstLink: 850
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.80210936, y: 3.5603025, z: -2.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.8021096, y: 3.5603027, z: -2.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 561
     FirstLink: 855
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.6021094, y: 3.5603025, z: -2.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.6021096, y: 3.5603027, z: -2.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 562
     FirstLink: 860
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.40210935, y: 3.5603025, z: -2.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: -0.4021096, y: 3.5603027, z: -2.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 563
     FirstLink: 866
     LinkCount: 4
     Boundary: 1
-  - Position: {x: 0.39789066, y: 3.5603025, z: -2.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.39789042, y: 3.5603027, z: -2.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 567
     FirstLink: 870
     LinkCount: 3
     Boundary: 1
-  - Position: {x: 0.5978907, y: 3.5603025, z: -2.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.59789044, y: 3.5603027, z: -2.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 568
     FirstLink: 873
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.79789066, y: 3.5603025, z: -2.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.7978904, y: 3.5603027, z: -2.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 569
     FirstLink: 878
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.99789065, y: 3.5603025, z: -2.3204513}
-    Normal: {x: 0, y: 1, z: 0.00000006039333}
+  - Position: {x: 0.9978904, y: 3.5603027, z: -2.3204503}
+    Normal: {x: 0, y: 1, z: 0.00000006039335}
     Column: 570
     FirstLink: 883
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.95, z: -1.5204513}
+  - Position: {x: -0.4021096, y: 2.95, z: -1.5204504}
     Normal: {x: 0, y: 1, z: 0}
     Column: 679
     FirstLink: 886
     LinkCount: 1
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.95, z: -1.5204513}
+  - Position: {x: -0.20210958, y: 2.95, z: -1.5204504}
     Normal: {x: 0, y: 1, z: 0}
     Column: 680
     FirstLink: 887
     LinkCount: 2
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 2.95, z: -1.5204513}
+  - Position: {x: -0.0021095797, y: 2.95, z: -1.5204504}
     Normal: {x: 0, y: 1, z: 0}
     Column: 681
     FirstLink: 889
     LinkCount: 2
     Boundary: 1
-  - Position: {x: 0.19789067, y: 2.95, z: -1.5204513}
+  - Position: {x: 0.19789043, y: 2.95, z: -1.5204504}
     Normal: {x: 0, y: 1, z: 0}
     Column: 682
     FirstLink: 891
     LinkCount: 1
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: -0.9204513}
+  - Position: {x: -0.6021096, y: 2.1018884, z: -0.9204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 765
     FirstLink: 892
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: -0.9204513}
+  - Position: {x: -0.4021096, y: 2.1018884, z: -0.9204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 766
     FirstLink: 895
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.1018882, z: -0.9204513}
+  - Position: {x: -0.20210958, y: 2.1018884, z: -0.9204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 767
     FirstLink: 900
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 2.1018882, z: -0.9204513}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: -0.9204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 768
     FirstLink: 905
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.19789067, y: 2.1018882, z: -0.9204513}
+  - Position: {x: 0.19789043, y: 2.1018884, z: -0.9204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 769
     FirstLink: 910
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.39789066, y: 2.1018882, z: -0.9204513}
+  - Position: {x: 0.39789042, y: 2.1018884, z: -0.9204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 770
     FirstLink: 915
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: -0.7204513}
+  - Position: {x: -0.6021096, y: 2.1018884, z: -0.72045034}
     Normal: {x: 0, y: 1, z: 0}
     Column: 794
     FirstLink: 918
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: -0.7204513}
+  - Position: {x: -0.4021096, y: 2.1018884, z: -0.72045034}
     Normal: {x: 0, y: 1, z: 0}
     Column: 795
     FirstLink: 924
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: -0.7204513}
+  - Position: {x: -0.20210958, y: 2.1018884, z: -0.72045034}
     Normal: {x: 0, y: 1, z: 0}
     Column: 796
     FirstLink: 932
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: -0.7204513}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: -0.72045034}
     Normal: {x: 0, y: 1, z: 0}
     Column: 797
     FirstLink: 940
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: -0.7204513}
+  - Position: {x: 0.19789043, y: 2.1018884, z: -0.72045034}
     Normal: {x: 0, y: 1, z: 0}
     Column: 798
     FirstLink: 948
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: -0.7204513}
+  - Position: {x: 0.39789042, y: 2.1018884, z: -0.72045034}
     Normal: {x: 0, y: 1, z: 0}
     Column: 799
     FirstLink: 956
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.1018882, z: -0.52045125}
+  - Position: {x: -0.8021096, y: 2.1018884, z: -0.5204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 822
     FirstLink: 962
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: -0.52045125}
+  - Position: {x: -0.6021096, y: 2.1018884, z: -0.5204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 823
     FirstLink: 967
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: -0.52045125}
+  - Position: {x: -0.4021096, y: 2.1018884, z: -0.5204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 824
     FirstLink: 974
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: -0.52045125}
+  - Position: {x: -0.20210958, y: 2.1018884, z: -0.5204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 825
     FirstLink: 982
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: -0.52045125}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: -0.5204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 826
     FirstLink: 990
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: -0.52045125}
+  - Position: {x: 0.19789043, y: 2.1018884, z: -0.5204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 827
     FirstLink: 998
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: -0.52045125}
+  - Position: {x: 0.39789042, y: 2.1018884, z: -0.5204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 828
     FirstLink: 1006
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.5978907, y: 2.1018882, z: -0.52045125}
+  - Position: {x: 0.59789044, y: 2.1018884, z: -0.5204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 829
     FirstLink: 1013
     LinkCount: 6
     Boundary: 1
-  - Position: {x: 0.79789066, y: 2.1367905, z: -0.52045125}
-    Normal: {x: 0, y: 0.64402956, z: 0.76500064}
+  - Position: {x: 0.7978904, y: 2.1367898, z: -0.5204503}
+    Normal: {x: 0, y: 0.6440293, z: 0.76500076}
     Column: 830
     FirstLink: 1019
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.1018882, z: -0.32045126}
+  - Position: {x: -1.2021096, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 849
     FirstLink: 1023
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.1018882, z: -0.32045126}
+  - Position: {x: -1.0021096, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 850
     FirstLink: 1026
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.1018882, z: -0.32045126}
+  - Position: {x: -0.8021096, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 851
     FirstLink: 1032
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: -0.32045126}
+  - Position: {x: -0.6021096, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 852
     FirstLink: 1039
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.1018882, z: -0.32045126}
+  - Position: {x: -0.4021096, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 853
     FirstLink: 1047
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: -0.32045126}
+  - Position: {x: -0.20210958, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 854
     FirstLink: 1055
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: -0.32045126}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 855
     FirstLink: 1063
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: -0.32045126}
+  - Position: {x: 0.19789043, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 856
     FirstLink: 1071
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: -0.32045126}
+  - Position: {x: 0.39789042, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 857
     FirstLink: 1079
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.1018882, z: -0.32045126}
+  - Position: {x: 0.59789044, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 858
     FirstLink: 1087
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.1018882, z: -0.32045126}
+  - Position: {x: 0.7978904, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 859
     FirstLink: 1095
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.99789065, y: 2.1018882, z: -0.32045126}
+  - Position: {x: 0.9978904, y: 2.1018884, z: -0.3204503}
     Normal: {x: 0, y: 1, z: 0}
     Column: 860
     FirstLink: 1102
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.1018882, z: -0.120451264}
+  - Position: {x: -1.2021096, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 878
     FirstLink: 1106
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.1018882, z: -0.120451264}
+  - Position: {x: -1.0021096, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 879
     FirstLink: 1109
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.1018882, z: -0.120451264}
+  - Position: {x: -0.8021096, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 880
     FirstLink: 1115
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: -0.120451264}
+  - Position: {x: -0.6021096, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 881
     FirstLink: 1122
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.1018882, z: -0.120451264}
+  - Position: {x: -0.4021096, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 882
     FirstLink: 1130
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: -0.120451264}
+  - Position: {x: -0.20210958, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 883
     FirstLink: 1138
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: -0.120451264}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 884
     FirstLink: 1146
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: -0.120451264}
+  - Position: {x: 0.19789043, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 885
     FirstLink: 1154
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: -0.120451264}
+  - Position: {x: 0.39789042, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 886
     FirstLink: 1162
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.1018882, z: -0.120451264}
+  - Position: {x: 0.59789044, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 887
     FirstLink: 1170
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.79789066, y: 2.1018882, z: -0.120451264}
+  - Position: {x: 0.7978904, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 888
     FirstLink: 1177
     LinkCount: 6
     Boundary: 1
-  - Position: {x: 0.99789065, y: 2.1018882, z: -0.120451264}
+  - Position: {x: 0.9978904, y: 2.1018884, z: -0.12045031}
     Normal: {x: 0, y: 1, z: 0}
     Column: 889
     FirstLink: 1183
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.1018882, z: 0.07954874}
+  - Position: {x: -0.8021096, y: 2.1018884, z: 0.07954969}
     Normal: {x: 0, y: 1, z: 0}
     Column: 909
     FirstLink: 1186
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: 0.07954874}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 0.07954969}
     Normal: {x: 0, y: 1, z: 0}
     Column: 910
     FirstLink: 1191
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: 0.07954874}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 0.07954969}
     Normal: {x: 0, y: 1, z: 0}
     Column: 911
     FirstLink: 1198
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: 0.07954874}
+  - Position: {x: -0.20210958, y: 2.1018884, z: 0.07954969}
     Normal: {x: 0, y: 1, z: 0}
     Column: 912
     FirstLink: 1206
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: 0.07954874}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: 0.07954969}
     Normal: {x: 0, y: 1, z: 0}
     Column: 913
     FirstLink: 1214
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: 0.07954874}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 0.07954969}
     Normal: {x: 0, y: 1, z: 0}
     Column: 914
     FirstLink: 1222
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: 0.07954874}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 0.07954969}
     Normal: {x: 0, y: 1, z: 0}
     Column: 915
     FirstLink: 1230
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.5978907, y: 2.1018882, z: 0.07954874}
+  - Position: {x: 0.59789044, y: 2.1018884, z: 0.07954969}
     Normal: {x: 0, y: 1, z: 0}
     Column: 916
     FirstLink: 1237
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: 0.27954873}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 0.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 939
     FirstLink: 1242
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: 0.27954873}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 0.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 940
     FirstLink: 1248
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: 0.27954873}
+  - Position: {x: -0.20210958, y: 2.1018884, z: 0.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 941
     FirstLink: 1256
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: 0.27954873}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: 0.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 942
     FirstLink: 1264
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: 0.27954873}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 0.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 943
     FirstLink: 1272
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: 0.27954873}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 0.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 944
     FirstLink: 1280
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: 0.47954875}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 0.4795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 968
     FirstLink: 1286
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: 0.47954875}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 0.4795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 969
     FirstLink: 1291
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.1018882, z: 0.47954875}
+  - Position: {x: -0.20210958, y: 2.1018884, z: 0.4795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 970
     FirstLink: 1298
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.20210934, y: 9.327332, z: 0.47954875}
+  - Position: {x: -0.20210958, y: 9.327333, z: 0.4795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 970
     FirstLink: 1304
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 2.1018882, z: 0.47954875}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: 0.4795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 971
     FirstLink: 1308
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 9.327332, z: 0.47954875}
+  - Position: {x: -0.0021095797, y: 9.327333, z: 0.4795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 971
     FirstLink: 1314
     LinkCount: 4
     Boundary: 1
-  - Position: {x: 0.19789067, y: 2.1018882, z: 0.47954875}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 0.4795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 972
     FirstLink: 1318
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.39789066, y: 2.1018882, z: 0.47954875}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 0.4795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 973
     FirstLink: 1325
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -2.0021093, y: 2.71, z: 0.67954874}
+  - Position: {x: -2.0021095, y: 2.71, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 990
     FirstLink: 1330
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.8021094, y: 2.71, z: 0.67954874}
+  - Position: {x: -1.8021096, y: 2.71, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 991
     FirstLink: 1333
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.6021093, y: 2.71, z: 0.67954874}
+  - Position: {x: -1.6021096, y: 2.71, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 992
     FirstLink: 1338
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.4021094, y: 2.71, z: 0.67954874}
+  - Position: {x: -1.4021096, y: 2.71, z: 0.6795497}
     Normal: {x: 0, y: 1, z: -0}
     Column: 993
     FirstLink: 1343
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: 0.67954874}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 997
     FirstLink: 1346
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: 0.67954874}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 998
     FirstLink: 1350
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.40210935, y: 9.327332, z: 0.67954874}
+  - Position: {x: -0.4021096, y: 9.327333, z: 0.6795497}
     Normal: {x: 0, y: 1, z: -0}
     Column: 998
     FirstLink: 1355
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -0.20210934, y: 9.327332, z: 0.67954874}
+  - Position: {x: -0.20210958, y: 9.327333, z: 0.6795497}
     Normal: {x: 0, y: 1, z: -0}
     Column: 999
     FirstLink: 1358
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 9.327332, z: 0.67954874}
+  - Position: {x: -0.0021095797, y: 9.327333, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1000
     FirstLink: 1363
     LinkCount: 4
     Boundary: 1
-  - Position: {x: 0.19789067, y: 2.1018882, z: 0.67954874}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1001
     FirstLink: 1367
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.19789067, y: 9.327332, z: 0.67954874}
+  - Position: {x: 0.19789043, y: 9.327333, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1001
     FirstLink: 1372
     LinkCount: 2
     Boundary: 1
-  - Position: {x: 0.39789066, y: 2.1018882, z: 0.67954874}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1002
     FirstLink: 1374
     LinkCount: 4
     Boundary: 1
-  - Position: {x: 1.1978906, y: 2.71, z: 0.67954874}
+  - Position: {x: 1.1978904, y: 2.71, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1006
     FirstLink: 1378
     LinkCount: 3
     Boundary: 1
-  - Position: {x: 1.3978907, y: 2.71, z: 0.67954874}
+  - Position: {x: 1.3978904, y: 2.71, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1007
     FirstLink: 1381
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 1.5978907, y: 2.71, z: 0.67954874}
+  - Position: {x: 1.5978905, y: 2.71, z: 0.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1008
     FirstLink: 1386
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 1.7978907, y: 2.71, z: 0.67954874}
+  - Position: {x: 1.7978904, y: 2.71, z: 0.6795497}
     Normal: {x: -0, y: 1, z: 0}
     Column: 1009
     FirstLink: 1391
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -2.0021093, y: 2.71, z: 0.8795487}
+  - Position: {x: -2.0021095, y: 2.71, z: 0.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1019
     FirstLink: 1394
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.8021094, y: 2.71, z: 0.8795487}
+  - Position: {x: -1.8021096, y: 2.71, z: 0.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1020
     FirstLink: 1399
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -1.6021093, y: 2.71, z: 0.8795487}
+  - Position: {x: -1.6021096, y: 2.71, z: 0.8795497}
     Normal: {x: 0, y: 1, z: -0}
     Column: 1021
     FirstLink: 1407
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -1.4021094, y: 2.71, z: 0.8795487}
+  - Position: {x: -1.4021096, y: 2.71, z: 0.8795497}
     Normal: {x: 0, y: 1, z: -0}
     Column: 1022
     FirstLink: 1415
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: 0.8795487}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 0.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1026
     FirstLink: 1420
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.40210935, y: 9.327332, z: 0.8795487}
+  - Position: {x: -0.4021096, y: 9.327333, z: 0.8795497}
     Normal: {x: 0, y: 1, z: -0}
     Column: 1027
     FirstLink: 1424
     LinkCount: 3
     Boundary: 1
-  - Position: {x: 0.39789066, y: 2.1018882, z: 0.8795487}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 0.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1031
     FirstLink: 1427
     LinkCount: 4
     Boundary: 1
-  - Position: {x: 1.1978906, y: 2.71, z: 0.8795487}
+  - Position: {x: 1.1978904, y: 2.71, z: 0.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1035
     FirstLink: 1431
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 1.3978907, y: 2.71, z: 0.8795487}
+  - Position: {x: 1.3978904, y: 2.71, z: 0.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1036
     FirstLink: 1436
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 1.5978907, y: 2.71, z: 0.8795487}
+  - Position: {x: 1.5978905, y: 2.71, z: 0.8795497}
     Normal: {x: -0, y: 1, z: 0}
     Column: 1037
     FirstLink: 1444
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 1.7978907, y: 2.71, z: 0.8795487}
+  - Position: {x: 1.7978904, y: 2.71, z: 0.8795497}
     Normal: {x: -0, y: 1, z: 0}
     Column: 1038
     FirstLink: 1452
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -2.0021093, y: 2.71, z: 1.0795487}
+  - Position: {x: -2.0021095, y: 2.71, z: 1.0795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1048
     FirstLink: 1457
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.8021094, y: 2.71, z: 1.0795487}
+  - Position: {x: -1.8021096, y: 2.71, z: 1.0795497}
     Normal: {x: 0, y: 1, z: -0}
     Column: 1049
     FirstLink: 1460
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.6021093, y: 2.71, z: 1.0795487}
+  - Position: {x: -1.6021096, y: 2.71, z: 1.0795497}
     Normal: {x: 0, y: 1, z: -0}
     Column: 1050
     FirstLink: 1465
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.4021094, y: 2.71, z: 1.0795487}
+  - Position: {x: -1.4021096, y: 2.71, z: 1.0795497}
     Normal: {x: 0, y: 1, z: -0}
     Column: 1051
     FirstLink: 1470
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: 1.0795487}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 1.0795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1055
     FirstLink: 1473
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: 1.0795487}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 1.0795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1056
     FirstLink: 1477
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.40210935, y: 9.327332, z: 1.0795487}
+  - Position: {x: -0.4021096, y: 9.327333, z: 1.0795497}
     Normal: {x: -0, y: 1, z: 0}
     Column: 1056
     FirstLink: 1482
     LinkCount: 2
     Boundary: 1
-  - Position: {x: 0.19789067, y: 2.1018882, z: 1.0795487}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 1.0795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1059
     FirstLink: 1484
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.19789067, y: 9.327332, z: 1.0795487}
+  - Position: {x: 0.19789043, y: 9.327333, z: 1.0795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1059
     FirstLink: 1489
     LinkCount: 1
     Boundary: 1
-  - Position: {x: 0.39789066, y: 2.1018882, z: 1.0795487}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 1.0795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1060
     FirstLink: 1490
     LinkCount: 4
     Boundary: 1
-  - Position: {x: 1.1978906, y: 2.71, z: 1.0795487}
+  - Position: {x: 1.1978904, y: 2.71, z: 1.0795497}
     Normal: {x: -0, y: 1, z: 0}
     Column: 1064
     FirstLink: 1494
     LinkCount: 3
     Boundary: 1
-  - Position: {x: 1.3978907, y: 2.71, z: 1.0795487}
+  - Position: {x: 1.3978904, y: 2.71, z: 1.0795497}
     Normal: {x: -0, y: 1, z: 0}
     Column: 1065
     FirstLink: 1497
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 1.5978907, y: 2.71, z: 1.0795487}
+  - Position: {x: 1.5978905, y: 2.71, z: 1.0795497}
     Normal: {x: -0, y: 1, z: 0}
     Column: 1066
     FirstLink: 1502
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 1.7978907, y: 2.71, z: 1.0795487}
+  - Position: {x: 1.7978904, y: 2.71, z: 1.0795497}
     Normal: {x: -0, y: 1, z: 0}
     Column: 1067
     FirstLink: 1507
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: 1.2795488}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 1.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1084
     FirstLink: 1510
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: 1.2795488}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 1.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1085
     FirstLink: 1516
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.1018882, z: 1.2795488}
+  - Position: {x: -0.20210958, y: 2.1018884, z: 1.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1086
     FirstLink: 1523
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.20210934, y: 9.327332, z: 1.2795488}
+  - Position: {x: -0.20210958, y: 9.327333, z: 1.2795497}
     Normal: {x: -0, y: 1, z: 0}
     Column: 1086
     FirstLink: 1529
     LinkCount: 2
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 2.1018882, z: 1.2795488}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: 1.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1087
     FirstLink: 1531
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 9.327332, z: 1.2795488}
+  - Position: {x: -0.0021095797, y: 9.327333, z: 1.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1087
     FirstLink: 1537
     LinkCount: 2
     Boundary: 1
-  - Position: {x: 0.19789067, y: 2.1018882, z: 1.2795488}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 1.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1088
     FirstLink: 1539
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.39789066, y: 2.1018882, z: 1.2795488}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 1.2795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1089
     FirstLink: 1546
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.1018882, z: 1.4795488}
+  - Position: {x: -0.8021096, y: 2.1018884, z: 1.4795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1112
     FirstLink: 1552
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: 1.4795488}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 1.4795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1113
     FirstLink: 1557
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: 1.4795488}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 1.4795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1114
     FirstLink: 1564
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: 1.4795488}
+  - Position: {x: -0.20210958, y: 2.1018884, z: 1.4795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1115
     FirstLink: 1572
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: 1.4795488}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: 1.4795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1116
     FirstLink: 1580
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: 1.4795488}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 1.4795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1117
     FirstLink: 1588
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: 1.4795488}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 1.4795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1118
     FirstLink: 1596
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.5978907, y: 2.1018882, z: 1.4795488}
+  - Position: {x: 0.59789044, y: 2.1018884, z: 1.4795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1119
     FirstLink: 1603
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.1018882, z: 1.6795487}
+  - Position: {x: -1.2021096, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1139
     FirstLink: 1608
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.1018882, z: 1.6795487}
+  - Position: {x: -1.0021096, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1140
     FirstLink: 1611
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.1018882, z: 1.6795487}
+  - Position: {x: -0.8021096, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1141
     FirstLink: 1617
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: 1.6795487}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1142
     FirstLink: 1624
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.1018882, z: 1.6795487}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1143
     FirstLink: 1632
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: 1.6795487}
+  - Position: {x: -0.20210958, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1144
     FirstLink: 1640
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: 1.6795487}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1145
     FirstLink: 1648
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: 1.6795487}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1146
     FirstLink: 1656
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: 1.6795487}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1147
     FirstLink: 1664
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.1018882, z: 1.6795487}
+  - Position: {x: 0.59789044, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1148
     FirstLink: 1672
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.79789066, y: 2.1018882, z: 1.6795487}
+  - Position: {x: 0.7978904, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1149
     FirstLink: 1679
     LinkCount: 6
     Boundary: 1
-  - Position: {x: 0.99789065, y: 2.1018882, z: 1.6795487}
+  - Position: {x: 0.9978904, y: 2.1018884, z: 1.6795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1150
     FirstLink: 1685
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.1018882, z: 1.8795488}
+  - Position: {x: -1.2021096, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1168
     FirstLink: 1688
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.1018882, z: 1.8795488}
+  - Position: {x: -1.0021096, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1169
     FirstLink: 1693
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 2.1018882, z: 1.8795488}
+  - Position: {x: -0.8021096, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1170
     FirstLink: 1701
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.1018882, z: 1.8795488}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1171
     FirstLink: 1709
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.1018882, z: 1.8795488}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1172
     FirstLink: 1717
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: 1.8795488}
+  - Position: {x: -0.20210958, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1173
     FirstLink: 1725
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: 1.8795488}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1174
     FirstLink: 1733
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: 1.8795488}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1175
     FirstLink: 1741
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: 1.8795488}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1176
     FirstLink: 1749
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.1018882, z: 1.8795488}
+  - Position: {x: 0.59789044, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1177
     FirstLink: 1757
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.1018882, z: 1.8795488}
+  - Position: {x: 0.7978904, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1178
     FirstLink: 1765
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 2.1018882, z: 1.8795488}
+  - Position: {x: 0.9978904, y: 2.1018884, z: 1.8795497}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1179
     FirstLink: 1773
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.1018882, z: 2.0795488}
+  - Position: {x: -1.2021096, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1197
     FirstLink: 1778
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.1018882, z: 2.0795488}
+  - Position: {x: -1.0021096, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1198
     FirstLink: 1783
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 2.1018882, z: 2.0795488}
+  - Position: {x: -0.8021096, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1199
     FirstLink: 1791
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.1018882, z: 2.0795488}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1200
     FirstLink: 1799
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.1018882, z: 2.0795488}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1201
     FirstLink: 1807
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: 2.0795488}
+  - Position: {x: -0.20210958, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1202
     FirstLink: 1815
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: 2.0795488}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1203
     FirstLink: 1823
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: 2.0795488}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1204
     FirstLink: 1831
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: 2.0795488}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1205
     FirstLink: 1839
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.1018882, z: 2.0795488}
+  - Position: {x: 0.59789044, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1206
     FirstLink: 1847
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.1018882, z: 2.0795488}
+  - Position: {x: 0.7978904, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1207
     FirstLink: 1855
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 2.1018882, z: 2.0795488}
+  - Position: {x: 0.9978904, y: 2.1018884, z: 2.0795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1208
     FirstLink: 1863
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.1018882, z: 2.279549}
+  - Position: {x: -1.2021096, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1226
     FirstLink: 1868
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.1018882, z: 2.279549}
+  - Position: {x: -1.0021096, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1227
     FirstLink: 1873
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 2.1018882, z: 2.279549}
+  - Position: {x: -0.8021096, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1228
     FirstLink: 1881
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.1018882, z: 2.279549}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1229
     FirstLink: 1889
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.1018882, z: 2.279549}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1230
     FirstLink: 1897
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.1018882, z: 2.279549}
+  - Position: {x: -0.20210958, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1231
     FirstLink: 1905
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.1018882, z: 2.279549}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1232
     FirstLink: 1913
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.1018882, z: 2.279549}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1233
     FirstLink: 1921
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.1018882, z: 2.279549}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1234
     FirstLink: 1929
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.1018882, z: 2.279549}
+  - Position: {x: 0.59789044, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1235
     FirstLink: 1937
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.1018882, z: 2.279549}
+  - Position: {x: 0.7978904, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1236
     FirstLink: 1945
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 2.1018882, z: 2.279549}
+  - Position: {x: 0.9978904, y: 2.1018884, z: 2.2795498}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1237
     FirstLink: 1953
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.1018882, z: 2.4795487}
+  - Position: {x: -1.2021096, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1255
     FirstLink: 1958
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.1018882, z: 2.4795487}
+  - Position: {x: -1.0021096, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1256
     FirstLink: 1961
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.1018882, z: 2.4795487}
+  - Position: {x: -0.8021096, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1257
     FirstLink: 1966
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.1018882, z: 2.4795487}
+  - Position: {x: -0.6021096, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1258
     FirstLink: 1971
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.1018882, z: 2.4795487}
+  - Position: {x: -0.4021096, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1259
     FirstLink: 1976
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.1018882, z: 2.4795487}
+  - Position: {x: -0.20210958, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1260
     FirstLink: 1981
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 2.1018882, z: 2.4795487}
+  - Position: {x: -0.0021095797, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1261
     FirstLink: 1986
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.19789067, y: 2.1018882, z: 2.4795487}
+  - Position: {x: 0.19789043, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1262
     FirstLink: 1991
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.39789066, y: 2.1018882, z: 2.4795487}
+  - Position: {x: 0.39789042, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1263
     FirstLink: 1996
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.5978907, y: 2.1018882, z: 2.4795487}
+  - Position: {x: 0.59789044, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1264
     FirstLink: 2001
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.79789066, y: 2.1018882, z: 2.4795487}
+  - Position: {x: 0.7978904, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1265
     FirstLink: 2006
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.99789065, y: 2.1018882, z: 2.4795487}
+  - Position: {x: 0.9978904, y: 2.1018884, z: 2.4795496}
     Normal: {x: 0, y: 1, z: 0}
     Column: 1266
     FirstLink: 2011
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.7210896, z: 3.0795488}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.2021096, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1342
     FirstLink: 2014
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.0021096, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1343
     FirstLink: 2017
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.8021096, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1344
     FirstLink: 2022
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.6021096, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1345
     FirstLink: 2027
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.4021096, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1346
     FirstLink: 2032
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.20210958, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1347
     FirstLink: 2037
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.0021095797, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1348
     FirstLink: 2042
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.19789067, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.19789043, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1349
     FirstLink: 2047
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.39789066, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.39789042, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1350
     FirstLink: 2052
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.5978907, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.59789044, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1351
     FirstLink: 2057
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.79789066, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.7978904, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1352
     FirstLink: 2062
     LinkCount: 5
     Boundary: 1
-  - Position: {x: 0.99789065, y: 2.7210896, z: 3.0795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.9978904, y: 2.7210896, z: 3.0795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1353
     FirstLink: 2067
     LinkCount: 3
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.7210896, z: 3.279549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.2021096, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1371
     FirstLink: 2070
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210896, z: 3.279549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.0021096, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1372
     FirstLink: 2075
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 2.7210896, z: 3.279549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.8021096, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1373
     FirstLink: 2083
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.7210896, z: 3.279549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.6021096, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1374
     FirstLink: 2091
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.7210896, z: 3.279549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.4021096, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1375
     FirstLink: 2099
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210896, z: 3.279549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.20210958, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1376
     FirstLink: 2107
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210896, z: 3.279549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.0021095797, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1377
     FirstLink: 2115
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210896, z: 3.279549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.19789043, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1378
     FirstLink: 2123
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210896, z: 3.279549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.39789042, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1379
     FirstLink: 2131
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.7210896, z: 3.279549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.59789044, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1380
     FirstLink: 2139
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.7210896, z: 3.279549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.7978904, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1381
     FirstLink: 2147
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 2.7210896, z: 3.279549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.9978904, y: 2.7210896, z: 3.2795498}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1382
     FirstLink: 2155
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.7210896, z: 3.4795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.2021096, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1400
     FirstLink: 2160
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210896, z: 3.4795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.0021096, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1401
     FirstLink: 2165
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 2.7210896, z: 3.4795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.8021096, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1402
     FirstLink: 2173
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.7210896, z: 3.4795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.6021096, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1403
     FirstLink: 2181
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.7210896, z: 3.4795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.4021096, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1404
     FirstLink: 2189
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210896, z: 3.4795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.20210958, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1405
     FirstLink: 2197
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210896, z: 3.4795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.0021095797, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1406
     FirstLink: 2205
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210896, z: 3.4795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.19789043, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1407
     FirstLink: 2213
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210896, z: 3.4795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.39789042, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1408
     FirstLink: 2221
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.7210896, z: 3.4795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.59789044, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1409
     FirstLink: 2229
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.7210896, z: 3.4795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.7978904, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1410
     FirstLink: 2237
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 2.7210896, z: 3.4795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.9978904, y: 2.7210896, z: 3.4795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1411
     FirstLink: 2245
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.7210894, z: 3.6795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.2021096, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1429
     FirstLink: 2250
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210894, z: 3.6795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.0021096, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1430
     FirstLink: 2255
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 2.7210894, z: 3.6795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.8021096, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1431
     FirstLink: 2263
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.7210894, z: 3.6795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.6021096, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1432
     FirstLink: 2271
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.7210894, z: 3.6795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.4021096, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1433
     FirstLink: 2279
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210894, z: 3.6795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.20210958, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1434
     FirstLink: 2287
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210894, z: 3.6795487}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.0021095797, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1435
     FirstLink: 2295
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210894, z: 3.6795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.19789043, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1436
     FirstLink: 2303
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210894, z: 3.6795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.39789042, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1437
     FirstLink: 2311
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.7210894, z: 3.6795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.59789044, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1438
     FirstLink: 2319
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.7210894, z: 3.6795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.7978904, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1439
     FirstLink: 2327
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 2.7210894, z: 3.6795487}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.9978904, y: 2.7210896, z: 3.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1440
     FirstLink: 2335
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.7210894, z: 3.8795488}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.2021096, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1458
     FirstLink: 2340
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210894, z: 3.8795488}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.0021096, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1459
     FirstLink: 2345
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 2.7210894, z: 3.8795488}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.8021096, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1460
     FirstLink: 2353
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.7210894, z: 3.8795488}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.6021096, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1461
     FirstLink: 2361
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.7210894, z: 3.8795488}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.4021096, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1462
     FirstLink: 2369
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210894, z: 3.8795488}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.20210958, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1463
     FirstLink: 2377
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210894, z: 3.8795488}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.0021095797, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1464
     FirstLink: 2385
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210894, z: 3.8795488}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.19789043, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1465
     FirstLink: 2393
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210894, z: 3.8795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.39789042, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1466
     FirstLink: 2401
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.7210894, z: 3.8795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.59789044, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1467
     FirstLink: 2409
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.7210894, z: 3.8795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.7978904, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1468
     FirstLink: 2417
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 2.7210894, z: 3.8795488}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.9978904, y: 2.7210896, z: 3.8795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1469
     FirstLink: 2425
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.7210894, z: 4.079549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.2021096, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1487
     FirstLink: 2430
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210894, z: 4.079549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.0021096, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1488
     FirstLink: 2435
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.80210936, y: 2.7210894, z: 4.079549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.8021096, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1489
     FirstLink: 2443
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.7210894, z: 4.079549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.6021096, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1490
     FirstLink: 2451
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.7210894, z: 4.079549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.4021096, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1491
     FirstLink: 2459
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210894, z: 4.079549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.20210958, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1492
     FirstLink: 2467
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210894, z: 4.079549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.0021095797, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1493
     FirstLink: 2475
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210894, z: 4.079549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.19789043, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1494
     FirstLink: 2483
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210894, z: 4.079549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.39789042, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1495
     FirstLink: 2491
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.7210894, z: 4.079549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.59789044, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1496
     FirstLink: 2499
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.7210894, z: 4.079549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.7978904, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1497
     FirstLink: 2507
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 2.7210894, z: 4.079549}
-    Normal: {x: -0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.9978904, y: 2.7210896, z: 4.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1498
     FirstLink: 2515
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.2021093, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.2021096, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1516
     FirstLink: 2520
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.0021096, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1517
     FirstLink: 2524
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.8021096, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1518
     FirstLink: 2531
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.6021096, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1519
     FirstLink: 2539
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.4021096, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1520
     FirstLink: 2547
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.20210958, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1521
     FirstLink: 2555
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.0021095797, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1522
     FirstLink: 2563
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.19789043, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1523
     FirstLink: 2571
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.39789042, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1524
     FirstLink: 2579
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.59789044, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1525
     FirstLink: 2587
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.7978904, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1526
     FirstLink: 2595
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.99789065, y: 2.7210894, z: 4.2795486}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.9978904, y: 2.7210896, z: 4.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1527
     FirstLink: 2603
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -1.0021096, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1546
     FirstLink: 2608
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.8021096, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1547
     FirstLink: 2614
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.6021096, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1548
     FirstLink: 2622
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.4021096, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1549
     FirstLink: 2630
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.20210958, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1550
     FirstLink: 2638
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: -0.0021095797, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1551
     FirstLink: 2646
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.19789043, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1552
     FirstLink: 2654
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.39789042, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1553
     FirstLink: 2662
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.59789044, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1554
     FirstLink: 2670
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.7978904, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1555
     FirstLink: 2678
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.99789065, y: 2.7210894, z: 4.479549}
-    Normal: {x: 0, y: 1, z: 0.00000013461577}
+  - Position: {x: 0.9978904, y: 2.7210896, z: 4.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1556
     FirstLink: 2685
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210884, z: 4.6795487}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -1.0021096, y: 2.7210884, z: 4.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1575
     FirstLink: 2689
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.7210884, z: 4.6795487}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.8021096, y: 2.7210884, z: 4.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1576
     FirstLink: 2694
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.7210884, z: 4.6795487}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.6021096, y: 2.7210884, z: 4.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1577
     FirstLink: 2702
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.7210884, z: 4.6795487}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.4021096, y: 2.7210884, z: 4.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1578
     FirstLink: 2710
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210884, z: 4.6795487}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.20210958, y: 2.7210884, z: 4.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1579
     FirstLink: 2718
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210884, z: 4.6795487}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.0021095797, y: 2.7210884, z: 4.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1580
     FirstLink: 2726
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210884, z: 4.6795487}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.19789043, y: 2.7210884, z: 4.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1581
     FirstLink: 2734
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210884, z: 4.6795487}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.39789042, y: 2.7210884, z: 4.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1582
     FirstLink: 2742
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.7210884, z: 4.6795487}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.59789044, y: 2.7210884, z: 4.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1583
     FirstLink: 2750
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.7210884, z: 4.6795487}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.7978904, y: 2.7210884, z: 4.6795497}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1584
     FirstLink: 2758
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210884, z: 4.879549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -1.0021096, y: 2.7210884, z: 4.87955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1604
     FirstLink: 2764
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.7210884, z: 4.879549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.8021096, y: 2.7210884, z: 4.87955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1605
     FirstLink: 2769
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.6021094, y: 2.7210884, z: 4.879549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.6021096, y: 2.7210884, z: 4.87955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1606
     FirstLink: 2777
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.7210884, z: 4.879549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.4021096, y: 2.7210884, z: 4.87955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1607
     FirstLink: 2785
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210884, z: 4.879549}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.20210958, y: 2.7210884, z: 4.87955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1608
     FirstLink: 2793
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210884, z: 4.879549}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.0021095797, y: 2.7210884, z: 4.87955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1609
     FirstLink: 2801
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210884, z: 4.879549}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.19789043, y: 2.7210884, z: 4.87955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1610
     FirstLink: 2809
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210884, z: 4.879549}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.39789042, y: 2.7210884, z: 4.87955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1611
     FirstLink: 2817
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.7210884, z: 4.879549}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.59789044, y: 2.7210884, z: 4.87955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1612
     FirstLink: 2825
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.79789066, y: 2.7210884, z: 4.879549}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.7978904, y: 2.7210884, z: 4.87955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1613
     FirstLink: 2833
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -1.0021094, y: 2.7210882, z: 5.079549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -1.0021096, y: 2.7210884, z: 5.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1633
     FirstLink: 2838
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.7210882, z: 5.079549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.8021096, y: 2.7210884, z: 5.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1634
     FirstLink: 2842
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.7210882, z: 5.079549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.6021096, y: 2.7210884, z: 5.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1635
     FirstLink: 2849
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.40210935, y: 2.7210882, z: 5.079549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.4021096, y: 2.7210884, z: 5.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1636
     FirstLink: 2857
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210882, z: 5.079549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.20210958, y: 2.7210884, z: 5.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1637
     FirstLink: 2865
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210882, z: 5.079549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.0021095797, y: 2.7210884, z: 5.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1638
     FirstLink: 2873
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210882, z: 5.079549}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.19789043, y: 2.7210884, z: 5.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1639
     FirstLink: 2881
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210882, z: 5.079549}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.39789042, y: 2.7210884, z: 5.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1640
     FirstLink: 2889
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.5978907, y: 2.7210882, z: 5.079549}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.59789044, y: 2.7210884, z: 5.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1641
     FirstLink: 2897
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.79789066, y: 2.7210882, z: 5.079549}
-    Normal: {x: -0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.7978904, y: 2.7210884, z: 5.07955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1642
     FirstLink: 2904
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.80210936, y: 2.7210882, z: 5.2795486}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.8021096, y: 2.7210884, z: 5.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1663
     FirstLink: 2908
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.7210882, z: 5.2795486}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.6021096, y: 2.7210884, z: 5.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1664
     FirstLink: 2913
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.7210882, z: 5.2795486}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.4021096, y: 2.7210884, z: 5.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1665
     FirstLink: 2920
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.20210934, y: 2.7210882, z: 5.2795486}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.20210958, y: 2.7210884, z: 5.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1666
     FirstLink: 2928
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210882, z: 5.2795486}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.0021095797, y: 2.7210884, z: 5.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1667
     FirstLink: 2936
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210882, z: 5.2795486}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.19789043, y: 2.7210884, z: 5.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1668
     FirstLink: 2944
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210882, z: 5.2795486}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.39789042, y: 2.7210884, z: 5.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1669
     FirstLink: 2952
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.5978907, y: 2.7210882, z: 5.2795486}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.59789044, y: 2.7210884, z: 5.2795496}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1670
     FirstLink: 2959
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.6021094, y: 2.7210882, z: 5.479549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.6021096, y: 2.7210884, z: 5.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1693
     FirstLink: 2964
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.7210882, z: 5.479549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.4021096, y: 2.7210884, z: 5.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1694
     FirstLink: 2969
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.7210882, z: 5.479549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.20210958, y: 2.7210884, z: 5.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1695
     FirstLink: 2976
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210882, z: 5.479549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: -0.0021095797, y: 2.7210884, z: 5.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1696
     FirstLink: 2984
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210882, z: 5.479549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.19789043, y: 2.7210884, z: 5.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1697
     FirstLink: 2992
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.39789066, y: 2.7210882, z: 5.479549}
-    Normal: {x: 0, y: 1, z: 0.0000002421725}
+  - Position: {x: 0.39789042, y: 2.7210884, z: 5.47955}
+    Normal: {x: 0, y: 1, z: 0}
     Column: 1698
     FirstLink: 3000
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.7210894, z: 5.6795487}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.4021096, y: 2.7210896, z: 5.6795497}
+    Normal: {x: -0, y: 1, z: 0.00000020144816}
     Column: 1723
     FirstLink: 3006
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.7210894, z: 5.6795487}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.20210958, y: 2.7210896, z: 5.6795497}
+    Normal: {x: -0, y: 1, z: 0.00000020144816}
     Column: 1724
     FirstLink: 3012
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210894, z: 5.6795487}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.0021095797, y: 2.7210896, z: 5.6795497}
+    Normal: {x: -0, y: 1, z: 0.00000020144816}
     Column: 1725
     FirstLink: 3020
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210894, z: 5.6795487}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: 0.19789043, y: 2.7210896, z: 5.6795497}
+    Normal: {x: -0, y: 1, z: 0.00000020144816}
     Column: 1726
     FirstLink: 3028
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.39789066, y: 2.7210894, z: 5.6795487}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: 0.39789042, y: 2.7210896, z: 5.6795497}
+    Normal: {x: -0, y: 1, z: 0.00000020144816}
     Column: 1727
     FirstLink: 3035
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.7210894, z: 5.879549}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.4021096, y: 2.7210896, z: 5.87955}
+    Normal: {x: 0, y: 1, z: 0.00000020144816}
     Column: 1752
     FirstLink: 3039
     LinkCount: 5
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.7210894, z: 5.879549}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.20210958, y: 2.7210896, z: 5.87955}
+    Normal: {x: -0, y: 1, z: 0.00000020144816}
     Column: 1753
     FirstLink: 3044
     LinkCount: 8
     Boundary: 0
-  - Position: {x: -0.0021093413, y: 2.7210894, z: 5.879549}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.0021095797, y: 2.7210896, z: 5.87955}
+    Normal: {x: -0, y: 1, z: 0.00000020144816}
     Column: 1754
     FirstLink: 3052
     LinkCount: 8
     Boundary: 0
-  - Position: {x: 0.19789067, y: 2.7210894, z: 5.879549}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: 0.19789043, y: 2.7210896, z: 5.87955}
+    Normal: {x: -0, y: 1, z: 0.00000020144816}
     Column: 1755
     FirstLink: 3060
     LinkCount: 6
     Boundary: 1
-  - Position: {x: -0.40210935, y: 2.7210894, z: 6.079549}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.4021096, y: 2.7210894, z: 6.07955}
+    Normal: {x: 0, y: 1, z: 0.00000020144816}
     Column: 1781
     FirstLink: 3066
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.7210894, z: 6.079549}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.20210958, y: 2.7210894, z: 6.07955}
+    Normal: {x: 0, y: 1, z: 0.00000020144816}
     Column: 1782
     FirstLink: 3070
     LinkCount: 7
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 2.7210894, z: 6.079549}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.0021095797, y: 2.7210894, z: 6.07955}
+    Normal: {x: -0, y: 1, z: 0.00000020144816}
     Column: 1783
     FirstLink: 3077
     LinkCount: 7
     Boundary: 1
-  - Position: {x: 0.19789067, y: 2.7210894, z: 6.079549}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: 0.19789043, y: 2.7210894, z: 6.07955}
+    Normal: {x: -0, y: 1, z: 0.00000020144816}
     Column: 1784
     FirstLink: 3084
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.20210934, y: 2.7210894, z: 6.2795486}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.20210958, y: 2.7210894, z: 6.2795496}
+    Normal: {x: 0, y: 1, z: 0.00000020144816}
     Column: 1811
     FirstLink: 3088
     LinkCount: 4
     Boundary: 1
-  - Position: {x: -0.0021093413, y: 2.7210894, z: 6.2795486}
-    Normal: {x: 0, y: 1, z: 0}
+  - Position: {x: -0.0021095797, y: 2.7210894, z: 6.2795496}
+    Normal: {x: 0, y: 1, z: 0.00000020144816}
     Column: 1812
     FirstLink: 3092
     LinkCount: 4

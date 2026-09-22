@@ -10,7 +10,14 @@ namespace WaveByWave.Enemies
     {
         private readonly Dictionary<int2, List<int>> _cells = new();
         private readonly Stack<List<int>> _pool = new();
-        private readonly Dictionary<int, float2> _positions = new();
+        private struct Entry
+        {
+            public float2 Position;
+            public int2 Cell;
+            public int Index;
+        }
+
+        private readonly Dictionary<int, Entry> _entries = new();
         private float _diameter;
 
         public EnemyShipSpatialIndex(float radius = 1f) => _diameter = math.max(1f, radius * 2f);
@@ -26,19 +33,48 @@ namespace WaveByWave.Enemies
         public void Set(int id, float2 position)
         {
             var cell = (int2)math.floor(position / _diameter);
-            if (_positions.TryGetValue(id, out var old))
+            if (_entries.TryGetValue(id, out var old))
             {
-                var oldCell = (int2)math.floor(old / _diameter);
-                if (math.all(cell == oldCell)) { _positions[id] = position; return; }
-                _cells[oldCell].Remove(id);
+                if (math.all(cell == old.Cell))
+                {
+                    old.Position = position;
+                    _entries[id] = old;
+                    return;
+                }
+                RemoveFromCell(old);
             }
-            _positions[id] = position;
             if (!_cells.TryGetValue(cell, out var list))
             {
                 list = _pool.Count > 0 ? _pool.Pop() : new List<int>(8);
                 _cells.Add(cell, list);
             }
+            _entries[id] = new Entry { Position = position, Cell = cell, Index = list.Count };
             list.Add(id);
+        }
+
+        public void Remove(int id)
+        {
+            if (!_entries.TryGetValue(id, out var entry)) return;
+            RemoveFromCell(entry);
+            _entries.Remove(id);
+        }
+
+        private void RemoveFromCell(Entry entry)
+        {
+            var list = _cells[entry.Cell];
+            var last = list.Count - 1;
+            if (entry.Index != last)
+            {
+                var movedId = list[last];
+                list[entry.Index] = movedId;
+                var moved = _entries[movedId];
+                moved.Index = entry.Index;
+                _entries[movedId] = moved;
+            }
+            list.RemoveAt(last);
+            if (list.Count != 0) return;
+            _cells.Remove(entry.Cell);
+            _pool.Push(list);
         }
 
         public bool IsClear(float2 position)
@@ -48,7 +84,7 @@ namespace WaveByWave.Enemies
             for (var x = -1; x <= 1; x++)
                 if (_cells.TryGetValue(cell + new int2(x, z), out var list))
                     foreach (var id in list)
-                        if (math.distancesq(position, _positions[id]) < _diameter * _diameter) return false;
+                        if (math.distancesq(position, _entries[id].Position) < _diameter * _diameter) return false;
             return true;
         }
 
@@ -71,11 +107,27 @@ namespace WaveByWave.Enemies
             }
         }
 
+        public void CollectWithinRadius(float2 position, float radius, List<int> result)
+        {
+            result.Clear();
+            var radiusSq = radius * radius;
+            var min = (int2)math.floor((position - radius) / _diameter);
+            var max = (int2)math.floor((position + radius) / _diameter);
+            for (var z = min.y; z <= max.y; z++)
+            for (var x = min.x; x <= max.x; x++)
+            {
+                if (!_cells.TryGetValue(new int2(x, z), out var list)) continue;
+                foreach (var id in list)
+                    if (math.distancesq(position, _entries[id].Position) <= radiusSq)
+                        result.Add(id);
+            }
+        }
+
         public void Clear()
         {
             foreach (var list in _cells.Values) { list.Clear(); _pool.Push(list); }
             _cells.Clear();
-            _positions.Clear();
+            _entries.Clear();
         }
     }
 }

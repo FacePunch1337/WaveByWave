@@ -39,6 +39,7 @@ namespace WaveByWave.Enemies
             public NetworkShipController Ship;
             public ShipCannonBattery Battery;
             public Vector3 Position;
+            public float CollisionRadius;
         }
 
         private struct Projectile
@@ -66,6 +67,8 @@ namespace WaveByWave.Enemies
         private static readonly ProfilerMarker SimulationMarker = new("WaveByWave.Fleet.Simulation");
         private readonly List<Entity> _remove = new();
         private readonly EnemyShipSpatialIndex _fleet = new();
+        private readonly List<int> _playerContactCandidates = new();
+        private bool _fleetInitialized;
         private RaycastHit[] _collisionHits = new RaycastHit[64];
         private readonly Collider[] _spawnOverlaps = new Collider[64];
         private readonly List<Vector3> _observers = new();
@@ -179,6 +182,7 @@ namespace WaveByWave.Enemies
             _collisionPoses.Clear();
             CollisionRevision++;
             _fleet.Clear();
+            _fleetInitialized = false;
             return true;
         }
 
@@ -200,8 +204,12 @@ namespace WaveByWave.Enemies
             }
             _nextSimulation = now + 1f / Mathf.Max(1, Definition.SimulationRate);
             if (!EnsureCollisionGeometry()) return;
-            using (var states = _ships.ToComponentDataArray<DotsEnemyShipState>(Allocator.Temp))
+            if (!_fleetInitialized)
+            {
+                using var states = _ships.ToComponentDataArray<DotsEnemyShipState>(Allocator.Temp);
                 _fleet.Rebuild(states, _authoredHullRadius);
+                _fleetInitialized = true;
+            }
             SpawnBatch();
 
             var targets = new NativeArray<EnemyShipTarget>(_targets.Count, Allocator.TempJob);
@@ -232,6 +240,7 @@ namespace WaveByWave.Enemies
                     Simulate(entity, ref state, ref brain, now);
                     simulated++;
                     if (state.Health > 0) _fleet.Set(state.Id, state.Position.xz);
+                    else _fleet.Remove(state.Id);
                     manager.SetComponentData(entity, state);
                     manager.SetComponentData(entity, brain);
                     CachePhysicsFrame(state);
@@ -248,6 +257,7 @@ namespace WaveByWave.Enemies
                 if (!manager.Exists(entity)) continue;
                 var state = manager.GetComponentData<DotsEnemyShipState>(entity);
                 _byId.Remove(state.Id);
+                _fleet.Remove(state.Id);
                 _physicsFrames.Remove(state.Id);
                 _collisionPoses.Remove(state.Id);
                 CollisionRevision++;
@@ -268,7 +278,9 @@ namespace WaveByWave.Enemies
                 if (ship == null || !ship.IsSpawned || !ship.IsServer) continue;
                 ship.TryGetComponent<ShipCannonBattery>(out var battery);
                 _targets.Add(new Target { Ship = ship, Battery = battery,
-                    Position = ship.SimulationPosition });
+                    Position = ship.SimulationPosition,
+                    CollisionRadius = ship.ContactBoundsCenter.magnitude +
+                        ship.ContactBoundsHalfExtents.magnitude });
                 _observers.Add(ship.SimulationPosition);
             }
             _wind ??= Object.FindFirstObjectByType<NetworkWindController>();
@@ -660,6 +672,7 @@ namespace WaveByWave.Enemies
             if (state.Health <= 0)
             {
                 state.DeathAt = Now;
+                _fleet.Remove(id);
                 DotsEnemyRuntime.Instance?.DespawnGroup(DotsEnemyRuntime.CrewGroupForShip(id));
             }
             manager.SetComponentData(entity, state);
@@ -710,6 +723,31 @@ namespace WaveByWave.Enemies
             return best;
         }
 
+        // Player-ship broad phase only. Pursuit still updates every enemy independent
+        // of range; a distant box cannot touch this hull during the current step.
+        internal bool FillCollisionPosesNear(Vector3 position, float radius,
+            Dictionary<int, RigidTransform> result)
+        {
+            _fleet.CollectWithinRadius(new float2(position.x, position.z), radius,
+                _playerContactCandidates);
+            var changed = false;
+            var count = 0;
+            foreach (var id in _playerContactCandidates)
+            {
+                if (!_collisionPoses.TryGetValue(id, out var pose)) continue;
+                count++;
+                if (!result.TryGetValue(id, out var old) ||
+                    math.any(old.pos != pose.pos) || math.any(old.rot.value != pose.rot.value))
+                    changed = true;
+            }
+            changed |= result.Count != count;
+            if (!changed) return false;
+            result.Clear();
+            foreach (var id in _playerContactCandidates)
+                if (_collisionPoses.TryGetValue(id, out var pose)) result.Add(id, pose);
+            return true;
+        }
+
         private void RestorePhysicsViews()
         {
             var restored = false;
@@ -752,6 +790,7 @@ namespace WaveByWave.Enemies
             _spawns.Clear();
             _projectiles.Clear();
             _fleet.Clear();
+            _fleetInitialized = false;
             ReleaseCollisionGeometry();
             _nextSimulation = 0;
             _simulationCursor = 0;

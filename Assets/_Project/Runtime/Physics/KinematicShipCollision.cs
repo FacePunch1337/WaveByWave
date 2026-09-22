@@ -235,8 +235,13 @@ namespace WaveByWave.Collision
         {
             if (!IsReady) return false;
             if (center == _fleetCenter && halfExtents == _fleetHalfExtents &&
-                ReferenceEquals(poses, _fleetPoses) && revision == _fleetRevision)
+                ReferenceEquals(poses, _fleetPoses) &&
+                (revision == _fleetRevision || _world.NumDynamicBodies == 0 &&
+                    (poses == null || poses.Count == 0)))
+            {
+                _fleetRevision = revision;
                 return !_fleetGeometryFailed;
+            }
             try
             {
                 var boundsChanged = center != _fleetCenter || halfExtents != _fleetHalfExtents;

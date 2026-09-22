@@ -116,7 +116,7 @@ namespace WaveByWave.Player
         private MovingPlatform _platform;
         private EnemyShipView _enemyShip;
         private Matrix4x4 _enemyPhysicsFrame;
-        private Vector3 _enemyLocalPosition, _enemyPreviousLocalPosition, _enemyPointVelocity;
+        private Vector3 _enemyLocalPosition, _enemyPreviousLocalPosition;
         private Quaternion _enemyLocalRotation = Quaternion.identity, _enemyPreviousLocalRotation = Quaternion.identity;
         private bool _enemyPoseInitialized;
         private int _remoteEnemyShipId;
@@ -628,11 +628,9 @@ namespace WaveByWave.Player
         public void BeforeCharacterUpdate(float deltaTime)
         {
             if (!_useKccMotor || !IsOwner || _sceneTransitioning || _enemyShip == null ||
-                !_enemyPoseInitialized || !_isGrounded) return;
+                !_enemyPoseInitialized) return;
             var next = DotsEnemyRuntime.PhysicsFrame(_enemyShip.transform);
-            var previousPoint = _enemyPhysicsFrame.MultiplyPoint3x4(_enemyLocalPosition);
             var nextPoint = next.MultiplyPoint3x4(_enemyLocalPosition);
-            _enemyPointVelocity = (nextPoint - previousPoint) / Mathf.Max(deltaTime, 0.0001f);
             // BeforeCharacterUpdate runs before KCC copies the Transform into its transient
             // state. Update that input pose, otherwise a transient-only change is overwritten.
             _kccMotor.SetPositionAndRotation(nextPoint, next.rotation * _enemyLocalRotation, false);
@@ -718,8 +716,9 @@ namespace WaveByWave.Player
                                       characterUp * jumpSpeed;
                     if (_enemyShip != null)
                     {
-                        currentVelocity += _enemyPointVelocity;
-                        _airbornePlatformMomentum = _enemyPointVelocity;
+                        // The ship-local frame continues to carry the airborne capsule.
+                        // Adding the ship's point velocity here would apply that motion twice.
+                        _airbornePlatformMomentum = Vector3.zero;
                     }
                     _isGrounded = false;
                     if (_platform != null)
@@ -913,12 +912,10 @@ namespace WaveByWave.Player
                 }
                 return;
             }
-            if (_enemyShip != null)
-            {
-                _enemyShip = null;
-                _enemyPoseInitialized = false;
-                _camera?.SetReferenceFrame(null);
-            }
+            // Keep the enemy frame through a jump, just like the player ship's
+            // airborne platform frame. Release it on water or another grounded surface.
+            if (_enemyShip != null && !_isGrounded) return;
+            if (_enemyShip != null) DetachEnemyShip();
 
             MovingPlatform supportingPlatform = null;
             if (_isGrounded && _kccMotor.GroundingStatus.GroundCollider != null)
@@ -969,12 +966,13 @@ namespace WaveByWave.Player
             if (!_useKccMotor || !IsOwner || _sceneTransitioning)
                 return;
 
-            if (_enemyShip != null && _isGrounded && !_kccMotor.MustUnground())
+            if (_enemyShip != null)
             {
                 var frame = DotsEnemyRuntime.PhysicsFrame(_enemyShip.transform);
                 var position = frame.inverse.MultiplyPoint3x4(_kccMotor.TransientPosition);
                 var rotation = Quaternion.Inverse(frame.rotation) * _kccMotor.TransientRotation;
-                if (_enemyPoseInitialized && _moveInput.sqrMagnitude <= 0.0001f)
+                if (_isGrounded && !_kccMotor.MustUnground() && _enemyPoseInitialized &&
+                    _moveInput.sqrMagnitude <= 0.0001f)
                 {
                     position = _enemyLocalPosition;
                     _kccMotor.SetTransientPosition(frame.MultiplyPoint3x4(position));
@@ -1401,8 +1399,6 @@ namespace WaveByWave.Player
 
         private void ResetClientPlatformFrame()
         {
-            if (_enemyShip != null && !_isGrounded)
-            { _enemyShip = null; _enemyPoseInitialized = false; _camera?.SetReferenceFrame(null); }
             _clientPlatformPoseInitialized = false;
             _kccPresentationPlatform = null;
             _usingClientPlatformRelativeVelocity = false;
@@ -1523,14 +1519,17 @@ namespace WaveByWave.Player
             PublishPlatformPose();
         }
 
+        private void DetachEnemyShip()
+        {
+            if (_enemyShip == null && !_enemyPoseInitialized) return;
+            _enemyShip = null;
+            _enemyPoseInitialized = false;
+            _camera?.SetReferenceFrame(null);
+        }
+
         private void ClearPlatformReference()
         {
-            if (_enemyShip != null)
-            {
-                _enemyShip = null;
-                _enemyPoseInitialized = false;
-                _camera?.SetReferenceFrame(null);
-            }
+            DetachEnemyShip();
             // Also clear a stale KCC override when the bookkeeping was already reset by
             // placement/despawn code. Leaving the override alive would keep carrying the
             // character with an old ship while the gameplay state says it is world-relative.
@@ -1553,7 +1552,7 @@ namespace WaveByWave.Player
             if (!IsOwner || !IsSpawned)
                 return;
 
-            if (_enemyShip != null && _isGrounded && _enemyPoseInitialized)
+            if (_enemyShip != null && _enemyPoseInitialized)
             {
                 _hasReplicatedPlatform.Value = false;
                 _enemyPassengerPose.Value = new EnemyShipPassengerPose { ShipId = _enemyShip.ShipId,
@@ -1813,7 +1812,7 @@ namespace WaveByWave.Player
                     // Display local walking/jumping in the ship's snapshot render frame.
                     // The motor root retains KCC collision simulation and world
                     // interpolation; only the camera/visual child is rebased.
-                    if (_enemyShip != null && _enemyPoseInitialized && _isGrounded)
+                    if (_enemyShip != null && _enemyPoseInitialized)
                     {
                         var fraction = Mathf.Clamp01((Time.time - Time.fixedTime) / Mathf.Max(Time.fixedDeltaTime, 0.0001f));
                         _presentationRoot.SetPositionAndRotation(_enemyShip.transform.TransformPoint(

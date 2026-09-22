@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using StylizedWater3;
 using Unity.Netcode;
+using Unity.Mathematics;
 using UnityEngine;
 using WaveByWave.Player;
 using WaveByWave.Collision;
@@ -115,6 +116,8 @@ namespace WaveByWave.Ships
         private Transform _planarMotionTarget;
         private MovingPlatform _movingPlatform;
         private KinematicShipCollision _geometryCollision;
+        private readonly Dictionary<int, RigidTransform> _nearbyEnemyCollisionPoses = new();
+        private uint _nearbyEnemyCollisionRevision;
         private Vector3 _collisionStartPosition;
         private Quaternion _collisionStartRotation;
         private float _previousHeading;
@@ -420,10 +423,25 @@ namespace WaveByWave.Ships
                 // AlignToWater is a sampled equilibrium, never a second pose writer.
                 var fleet = WaveByWave.Enemies.DotsEnemyShipRuntime.Instance;
                 var hasFleet = fleet != null && fleet.CanSimulate;
+                if (hasFleet)
+                {
+                    var hullRadius = ContactBoundsCenter.magnitude + ContactBoundsHalfExtents.magnitude;
+                    var enemyRadius = fleet.ContactBoundsCenter.magnitude + fleet.ContactBoundsHalfExtents.magnitude;
+                    var travel = _linearVelocity.magnitude * deltaTime +
+                        _angularVelocity.magnitude * deltaTime * hullRadius;
+                    if (fleet.FillCollisionPosesNear(_collisionStartPosition,
+                        hullRadius + enemyRadius + travel + collisionSkin + 2f,
+                        _nearbyEnemyCollisionPoses)) _nearbyEnemyCollisionRevision++;
+                }
+                else if (_nearbyEnemyCollisionPoses.Count > 0)
+                {
+                    _nearbyEnemyCollisionPoses.Clear();
+                    _nearbyEnemyCollisionRevision++;
+                }
                 var fleetReady = _geometryCollision.SetFleetObstacles(
                     hasFleet ? fleet.ContactBoundsCenter : Vector3.zero,
                     hasFleet ? fleet.ContactBoundsHalfExtents : Vector3.zero,
-                    hasFleet ? fleet.CollisionPoses : null, hasFleet ? fleet.CollisionRevision : 0);
+                    hasFleet ? _nearbyEnemyCollisionPoses : null, _nearbyEnemyCollisionRevision);
                 var incomingVelocity = _linearVelocity;
                 var resolved = fleetReady
                     ? _geometryCollision.ResolveMotion(_collisionStartPosition,

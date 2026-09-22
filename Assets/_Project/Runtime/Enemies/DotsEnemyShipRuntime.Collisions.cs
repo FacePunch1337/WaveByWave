@@ -188,7 +188,8 @@ namespace WaveByWave.Enemies
                         contactedPlayer = null;
                     }
                 foreach (var target in _targets)
-                    if (_targetHulls.TryGetValue(target.Ship.gameObject, out var hull))
+                    if (PlayerHullCanContact(position + accepted, remaining, target) &&
+                        _targetHulls.TryGetValue(target.Ship.gameObject, out var hull))
                     {
                         var frame = WorldItem.GetPhysicsFrame(target.Ship.NetworkObject);
                         var candidateFraction = fraction;
@@ -229,13 +230,22 @@ namespace WaveByWave.Enemies
                 if (_collisionPoses.TryGetValue(other, out var obstacle) &&
                     RotationPenetrates(_authoredHull, _authoredHull, position, previous, proposed, obstacle)) return previous;
             foreach (var target in _targets)
-                if (_targetHulls.TryGetValue(target.Ship.gameObject, out var hull))
+                if (PlayerHullCanContact(position, Vector3.zero, target) &&
+                    _targetHulls.TryGetValue(target.Ship.gameObject, out var hull))
                 {
                     var frame = WorldItem.GetPhysicsFrame(target.Ship.NetworkObject);
                     if (RotationPenetrates(_authoredHull, hull, position, previous, proposed,
                             new RigidTransform(frame.rotation, (Vector3)frame.GetColumn(3)))) return previous;
                 }
             return proposed;
+        }
+
+        private bool PlayerHullCanContact(Vector3 position, Vector3 movement, Target target)
+        {
+            var range = _authoredHullRadius + target.CollisionRadius + movement.magnitude +
+                Definition.CollisionSkin + 2f;
+            var delta = target.Position - position;
+            return delta.x * delta.x + delta.z * delta.z <= range * range;
         }
 
         private struct ApproachingContact : ICollector<ColliderCastHit>

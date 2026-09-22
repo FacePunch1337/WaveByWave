@@ -438,8 +438,14 @@ namespace WaveByWave.Editor
             }
             var catalog = (DotsEnemyCatalog)target;
             EditorGUILayout.HelpBox("Performance diagnostics: переключатели действуют на существующих скелетов во время игры, без повторного спавна. Отключайте по одному и возвращайте перед следующей проверкой. На клиенте без сервера переключатели серверного движения не влияют на симуляцию.", MessageType.Info);
-            if (!catalog.EnableCrowdCollisions || !catalog.EnableSurfaceContinuityChecks)
-                EditorGUILayout.HelpBox("Диагностика отключила защиту движения: без Crowd Collisions скелеты могут пересекаться; без Surface Continuity Checks физическая ветка может срезать путь через воду. Запечённая карта палубы сохраняет свои проверки связности.", MessageType.Warning);
+            if (catalog.EnableTargetSlots)
+                EditorGUILayout.HelpBox("Target Slots: каждому скелету назначена постоянная точка в спирали вокруг игрока. Режим не строит сетку и не ищет соседей, поэтому сам по себе не гарантирует столкновения. Для дешёвого A/B оставьте три Crowd-переключателя выключенными и меняйте только Enable Target Slots.", MessageType.Info);
+            if (catalog.EnableCrowdCollisions)
+                EditorGUILayout.HelpBox("Crowd Collisions теперь является мягким режимом личного пространства: постоянный локальный индекс не перестраивает всю толпу, а плавно отфильтрованное давление считается только для реально двигавшихся скелетов. Жёсткой остановки и проверки пересечения шага нет. Crowd Separation Radius задаёт дистанцию давления даже при выключенном Crowd Separation.", MessageType.Info);
+            if (!catalog.EnableCrowdCollisions)
+                EditorGUILayout.HelpBox("Crowd Collisions выключен: мягкое личное пространство не рассчитывается, поэтому скелеты могут свободно пересекаться.", MessageType.Warning);
+            if (!catalog.EnableSurfaceContinuityChecks)
+                EditorGUILayout.HelpBox("Без Surface Continuity Checks физическая ветка может срезать путь через воду. Запечённая карта палубы сохраняет свои проверки связности. Target Slots не заменяет проверку поверхности.", MessageType.Warning);
             if (catalog.EnableCrowdSeparation && catalog.CrowdSeparationRadius <= 0)
                 EditorGUILayout.HelpBox("Мягкое расхождение уже отключено нулевым Crowd Separation Radius. Для текущего каталога отдельно сравните Crowd Avoidance и Crowd Collisions.", MessageType.Info);
             if (catalog.UseCombinedVariants && catalog.CombinedVariants.Count == 0)

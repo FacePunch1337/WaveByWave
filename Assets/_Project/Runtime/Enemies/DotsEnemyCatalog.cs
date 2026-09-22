@@ -183,13 +183,17 @@ namespace WaveByWave.Enemies
         public int EdgeSearchesPerFrame = 32;
 
         [Header("Performance diagnostics (live toggles)")]
+        [Tooltip("Give every skeleton a stable point in a spiral around its player target. This only changes desired movement: it has no neighbour search and does not prevent physical overlap by itself. Applies live.")]
+        public bool EnableTargetSlots;
+        [Range(0.2f, 2f), Tooltip("Approximate distance between stable target slots around the player, in world metres. Applies live; no deck rebake is required.")]
+        public float TargetSlotSpacing = 0.35f;
         [Tooltip("Use the baked deck map when available. Off uses the existing collider/PhysX movement path; a physical ship view is required for that fallback. Applies to existing bots without rebaking.")]
         public bool UseBakedDeckNavigation = true;
         [Tooltip("Choose a persistent flank around nearby enemies. Off skips avoidance decisions. Does not disable pursuit or change target detection.")]
         public bool EnableCrowdAvoidance = true;
         [Tooltip("Calculate soft neighbour repulsion. Independent of hard contacts and avoidance. The neighbour search is already disabled when Crowd Separation Radius is zero.")]
         public bool EnableCrowdSeparation = true;
-        [Tooltip("Build the hard-contact grid and limit steps against other bots. Off skips both costs and allows skeletons to overlap; soft separation and avoidance remain independent.")]
+        [Tooltip("Use an incremental surface-local index to apply smoothly filtered personal-space pressure. There is no hard stop or collision sweep; only moved bots update the index and at most 32 occupants of a cell are sampled. Off skips this pressure.")]
         public bool EnableCrowdCollisions = true;
         [Tooltip("Check intermediate ground samples on the collider/PhysX movement path. Off still checks the destination, but can allow cutting across water/gaps. Baked deck connectivity is unaffected.")]
         public bool EnableSurfaceContinuityChecks = true;

@@ -35,6 +35,8 @@ namespace WaveByWave.Enemies
         public int Target;
         public int SpawnGroup;
         public float3 Direction;
+        public float3 MoveDirection;
+        public float3 MoveTarget;
         public float TargetDistance;
         public float NextAttack;
         public float StrikeAt;
@@ -51,6 +53,14 @@ namespace WaveByWave.Enemies
         public float NextCrowdSteerAt, CrowdClearSince, CrowdBlockedTime, CrowdSideLockedUntil;
         public int CrowdSide, CrowdTarget;
         public ulong CrowdSupport;
+        public int TargetSlotTarget;
+        public int TargetSlotConfiguration;
+        public float2 TargetSlotDirection;
+        public float TargetSlotRadiusFactor;
+        public byte TargetSlotSettled;
+        public int ContactSide;
+        public ulong ContactSupport;
+        public float2 ContactAvoidance;
     }
 
     public struct DotsEnemyPrefab : IComponentData { public Entity Value; }
@@ -169,7 +179,7 @@ namespace WaveByWave.Enemies
             NativeParallelMultiHashMap<int3, EnemyCrowdBody> grid, float cellSize,
             float lookAhead, float spacing, float heightRange, float speed, float now, float stoppingDistance)
         {
-            var toward = brain.Direction.xz;
+            var toward = brain.MoveDirection.xz;
             if (brain.Target < 0 || brain.Attacking != 0 || brain.TargetDistance <= stoppingDistance ||
                 math.lengthsq(toward) < 0.0001f)
             {
@@ -177,7 +187,7 @@ namespace WaveByWave.Enemies
                 return;
             }
             var changed = brain.CrowdTarget != brain.Target || brain.CrowdSupport != state.SupportId ||
-                math.dot(brain.CrowdTargetDirection, brain.Direction) < 0.7f;
+                math.dot(brain.CrowdTargetDirection, brain.MoveDirection) < 0.7f;
             if (changed)
             {
                 Reset(ref brain);
@@ -187,11 +197,11 @@ namespace WaveByWave.Enemies
             // Throttle only the avoidance decision, not pursuit, movement or target selection.
             if (!changed && now < brain.NextCrowdSteerAt)
             {
-                if (brain.CrowdSide == 0) brain.CrowdDirection = brain.Direction;
+                if (brain.CrowdSide == 0) brain.CrowdDirection = brain.MoveDirection;
                 return;
             }
             brain.NextCrowdSteerAt = now + 0.1f + (math.hash(new int2(state.Id, 173)) & 255u) * (0.04f / 255f);
-            brain.CrowdTargetDirection = brain.Direction;
+            brain.CrowdTargetDirection = brain.MoveDirection;
             var reach = math.max(lookAhead, speed * 0.2f + spacing);
             var range = reach + spacing;
             var rangeSq = range * range;
@@ -229,7 +239,7 @@ namespace WaveByWave.Enemies
             {
                 if (brain.CrowdClearSince <= 0) brain.CrowdClearSince = now;
                 if (now - brain.CrowdClearSince >= 0.3f) brain.CrowdSide = 0;
-                brain.CrowdDirection = brain.Direction;
+                brain.CrowdDirection = brain.MoveDirection;
                 return;
             }
             brain.CrowdClearSince = 0;
@@ -297,8 +307,8 @@ namespace WaveByWave.Enemies
 
         public static void Reset(ref DotsEnemyBrain brain)
         {
-            brain.CrowdDirection = brain.Direction;
-            brain.CrowdTargetDirection = brain.Direction;
+            brain.CrowdDirection = brain.MoveDirection;
+            brain.CrowdTargetDirection = brain.MoveDirection;
             brain.NextCrowdSteerAt = brain.CrowdClearSince = brain.CrowdBlockedTime = 0;
             brain.CrowdSide = 0;
         }
@@ -337,10 +347,16 @@ namespace WaveByWave.Enemies
         public float CrowdRadius;
         public float CrowdVerticalRange;
         public float AvoidanceLookAhead, BodySpacing, MoveSpeed, StoppingDistance;
+        public float TargetSlotSpacing;
+        public int TargetSlotCount;
+        public bool UseTargetSlots;
         private void Execute(in DotsEnemyState state, ref DotsEnemyBrain brain)
         {
+            var oldTarget = brain.Target;
             brain.Target = -1;
             brain.Direction = float3.zero;
+            brain.MoveDirection = float3.zero;
+            brain.MoveTarget = state.Position;
             brain.Separation = float3.zero;
             brain.TargetDistance = float.MaxValue;
             if (state.Health <= 0 || state.StunUntil > Time)
@@ -366,6 +382,50 @@ namespace WaveByWave.Enemies
             {
                 brain.TargetDistance = math.sqrt(best);
                 brain.Direction = math.normalizesafe(new float3(bestDelta.x, 0, bestDelta.z));
+                brain.MoveDirection = brain.Direction;
+                brain.MoveTarget = state.Position + bestDelta;
+                if (UseTargetSlots)
+                {
+                    if (oldTarget != brain.Target || brain.TargetSlotTarget != brain.Target)
+                        brain.TargetSlotSettled = 0;
+                    brain.TargetSlotTarget = brain.Target;
+                    if (brain.TargetSlotConfiguration != TargetSlotCount)
+                    {
+                        var slot = (state.Id - 1) % math.max(1, TargetSlotCount);
+                        if (slot < 0) slot += math.max(1, TargetSlotCount);
+                        const float goldenAngle = 2.39996323f;
+                        math.sincos(slot * goldenAngle, out var sine, out var cosine);
+                        brain.TargetSlotDirection = new float2(cosine, sine);
+                        brain.TargetSlotRadiusFactor = 0.525f * math.sqrt(slot);
+                        brain.TargetSlotConfiguration = TargetSlotCount;
+                    }
+                    // Equal-area Vogel spiral. Direction and radius factor are cached once;
+                    // no neighbour lists, shared occupancy map or per-frame reassignment.
+                    var assignedRadius = StoppingDistance + TargetSlotSpacing * brain.TargetSlotRadiusFactor;
+                    var currentRadius = math.length(bestDelta.xz);
+                    // A wide outer slot must never order a skeleton that is already closer
+                    // to retreat from the player. It keeps the stable angle and advances
+                    // inward instead; bots approaching from afar retain the full spiral.
+                    var radius = assignedRadius <= currentRadius ? assignedRadius :
+                        currentRadius <= StoppingDistance ? currentRadius :
+                        math.max(StoppingDistance, currentRadius - TargetSlotSpacing);
+                    var slotDelta = bestDelta + new float3(brain.TargetSlotDirection.x * radius, 0,
+                        brain.TargetSlotDirection.y * radius);
+                    brain.MoveTarget = state.Position + slotDelta;
+                    var slotDistance = math.length(slotDelta.xz);
+                    var arrive = math.max(0.08f, TargetSlotSpacing * 0.3f);
+                    if ((brain.TargetSlotSettled != 0 && slotDistance <= arrive * 1.6f) || slotDistance <= arrive)
+                    {
+                        brain.TargetSlotSettled = 1;
+                        brain.MoveDirection = float3.zero;
+                    }
+                    else
+                    {
+                        brain.TargetSlotSettled = 0;
+                        brain.MoveDirection = math.normalizesafe(new float3(slotDelta.x, 0, slotDelta.z));
+                    }
+                }
+                else brain.TargetSlotSettled = 0;
             }
 
             if (AvoidanceLookAhead > 0)
@@ -442,24 +502,27 @@ namespace WaveByWave.Enemies
 
         public void Seek(NativeArray<EnemyTarget> targets, float now, float crowdRadius, float crowdVerticalRange,
             float avoidanceLookAhead = 0, float bodyRadius = 0.38f, float moveSpeed = 3.8f, float stoppingDistance = 0,
-            bool enableSeparation = true)
+            bool enableSeparation = true, bool useTargetSlots = false, float targetSlotSpacing = 0.35f,
+            int targetSlotCount = 6000)
         {
             var count = _enemyQuery.CalculateEntityCount();
             if (count == 0) return;
-            // Reuse native storage; the grid contains only data needed for local steering,
-            // not a full copy of every enemy's replicated state.
             Dependency.Complete();
+            // Keep a tiny valid container for the optional job field. It is neither
+            // cleared nor populated while both legacy neighbour modes are disabled.
             if (!_crowdGrid.IsCreated)
-                _crowdGrid = new NativeParallelMultiHashMap<int3, EnemyCrowdBody>(
-                    math.ceilpow2(math.max(16, count)), Allocator.Persistent);
-            _crowdGrid.Clear();
-            if (_crowdGrid.Capacity < count) _crowdGrid.Capacity = math.ceilpow2(count);
+                _crowdGrid = new NativeParallelMultiHashMap<int3, EnemyCrowdBody>(16, Allocator.Persistent);
             var spacing = math.max(crowdRadius, bodyRadius * 2f + 0.04f);
             var separationRadius = enableSeparation ? crowdRadius : 0;
             var avoidanceRange = avoidanceLookAhead > 0 ? math.max(avoidanceLookAhead, moveSpeed * 0.2f + spacing) + spacing : 0;
             var cellSize = math.max(0.01f, math.max(separationRadius, avoidanceRange));
-            if (separationRadius > 0 || avoidanceLookAhead > 0)
+            var useCrowdGrid = separationRadius > 0 || avoidanceLookAhead > 0;
+            if (useCrowdGrid)
             {
+                // Only the legacy neighbour modes allocate/build this map. Target Slots
+                // never clear, fill or read it while all three crowd toggles are off.
+                _crowdGrid.Clear();
+                if (_crowdGrid.Capacity < count) _crowdGrid.Capacity = math.ceilpow2(count);
                 Dependency = new EnemyBuildCrowdGridJob
                 {
                     CrowdGrid = _crowdGrid.AsParallelWriter(), CellSize = cellSize
@@ -472,7 +535,9 @@ namespace WaveByWave.Enemies
                     CrowdCellSize = cellSize, CrowdRadius = separationRadius,
                     CrowdVerticalRange = crowdVerticalRange,
                     AvoidanceLookAhead = avoidanceLookAhead, BodySpacing = spacing,
-                    MoveSpeed = moveSpeed, StoppingDistance = stoppingDistance
+                    MoveSpeed = moveSpeed, StoppingDistance = stoppingDistance,
+                    UseTargetSlots = useTargetSlots, TargetSlotSpacing = math.max(0.2f, targetSlotSpacing),
+                    TargetSlotCount = math.max(1, targetSlotCount)
                 }
                 .ScheduleParallel(_enemyQuery, Dependency);
             Dependency.Complete();

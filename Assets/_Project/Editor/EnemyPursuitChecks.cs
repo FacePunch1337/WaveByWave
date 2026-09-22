@@ -133,35 +133,10 @@ namespace WaveByWave.Editor
                 "Skeleton did not return to idle after movement intent ended.");
 
             var instanceFlags = BindingFlags.Instance | BindingFlags.NonPublic;
-            var limit = typeof(DotsEnemyRuntime).GetMethod("LimitCrowdStep", instanceFlags);
-            var buildIndex = typeof(DotsEnemyRuntime).GetMethod("BuildMovementCrowdIndex", instanceFlags);
-            var root = new GameObject("Crowd movement check");
-            root.SetActive(false);
-            var runtime = root.AddComponent<DotsEnemyRuntime>();
-            var bodies = new NativeArray<DotsEnemyState>(1, Allocator.Temp);
-            try
-            {
-                bodies[0] = new DotsEnemyState { Id = 2, Health = 60, SupportId = 7,
-                    Position = new float3(1, 0, 0) };
-                Vector3 Step(Vector3 from, Vector3 to, ulong support = 7)
-                {
-                    buildIndex.Invoke(runtime, new object[] { bodies, 0.82f, 0.4f });
-                    return (Vector3)limit.Invoke(runtime,
-                        new object[] { 1, support, from, to, bodies, 0.82f, 0.4f, 1.7f });
-                }
-                var stopped = Step(Vector3.zero, new Vector3(0.5f, 10, 0));
-                Check(stopped.x < 0.17f && stopped.y == 10,
-                    "Crowd limiter allowed entry into personal space or mixed vertical correction into XZ.");
-                Check(Step(Vector3.zero, new Vector3(0.5f, 0, 0), 8).x == 0.5f,
-                    "Enemies on different support surfaces blocked each other.");
-                bodies[0] = new DotsEnemyState { Id = 2, Health = 60, SupportId = 7,
-                    Position = new float3(0.2f, 0, 0) };
-                Check(Step(Vector3.zero, new Vector3(-0.2f, 0, 0)).x < -0.19f,
-                    "An overlapping skeleton was not allowed to spread away.");
-                Check(Mathf.Abs(Step(Vector3.zero, new Vector3(0.1f, 0, 0)).x) < 0.001f,
-                    "An overlapping skeleton was allowed to compress the crowd further.");
-            }
-            finally { bodies.Dispose(); Object.DestroyImmediate(root); }
+            Check(typeof(DotsEnemyRuntime).GetMethod("LimitCrowdStep", instanceFlags) == null,
+                "Hard crowd step limiter returned and can reintroduce contact jerks.");
+            Check(typeof(DotsEnemyRuntime).GetMethod("SteerCrowdStep", instanceFlags) != null,
+                "Smooth personal-space steering is missing.");
         }
 
         private static void CheckRenderBounds()

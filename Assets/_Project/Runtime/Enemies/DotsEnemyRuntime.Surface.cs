@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Mathematics;
@@ -16,15 +17,41 @@ namespace WaveByWave.Enemies
             public bool Returning;
         }
         private readonly Dictionary<int, SurfaceTransfer> _surfaceTransfers = new();
-        private readonly Dictionary<int2, List<int>> _movementCrowdGrid = new();
+        private readonly struct MovementCrowdKey : IEquatable<MovementCrowdKey>
+        {
+            public readonly ulong Support;
+            public readonly int2 Cell;
+            public MovementCrowdKey(ulong support, int2 cell) { Support = support; Cell = cell; }
+            public bool Equals(MovementCrowdKey other) => Support == other.Support && math.all(Cell == other.Cell);
+            public override bool Equals(object value) => value is MovementCrowdKey other && Equals(other);
+            public override int GetHashCode() => (int)math.hash(new uint4((uint)Support,
+                (uint)(Support >> 32), (uint)Cell.x, (uint)Cell.y));
+        }
+        private struct MovementCrowdBody
+        {
+            public DotsEnemyState State;
+            public MovementCrowdKey Key;
+            public int CellIndex;
+        }
+        private readonly Dictionary<MovementCrowdKey, List<int>> _movementCrowdGrid = new();
+        private readonly Dictionary<int, MovementCrowdBody> _movementCrowdBodies = new();
         private readonly Stack<List<int>> _movementCrowdPool = new();
         private float _movementCrowdCellSize = 1f;
+        private bool _movementCrowdReady;
 
         private static float SmoothSurfaceHeight(float current, float target, float speed, float deltaTime) =>
             Mathf.MoveTowards(current, target, Mathf.Max(0.1f, speed) * deltaTime);
 
-        private void BuildMovementCrowdIndex(NativeArray<DotsEnemyState> bodies,
-            float configuredDistance, float bodyRadius)
+        private static float3 MovementCrowdPoint(in DotsEnemyState state) =>
+            state.SupportId != 0 ? state.LocalPosition : state.Position;
+
+        private MovementCrowdKey MovementCrowdKeyFor(in DotsEnemyState state)
+        {
+            var point = MovementCrowdPoint(in state);
+            return new MovementCrowdKey(state.SupportId, (int2)math.floor(point.xz / _movementCrowdCellSize));
+        }
+
+        private void ClearMovementCrowdIndex()
         {
             foreach (var list in _movementCrowdGrid.Values)
             {
@@ -32,100 +59,181 @@ namespace WaveByWave.Enemies
                 _movementCrowdPool.Push(list);
             }
             _movementCrowdGrid.Clear();
-            _movementCrowdCellSize = math.max(0.1f,
-                math.max(configuredDistance, bodyRadius * 2f + 0.04f));
+            _movementCrowdBodies.Clear();
+            _movementCrowdReady = false;
+        }
+
+        private void PrepareMovementCrowdIndex()
+        {
+            if (!Catalog.EnableCrowdCollisions)
+            {
+                if (_movementCrowdReady) ClearMovementCrowdIndex();
+                return;
+            }
+            var minimum = math.max(Catalog.CrowdSeparationRadius, Catalog.BodyRadius * 2f + 0.04f);
+            var cellSize = math.max(minimum, Catalog.MoveSpeed * 0.2f + minimum);
+            if (_movementCrowdReady && math.abs(cellSize - _movementCrowdCellSize) < 0.0001f) return;
+            ClearMovementCrowdIndex();
+            _movementCrowdCellSize = cellSize;
+            if (_serverWorld == null || !_serverWorld.IsCreated) return;
+            using var bodies = _enemies.ToComponentDataArray<DotsEnemyState>(Allocator.Temp);
             for (var i = 0; i < bodies.Length; i++)
             {
-                if (bodies[i].Health <= 0) continue;
-                AddMovementCrowdBody(i, bodies[i].Position.xz);
+                var state = bodies[i];
+                if (state.Health <= 0 || state.Scene != _scene) continue;
+                AddMovementCrowdBody(in state);
             }
+            _movementCrowdReady = true;
         }
 
-        private void AddMovementCrowdBody(int index, float2 position)
+        private void AddMovementCrowdBody(in DotsEnemyState state)
         {
-            var cell = (int2)math.floor(position / _movementCrowdCellSize);
-            if (!_movementCrowdGrid.TryGetValue(cell, out var list))
+            var key = MovementCrowdKeyFor(in state);
+            if (!_movementCrowdGrid.TryGetValue(key, out var list))
             {
                 list = _movementCrowdPool.Count > 0 ? _movementCrowdPool.Pop() : new List<int>(8);
-                _movementCrowdGrid.Add(cell, list);
+                _movementCrowdGrid.Add(key, list);
             }
-            list.Add(index);
+            var body = new MovementCrowdBody { State = state, Key = key, CellIndex = list.Count };
+            list.Add(state.Id);
+            _movementCrowdBodies[state.Id] = body;
         }
 
-        private void UpdateCrowdSnapshot(NativeArray<DotsEnemyState> bodies, DotsEnemyState state)
+        private void RemoveMovementCrowdBody(int id)
         {
-            if (!bodies.IsCreated || !_crowdIndices.TryGetValue(state.Id, out var index)) return;
-            var previous = bodies[index];
-            var oldCell = (int2)math.floor(previous.Position.xz / _movementCrowdCellSize);
-            var newCell = (int2)math.floor(state.Position.xz / _movementCrowdCellSize);
-            if (math.any(oldCell != newCell))
+            if (!_movementCrowdBodies.Remove(id, out var body) ||
+                !_movementCrowdGrid.TryGetValue(body.Key, out var list)) return;
+            var lastIndex = list.Count - 1;
+            if (body.CellIndex < 0 || body.CellIndex > lastIndex) return;
+            var movedId = list[lastIndex];
+            list[body.CellIndex] = movedId;
+            list.RemoveAt(lastIndex);
+            if (movedId != id && _movementCrowdBodies.TryGetValue(movedId, out var moved))
             {
-                if (_movementCrowdGrid.TryGetValue(oldCell, out var oldList)) oldList.Remove(index);
-                AddMovementCrowdBody(index, state.Position.xz);
+                moved.CellIndex = body.CellIndex;
+                _movementCrowdBodies[movedId] = moved;
             }
-            bodies[index] = state;
+            if (list.Count != 0) return;
+            _movementCrowdGrid.Remove(body.Key);
+            _movementCrowdPool.Push(list);
         }
 
-        private Vector3 LimitCrowdStep(int id, ulong support, Vector3 from, Vector3 desired,
-            NativeArray<DotsEnemyState> bodies, float configuredDistance, float bodyRadius, float bodyHeight)
+        private void UpdateCrowdSnapshot(in DotsEnemyState state)
         {
-            if (!bodies.IsCreated || Catalog != null && !Catalog.EnableCrowdCollisions) return desired;
-            var minimum = Mathf.Max(configuredDistance, bodyRadius * 2f + 0.04f);
-            if (minimum <= 0) return desired;
-            var start = new float2(from.x, from.z);
-            var end = new float2(desired.x, desired.z);
-            var step = end - start;
-            var lengthSq = math.lengthsq(step);
-            if (lengthSq < 0.0000001f) return desired;
-            var minimumSq = minimum * minimum;
-            var maxFraction = 1f;
-            var startedInside = false;
-            var oldNearestSq = float.PositiveInfinity;
-            var newNearestSq = float.PositiveInfinity;
-            var minimumCell = (int2)math.floor((math.min(start, end) - minimum) / _movementCrowdCellSize);
-            var maximumCell = (int2)math.floor((math.max(start, end) + minimum) / _movementCrowdCellSize);
-            for (var y = minimumCell.y; y <= maximumCell.y; y++)
-            for (var x = minimumCell.x; x <= maximumCell.x; x++)
+            if (!_movementCrowdReady) return;
+            if (state.Health <= 0 || state.Scene != _scene)
             {
-                if (!_movementCrowdGrid.TryGetValue(new int2(x, y), out var neighbours)) continue;
-                foreach (var index in neighbours)
+                RemoveMovementCrowdBody(state.Id);
+                return;
+            }
+            if (!_movementCrowdBodies.TryGetValue(state.Id, out var previous))
+            {
+                AddMovementCrowdBody(in state);
+                return;
+            }
+            var key = MovementCrowdKeyFor(in state);
+            if (key.Equals(previous.Key))
+            {
+                previous.State = state;
+                _movementCrowdBodies[state.Id] = previous;
+                return;
+            }
+            RemoveMovementCrowdBody(state.Id);
+            AddMovementCrowdBody(in state);
+        }
+
+        private float3 SteerCrowdStep(in DotsEnemyState state, ref DotsEnemyBrain brain,
+            float3 displacement, float deltaTime)
+        {
+            if (!_movementCrowdReady || !Catalog.EnableCrowdCollisions)
+            {
+                brain.ContactAvoidance = float2.zero;
+                return displacement;
+            }
+            if (math.lengthsq(displacement.xz) < 0.000001f)
+            {
+                brain.ContactAvoidance *= math.exp(-4f * math.max(0.02f, deltaTime));
+                return displacement;
+            }
+            var length = math.length(displacement.xz);
+            var forward = displacement.xz / length;
+            var surfaceRotation = quaternion.identity;
+            var frame = Matrix4x4.identity;
+            var hasSurfaceFrame = state.SupportId != 0 &&
+                TryGetSurfaceFrame(state.SupportId, true, out frame);
+            if (hasSurfaceFrame)
+            {
+                surfaceRotation = frame.rotation;
+                var localForward = math.mul(math.inverse(surfaceRotation),
+                    new float3(forward.x, 0, forward.y));
+                forward = math.normalizesafe(localForward.xz, forward);
+            }
+            if (brain.ContactSupport != state.SupportId)
+            {
+                brain.ContactSupport = state.SupportId;
+                brain.ContactAvoidance = float2.zero;
+            }
+            var side = brain.ContactSide;
+            if (side == 0) side = (math.hash(new int2(state.Id, 1187)) & 1u) == 0 ? 1 : -1;
+            brain.ContactSide = side;
+            var right = new float2(forward.y, -forward.x);
+            var point = MovementCrowdPoint(in state);
+            var cell = (int2)math.floor(point.xz / _movementCrowdCellSize);
+            var minimum = math.max(Catalog.CrowdSeparationRadius,
+                Catalog.BodyRadius * 2f + 0.04f);
+            var range = math.min(_movementCrowdCellSize, math.max(minimum * 2f, minimum + length));
+            var rangeSq = range * range;
+            var pressure = float2.zero;
+            for (var z = -1; z <= 1; z++)
+            for (var x = -1; x <= 1; x++)
+            {
+                var key = new MovementCrowdKey(state.SupportId, cell + new int2(x, z));
+                if (!_movementCrowdGrid.TryGetValue(key, out var neighbours)) continue;
+                var samples = math.min(32, neighbours.Count);
+                var first = neighbours.Count > 0
+                    ? (int)(math.hash(new int3(state.Id, key.Cell.x, key.Cell.y)) % (uint)neighbours.Count) : 0;
+                for (var sample = 0; sample < samples; sample++)
                 {
-                    var other = bodies[index];
-                    if (other.Id == id || other.Health <= 0 || other.SupportId != support ||
-                        math.abs(other.Position.y - from.y) > bodyHeight * 0.75f) continue;
-                    var center = other.Position.xz;
-                    var oldOffset = start - center;
-                    var newOffset = end - center;
-                    var oldSq = math.lengthsq(oldOffset);
-                    var newSq = math.lengthsq(newOffset);
-                    if (oldSq < minimumSq - 0.0001f)
+                    var otherId = neighbours[(first + sample) % neighbours.Count];
+                    if (otherId == state.Id || !_movementCrowdBodies.TryGetValue(otherId, out var body)) continue;
+                    var other = body.State;
+                    var otherPoint = MovementCrowdPoint(in other);
+                    if (other.Health <= 0 || other.SupportId != state.SupportId ||
+                        math.abs(otherPoint.y - point.y) > Catalog.BodyHeight * 0.75f) continue;
+                    var away = point.xz - otherPoint.xz;
+                    var distanceSq = math.lengthsq(away);
+                    if (distanceSq >= rangeSq) continue;
+                    float distance;
+                    if (distanceSq > 0.000001f)
                     {
-                        startedInside = true;
-                        oldNearestSq = math.min(oldNearestSq, oldSq);
-                        newNearestSq = math.min(newNearestSq, newSq);
-                        continue;
+                        distance = math.sqrt(distanceSq);
+                        away /= distance;
                     }
-                    // Sweep the horizontal movement against the neighbour's exclusion circle.
-                    var b = 2f * math.dot(oldOffset, step);
-                    // At exact contact, a tangent/outward step separates the bodies. The
-                    // quadratic's zero root must not turn this valid slide into a full stop.
-                    if (b >= 0) continue;
-                    var c = oldSq - minimumSq;
-                    var discriminant = b * b - 4f * lengthSq * c;
-                    if (discriminant < 0) continue;
-                    var entry = (-b - math.sqrt(discriminant)) / (2f * lengthSq);
-                    if (entry >= 0 && entry <= maxFraction) maxFraction = entry;
+                    else
+                    {
+                        var low = math.min(state.Id, otherId);
+                        var high = math.max(state.Id, otherId);
+                        var angle = (math.hash(new int2(low, high)) & 65535u) *
+                            (math.PI * 2f / 65535f);
+                        away = new float2(math.cos(angle), math.sin(angle));
+                        if (state.Id > otherId) away = -away;
+                        distance = 0;
+                    }
+                    var weight = 1f - distance / range;
+                    var ahead = math.saturate(math.dot(-away, forward));
+                    pressure += away * weight + right * (side * ahead * weight * 0.65f);
                 }
             }
-            // Existing spawn overlap may only improve; this lets a stack spread out but
-            // never lets pursuit compress it further.
-            if (startedInside && newNearestSq <= oldNearestSq + 0.0001f) maxFraction = 0;
-            if (maxFraction < 1f)
-            {
-                var skin = 0.01f / math.sqrt(lengthSq);
-                end = math.lerp(start, end, math.max(0, maxFraction - skin));
-            }
-            return new Vector3(end.x, desired.y, end.y);
+            var pressureLength = math.length(pressure);
+            var targetAvoidance = pressureLength > 0.0001f
+                ? pressure / pressureLength * math.saturate(pressureLength) : float2.zero;
+            var response = 1f - math.exp(-6f * math.max(0.02f, deltaTime));
+            brain.ContactAvoidance = math.lerp(brain.ContactAvoidance, targetAvoidance, response);
+            var heading = math.normalizesafe(forward + brain.ContactAvoidance * 1.35f, forward);
+            var worldHeading = new float3(heading.x, 0, heading.y);
+            if (hasSurfaceFrame) worldHeading = math.mul(surfaceRotation, worldHeading);
+            var horizontal = math.normalizesafe(worldHeading.xz, displacement.xz / length) * length;
+            return new float3(horizontal.x, displacement.y, horizontal.y);
         }
 
         private void UpdateLocomotion(ref DotsEnemyState state, ref DotsEnemyBrain brain,

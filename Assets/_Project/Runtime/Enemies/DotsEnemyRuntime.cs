@@ -54,7 +54,6 @@ namespace WaveByWave.Enemies
         private readonly List<SpawnRequest> _spawns = new();
         private readonly List<PlayerTarget> _players = new();
         private readonly Dictionary<int, Entity> _byId = new();
-        private readonly Dictionary<int, int> _crowdIndices = new();
         private readonly Dictionary<ulong, Transform> _surfaces = new();
         private readonly HashSet<int> _crewGroups = new();
         private readonly List<Entity> _remove = new();
@@ -118,6 +117,7 @@ namespace WaveByWave.Enemies
                     var id = manager.GetComponentData<DotsEnemyState>(entity).Id;
                     _byId.Remove(id);
                     _surfaceTransfers.Remove(id);
+                    RemoveMovementCrowdBody(id);
                     manager.DestroyEntity(entity);
                 }
             }
@@ -146,6 +146,7 @@ namespace WaveByWave.Enemies
             if (world == null || !world.IsCreated) return false;
             if (_serverWorld != world)
             {
+                ClearMovementCrowdIndex();
                 _serverWorld = world;
                 _enemies = world.EntityManager.CreateEntityQuery(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
                 _byId.Clear();
@@ -174,7 +175,8 @@ namespace WaveByWave.Enemies
             system.Seek(targets, now, Catalog.CrowdSeparationRadius, Catalog.BodyHeight * 0.75f,
                 Catalog.EnableCrowdAvoidance ? Mathf.Clamp(Catalog.CrowdAvoidanceLookAhead, 0.3f, 4f) : 0,
                 Catalog.BodyRadius, Catalog.MoveSpeed, Catalog.MeleeRange * 0.82f,
-                Catalog.EnableCrowdSeparation);
+                Catalog.EnableCrowdSeparation, Catalog.EnableTargetSlots,
+                Catalog.TargetSlotSpacing, Catalog.MaximumEnemies);
             system.FaceTargets(now, Mathf.Min(Time.unscaledDeltaTime, 0.2f), _scene);
             StressCount = 0;
             foreach (var entity in entities)
@@ -185,6 +187,7 @@ namespace WaveByWave.Enemies
                 if (state.Health <= 0)
                 {
                     _surfaceTransfers.Remove(state.Id);
+                    RemoveMovementCrowdBody(state.Id);
                     if (now > state.DeathAt + 1f) _remove.Add(entity);
                     continue;
                 }
@@ -200,6 +203,7 @@ namespace WaveByWave.Enemies
                     var id = manager.GetComponentData<DotsEnemyState>(entity).Id;
                     _byId.Remove(id);
                     _surfaceTransfers.Remove(id);
+                    RemoveMovementCrowdBody(id);
                     manager.DestroyEntity(entity);
                 }
             _remove.Clear();
@@ -263,6 +267,7 @@ namespace WaveByWave.Enemies
                 if (found++ < count) continue;
                 _byId.Remove(state.Id);
                 _surfaceTransfers.Remove(state.Id);
+                RemoveMovementCrowdBody(state.Id);
                 _serverWorld.EntityManager.DestroyEntity(entity);
             }
             StressCount = Mathf.Min(found, count);
@@ -314,6 +319,7 @@ namespace WaveByWave.Enemies
                     manager.SetComponentData(entity, new DotsEnemyBrain { Target = -1, SpawnGroup = request.Group,
                         LastSurfaceTime = Now, NextAttack = Now + request.Random.NextFloat(0.5f, 1.5f) });
                     _byId.Add(state.Id, entity);
+                    UpdateCrowdSnapshot(in state);
                     request.Remaining--;
                     request.Attempts = 0;
                 }
@@ -411,15 +417,7 @@ namespace WaveByWave.Enemies
             if (entities.Length == 0) return;
             var manager = _serverWorld.EntityManager;
             _deckMaps.Clear();
-            using var crowdBodies = Catalog.EnableCrowdCollisions
-                ? _enemies.ToComponentDataArray<DotsEnemyState>(Allocator.Temp)
-                : new NativeArray<DotsEnemyState>(0, Allocator.Temp);
-            _crowdIndices.Clear();
-            if (Catalog.EnableCrowdCollisions)
-            {
-                for (var body = 0; body < crowdBodies.Length; body++) _crowdIndices[crowdBodies[body].Id] = body;
-                BuildMovementCrowdIndex(crowdBodies, Catalog.CrowdSeparationRadius, Catalog.BodyRadius);
-            }
+            PrepareMovementCrowdIndex();
             var count = Mathf.Min(entities.Length, Catalog.SurfaceProbesPerFrame);
             EnsureProbeCapacity(count);
             _probes.Clear();
@@ -437,14 +435,14 @@ namespace WaveByWave.Enemies
                 state.MovementUpdatedAt = now;
                 if (AdvanceSurfaceTransfer(ref state, ref brain, dt, now))
                 {
-                    UpdateCrowdSnapshot(crowdBodies, state);
+                    UpdateCrowdSnapshot(in state);
                     manager.SetComponentData(entity, state);
                     manager.SetComponentData(entity, brain);
                     continue;
                 }
-                var direction = Catalog.EnableCrowdAvoidance ? brain.CrowdDirection : brain.Direction;
+                var direction = Catalog.EnableCrowdAvoidance ? brain.CrowdDirection : brain.MoveDirection;
                 var stoppingDistance = Catalog.MeleeRange * 0.82f;
-                if (brain.Attacking != 0 || brain.TargetDistance <= stoppingDistance)
+                if (brain.Attacking != 0 || !Catalog.EnableTargetSlots && brain.TargetDistance <= stoppingDistance)
                     direction = float3.zero;
                 var separation = brain.Separation;
                 var separationAmount = math.saturate(math.length(separation));
@@ -462,6 +460,7 @@ namespace WaveByWave.Enemies
                 if (movementLength > Catalog.MoveSpeed) movement *= Catalog.MoveSpeed / movementLength;
                 var displacement = (movement + brain.Knockback) * dt;
                 var wantsToMove = math.lengthsq(movement) > 0.0001f;
+                displacement = SteerCrowdStep(in state, ref brain, displacement, dt);
                 brain.Knockback *= math.exp(-7f * dt);
                 manager.SetComponentData(entity, brain);
                 // Idle passengers already have an exact local pose. Re-projecting them onto
@@ -473,7 +472,7 @@ namespace WaveByWave.Enemies
                     manager.SetComponentData(entity, brain);
                     continue;
                 }
-                if (MoveOnBakedDeck(ref state, ref brain, displacement, dt, wantsToMove, now, crowdBodies, ref edgeSearchesRemaining))
+                if (MoveOnBakedDeck(ref state, ref brain, displacement, dt, wantsToMove, now, ref edgeSearchesRemaining))
                 {
                     manager.SetComponentData(entity, state);
                     manager.SetComponentData(entity, brain);
@@ -492,7 +491,7 @@ namespace WaveByWave.Enemies
             if (count == 0) return;
             // Pursuit is deliberately ground-following, not a capsule character controller.
             // Props must not stop a crowd. Only a valid dry supporting surface is required;
-            // enemies themselves have no physics colliders or pairwise separation forces.
+            // personal-space pressure has already adjusted the requested destination.
             RaycastCommand.ScheduleBatch(_groundCommands.GetSubArray(0, count),
                 _groundResults.GetSubArray(0, count * GroundHitsPerProbe), 32, GroundHitsPerProbe).Complete();
             // Interior ground samples used to issue individual PhysX queries on the main
@@ -554,44 +553,33 @@ namespace WaveByWave.Enemies
                     if (edgeSearchesRemaining > 0)
                     {
                         edgeSearchesRemaining--;
-                        var goal = Feet(_players[brain.Target].Player);
-                        if (TryBeginSurfaceTransfer(state, goal))
+                        var transferGoal = Feet(_players[brain.Target].Player);
+                        if (TryBeginSurfaceTransfer(state, transferGoal))
                         {
                             AdvanceSurfaceTransfer(ref state, ref brain, probe.DeltaTime, now);
-                            UpdateCrowdSnapshot(crowdBodies, state);
+                            UpdateCrowdSnapshot(in state);
                             manager.SetComponentData(probe.Entity, state);
                             manager.SetComponentData(probe.Entity, brain);
                             continue;
                         }
-                        TryFollowEdge(state, goal, probe.DeltaTime, out ground);
+                        TryFollowEdge(state, brain.MoveTarget, probe.DeltaTime, out ground);
                     }
                     else movementEvaluated = false;
                 }
                 if (ground.collider != null)
                 {
                     var previous = state.Position;
-                    var candidate = state;
-                    candidate.Position = ground.point;
-                    AttachSurface(ref candidate, ground.collider);
-                    var accepted = LimitCrowdStep(state.Id, candidate.SupportId, previous,
-                        ground.point, crowdBodies, Catalog.CrowdSeparationRadius,
-                        Catalog.BodyRadius, Catalog.BodyHeight);
-                    var wantedHorizontal = math.distance(previous.xz, ((float3)ground.point).xz);
-                    var acceptedHorizontal = math.distance(previous.xz, ((float3)accepted).xz);
-                    var horizontalFraction = wantedHorizontal > 0.00001f
-                        ? math.saturate(acceptedHorizontal / wantedHorizontal) : 1f;
-                    var targetHeight = Mathf.Lerp(previous.y, ground.point.y, horizontalFraction);
-                    state.Position = new float3(accepted.x,
-                        SmoothSurfaceHeight(previous.y, targetHeight,
-                            Catalog.SurfaceVerticalSpeed, probe.DeltaTime), accepted.z);
+                    state.Position = new float3(ground.point.x,
+                        SmoothSurfaceHeight(previous.y, ground.point.y,
+                            Catalog.SurfaceVerticalSpeed, probe.DeltaTime), ground.point.z);
                     movedDistance = math.distance(previous.xz, state.Position.xz);
                     if (math.lengthsq(brain.Direction) > 0.01f && state.StunUntil <= now && brain.Attacking == 0)
                         state.Rotation = math.slerp(state.Rotation, quaternion.LookRotationSafe(
-                            (float3)Vector3.ProjectOnPlane(state.Position - previous, ground.normal), ground.normal),
+                            (float3)Vector3.ProjectOnPlane(brain.Direction, ground.normal), ground.normal),
                             1 - math.exp(-12 * probe.DeltaTime));
                     AttachSurface(ref state, ground.collider);
                     ReleaseBoardedCrew(ref brain, state);
-                    UpdateCrowdSnapshot(crowdBodies, state);
+                    UpdateCrowdSnapshot(in state);
                 }
                 UpdateLocomotion(ref state, ref brain, movedDistance, probe.DeltaTime,
                     movementEvaluated, probe.WantsToMove, now);
@@ -791,6 +779,7 @@ namespace WaveByWave.Enemies
                     NextAttack = now + random.NextFloat(0.5f, 1.5f)
                 });
                 _byId.Add(state.Id, entity);
+                UpdateCrowdSnapshot(in state);
             }
             _crewGroups.Add(group);
             return true;
@@ -809,6 +798,7 @@ namespace WaveByWave.Enemies
                 var id = manager.GetComponentData<DotsEnemyState>(entity).Id;
                 _byId.Remove(id);
                 _surfaceTransfers.Remove(id);
+                RemoveMovementCrowdBody(id);
                 manager.DestroyEntity(entity);
             }
         }
@@ -933,7 +923,8 @@ namespace WaveByWave.Enemies
         private void ClearServer()
         {
             if (_serverWorld != null && _serverWorld.IsCreated) _serverWorld.EntityManager.DestroyEntity(_enemies);
-            _byId.Clear(); _crewGroups.Clear(); _spawns.Clear(); _surfaceTransfers.Clear(); StressCount = 0;
+            _byId.Clear(); _crewGroups.Clear(); _spawns.Clear(); _surfaceTransfers.Clear();
+            ClearMovementCrowdIndex(); StressCount = 0;
         }
         private void DisposeProbes()
         {

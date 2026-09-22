@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -28,7 +27,7 @@ namespace WaveByWave.Enemies
         }
 
         private bool MoveOnBakedDeck(ref DotsEnemyState state, ref DotsEnemyBrain brain, Vector3 displacement,
-            float deltaTime, bool wantsToMove, float now, NativeArray<DotsEnemyState> crowd, ref int edgeBudget)
+            float deltaTime, bool wantsToMove, float now, ref int edgeBudget)
         {
             if (!Catalog.UseBakedDeckNavigation) return false;
             var map = DeckMap(state.SupportId);
@@ -53,22 +52,23 @@ namespace WaveByWave.Enemies
             var evaluated = true;
             if (!moving && brain.Target >= 0 && brain.Target < _players.Count && brain.Attacking == 0 && state.StunUntil <= now)
             {
-                var goal = Feet(_players[brain.Target].Player);
+                var transferGoal = Feet(_players[brain.Target].Player);
+                var movementGoal = (Vector3)brain.MoveTarget;
                 if (Catalog.EnableSurfaceTransfers && map.Nodes[node].Boundary && Catalog.MaximumSurfaceGap > 0)
                 {
                     if (edgeBudget > 0)
                     {
                         edgeBudget--;
-                        if (TryBeginSurfaceTransfer(state, goal))
+                        if (TryBeginSurfaceTransfer(state, transferGoal))
                         {
                             AdvanceSurfaceTransfer(ref state, ref brain, deltaTime, now);
-                            UpdateCrowdSnapshot(crowd, state);
+                            UpdateCrowdSnapshot(in state);
                             return true;
                         }
                     }
                     else evaluated = false;
                 }
-                moving = Catalog.EnableSurfaceEdgeFollowing && map.TryFollow(node, from, inverse.MultiplyPoint3x4(goal),
+                moving = Catalog.EnableSurfaceEdgeFollowing && map.TryFollow(node, from, inverse.MultiplyPoint3x4(movementGoal),
                     Catalog.MoveSpeed * deltaTime / minimumScale, step, drop, out feet, out normal);
             }
             var distance = 0f;
@@ -81,25 +81,18 @@ namespace WaveByWave.Enemies
                     (!_water.TryWaterLevel(worldFeet, out var waterHeight) || worldFeet.y >= waterHeight - 0.05f);
                 if (walkable)
                 {
-                    var accepted = LimitCrowdStep(state.Id, state.SupportId, previous, worldFeet, crowd,
-                        Catalog.CrowdSeparationRadius, Catalog.BodyRadius, Catalog.BodyHeight);
-                    // A collision-shortened step still has to remain on the same connected deck.
-                    if (map.TryMove(node, from, inverse.MultiplyPoint3x4(accepted), step, drop, out var limited, out normal))
-                    {
-                        worldFeet = frame.MultiplyPoint3x4(limited);
-                        state.Position = new float3(worldFeet.x,
-                            SmoothSurfaceHeight(previous.y, worldFeet.y, Catalog.SurfaceVerticalSpeed, deltaTime), worldFeet.z);
-                        distance = math.distance(previous.xz, state.Position.xz);
-                        if (distance > 0.001f && state.StunUntil <= now && brain.Attacking == 0)
-                            state.Rotation = math.slerp(state.Rotation, quaternion.LookRotationSafe(
-                                Vector3.ProjectOnPlane(state.Position - previous, up), up), 1f - math.exp(-12f * deltaTime));
-                        state.LocalPosition = inverse.MultiplyPoint3x4(state.Position);
-                        state.LocalRotation = Quaternion.Inverse(frame.rotation) * (Quaternion)state.Rotation;
-                        if (map.TryLocate(limited, 0.02f, out var supportingNode))
-                        { brain.DeckNode = supportingNode; brain.DeckSupport = state.SupportId; }
-                        ReleaseBoardedCrew(ref brain, state);
-                        UpdateCrowdSnapshot(crowd, state);
-                    }
+                    state.Position = new float3(worldFeet.x,
+                        SmoothSurfaceHeight(previous.y, worldFeet.y, Catalog.SurfaceVerticalSpeed, deltaTime), worldFeet.z);
+                    distance = math.distance(previous.xz, state.Position.xz);
+                    if (distance > 0.001f && state.StunUntil <= now && brain.Attacking == 0)
+                        state.Rotation = math.slerp(state.Rotation, quaternion.LookRotationSafe(
+                            Vector3.ProjectOnPlane(brain.Direction, up), up), 1f - math.exp(-12f * deltaTime));
+                    state.LocalPosition = inverse.MultiplyPoint3x4(state.Position);
+                    state.LocalRotation = Quaternion.Inverse(frame.rotation) * (Quaternion)state.Rotation;
+                    if (map.TryLocate(feet, 0.02f, out var supportingNode))
+                    { brain.DeckNode = supportingNode; brain.DeckSupport = state.SupportId; }
+                    ReleaseBoardedCrew(ref brain, state);
+                    UpdateCrowdSnapshot(in state);
                 }
                 evaluated = true;
             }

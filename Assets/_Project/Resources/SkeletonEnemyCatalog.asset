@@ -2281,7 +2281,7 @@ MonoBehaviour:
   SurfaceVerticalSpeed: 4
   BodyRadius: 0.1
   BodyHeight: 1.7
-  CrowdSeparationRadius: 0
+  CrowdSeparationRadius: 0.35
   CrowdSeparationStrength: 0
   CrowdAvoidanceLookAhead: 1.5
   SurfaceProbesPerFrame: 256
@@ -2293,10 +2293,12 @@ MonoBehaviour:
   MaximumSurfaceGap: 3
   SurfaceTransferHeight: 10
   EdgeSearchesPerFrame: 32
+  EnableTargetSlots: 0
+  TargetSlotSpacing: 0.2
   UseBakedDeckNavigation: 1
   EnableCrowdAvoidance: 0
   EnableCrowdSeparation: 0
-  EnableCrowdCollisions: 0
+  EnableCrowdCollisions: 1
   EnableSurfaceContinuityChecks: 0
   EnableSurfaceEdgeFollowing: 0
   EnableSurfaceTransfers: 1

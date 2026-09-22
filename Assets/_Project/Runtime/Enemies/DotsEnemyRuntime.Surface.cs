@@ -92,13 +92,17 @@ namespace WaveByWave.Enemies
             if (attacking || stunned) { idleTime = 0; return current; }
             // A deferred edge search is not evidence that the character has stopped.
             if (!evaluated) return current;
-            if (distance >= Mathf.Max(0.004f, deltaTime * 0.08f) || wantsToMove)
+            if (distance >= Mathf.Max(0.004f, deltaTime * 0.08f))
             {
                 idleTime = 0;
                 return EnemyAnimationState.Run;
             }
+            // Movement intent alone must not keep the run animation alive at an
+            // impassable edge. Keep a short grace period so intermittent surface
+            // probes do not alternate between run and idle every frame.
             idleTime += deltaTime;
-            return idleTime >= 0.25f ? EnemyAnimationState.Idle : current;
+            var grace = wantsToMove ? 0.3f : 0.2f;
+            return idleTime >= grace ? EnemyAnimationState.Idle : current;
         }
 
         private void FaceTarget(ref DotsEnemyState state, DotsEnemyBrain brain, float deltaTime, float now)

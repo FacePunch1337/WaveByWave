@@ -111,3 +111,4 @@ Assets/_Project/Generated/CollisionMeshes/**/*.asset filter=lfs diff=lfs merge=l
 "Assets/Stylized Water 3/_Demo/DemoAssets/Terrain/SWS_DioramaTerrain.asset" filter=lfs diff=lfs merge=lfs -text
 "Assets/Ultimate Game Tools/ConcaveCollider/Sample Scenes/Bucket/Terrain.asset" filter=lfs diff=lfs merge=lfs -text
 Assets/_Project/Resources/ShipCollisionMeshLibrary.asset !text !filter !merge !diff
+"Assets/Scenes/CatBorg Studio/3D Pirates Lowpoly Pack/**" !filter !diff !merge -text

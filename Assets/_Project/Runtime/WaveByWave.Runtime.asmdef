@@ -8,6 +8,7 @@
         "Unity.InputSystem",
         "KinematicCharacterController",
         "Unity.Mathematics",
+        "Unity.Mathematics.Extensions",
         "Unity.Burst",
         "Unity.Physics",
         "Unity.Netcode.Runtime",

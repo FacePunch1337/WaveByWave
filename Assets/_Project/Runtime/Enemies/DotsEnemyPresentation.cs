@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Unity.Burst;
+using Unity.Burst.Intrinsics;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -29,17 +30,47 @@ namespace WaveByWave.Enemies
     internal partial struct EnemyRenderJob : IJobEntity
     {
         [ReadOnly] public ComponentLookup<EnemyVisualPose> Poses;
-        private void Execute(ref LocalToWorld transform, ref EnemyFrameProperty animation, in EnemyPartOwner owner)
+        private void Execute(ref LocalToWorld transform, ref WorldRenderBounds worldBounds,
+            in RenderBounds renderBounds, ref EnemyFrameProperty animation, in EnemyPartOwner owner)
         {
             if (!Poses.TryGetComponent(owner.Root, out var pose)) return;
             transform.Value = pose.Matrix;
             animation.Value = pose.Frame;
-            if (owner.Orbit == 0) return;
+            if (owner.Orbit == 0)
+            {
+                worldBounds.Value = AABB.Transform(transform.Value, StableRenderBounds(renderBounds.Value));
+                return;
+            }
             var phase = pose.Time * 4 + (owner.Orbit - 1) * math.PI * 2 / 3;
             var local = new float3(math.cos(phase) * 0.28f, 1.15f + math.sin(phase * 2) * 0.03f, math.sin(phase) * 0.28f);
             transform.Value = math.mul(pose.Matrix, float4x4.TRS(local, quaternion.RotateY(phase),
                 new float3(pose.Stunned != 0 ? 0.05f : 0)));
             animation.Value = float4.zero;
+            worldBounds.Value = AABB.Transform(transform.Value, StableRenderBounds(renderBounds.Value));
+        }
+
+        internal static AABB StableRenderBounds(AABB source)
+        {
+            // Vertex-animation textures deform vertices after CPU culling. Every part needs
+            // bounds large enough for the whole animated skeleton, not its bind-pose fragment.
+            source.Extents = math.max(source.Extents, new float3(1.25f, 1.5f, 1.25f));
+            return source;
+        }
+    }
+
+    [BurstCompile]
+    internal struct EnemyRenderChunkBoundsJob : IJobChunk
+    {
+        [ReadOnly] public ComponentTypeHandle<WorldRenderBounds> WorldBounds;
+        public ComponentTypeHandle<ChunkWorldRenderBounds> ChunkBounds;
+
+        public void Execute(in ArchetypeChunk chunk, int unfilteredChunkIndex,
+            bool useEnabledMask, in v128 chunkEnabledMask)
+        {
+            var bounds = chunk.GetNativeArray(ref WorldBounds);
+            var combined = MinMaxAABB.Empty;
+            for (var i = 0; i < bounds.Length; i++) combined.Encapsulate(bounds[i].Value);
+            chunk.SetChunkComponentData(ref ChunkBounds, new ChunkWorldRenderBounds { Value = combined });
         }
     }
 
@@ -49,10 +80,27 @@ namespace WaveByWave.Enemies
     [WorldSystemFilter(WorldSystemFilterFlags.ClientSimulation)]
     public partial class EnemyRenderSystem : SystemBase
     {
+        private EntityQuery _parts;
+
+        protected override void OnCreate() => _parts = GetEntityQuery(new EntityQueryDesc
+        {
+            All = new[]
+            {
+                ComponentType.ReadOnly<EnemyPartOwner>(), ComponentType.ReadWrite<LocalToWorld>(),
+                ComponentType.ReadOnly<RenderBounds>(), ComponentType.ReadWrite<WorldRenderBounds>(),
+                ComponentType.ChunkComponent<ChunkWorldRenderBounds>()
+            }
+        });
+
         protected override void OnUpdate()
         {
             Dependency = new EnemyRenderJob { Poses = GetComponentLookup<EnemyVisualPose>(true) }
                 .ScheduleParallel(Dependency);
+            Dependency = new EnemyRenderChunkBoundsJob
+            {
+                WorldBounds = GetComponentTypeHandle<WorldRenderBounds>(true),
+                ChunkBounds = GetComponentTypeHandle<ChunkWorldRenderBounds>()
+            }.ScheduleParallel(_parts, Dependency);
             Dependency.Complete();
         }
     }

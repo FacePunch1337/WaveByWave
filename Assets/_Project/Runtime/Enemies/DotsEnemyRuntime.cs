@@ -45,12 +45,14 @@ namespace WaveByWave.Enemies
         {
             public Entity Entity;
             public float DeltaTime;
+            public bool WantsToMove;
         }
         private readonly List<EnemySpawnPoint> _points = new();
         private readonly HashSet<EnemySpawnPoint> _activated = new();
         private readonly List<SpawnRequest> _spawns = new();
         private readonly List<PlayerTarget> _players = new();
         private readonly Dictionary<int, Entity> _byId = new();
+        private readonly Dictionary<int, int> _crowdIndices = new();
         private readonly Dictionary<ulong, Transform> _surfaces = new();
         private readonly HashSet<int> _crewGroups = new();
         private readonly List<Entity> _remove = new();
@@ -171,7 +173,7 @@ namespace WaveByWave.Enemies
                     Carry(ref state);
                     manager.SetComponentData(entity, state);
                 }
-            system.Seek(targets, now, Catalog.CrowdSeparationRadius);
+            system.Seek(targets, now, Catalog.CrowdSeparationRadius, Catalog.BodyHeight * 0.75f);
             using (var entities = _enemies.ToEntityArray(Allocator.Temp))
             {
                 StressCount = 0;
@@ -396,6 +398,9 @@ namespace WaveByWave.Enemies
         {
             if (entities.Length == 0) return;
             var manager = _serverWorld.EntityManager;
+            using var crowdBodies = _enemies.ToComponentDataArray<DotsEnemyState>(Allocator.Temp);
+            _crowdIndices.Clear();
+            for (var body = 0; body < crowdBodies.Length; body++) _crowdIndices[crowdBodies[body].Id] = body;
             var count = Mathf.Min(entities.Length, Catalog.SurfaceProbesPerFrame);
             EnsureProbeCapacity(count);
             _probes.Clear();
@@ -412,6 +417,7 @@ namespace WaveByWave.Enemies
                 brain.LastSurfaceTime = now;
                 if (AdvanceSurfaceTransfer(ref state, ref brain, dt, now))
                 {
+                    UpdateCrowdSnapshot(crowdBodies, state);
                     manager.SetComponentData(entity, state);
                     manager.SetComponentData(entity, brain);
                     continue;
@@ -420,20 +426,29 @@ namespace WaveByWave.Enemies
                 var stoppingDistance = Catalog.MeleeRange * 0.82f;
                 if (brain.Attacking != 0 || brain.TargetDistance <= stoppingDistance)
                     direction = float3.zero;
-                var separation = brain.Separation * Catalog.CrowdSeparationStrength;
-                if (brain.Attacking != 0) separation *= 0.35f;
+                var separation = brain.Separation;
+                var separationAmount = math.saturate(math.length(separation));
+                if (separationAmount > 0.0001f)
+                {
+                    var away = separation / separationAmount;
+                    // Pursuit can be tangent to a neighbour, but may not point into it.
+                    direction += away * math.max(0, -math.dot(direction, away));
+                    direction = math.normalizesafe(direction + away *
+                        (math.max(0.25f, separationAmount) * Catalog.CrowdSeparationStrength));
+                }
                 if (state.StunUntil > now) { direction = float3.zero; separation = float3.zero; }
-                var movement = (direction + separation) * Catalog.MoveSpeed;
+                var movement = direction * Catalog.MoveSpeed;
                 var movementLength = math.length(movement);
                 if (movementLength > Catalog.MoveSpeed) movement *= Catalog.MoveSpeed / movementLength;
                 var displacement = (movement + brain.Knockback) * dt;
+                var wantsToMove = math.lengthsq(movement) > 0.0001f;
                 brain.Knockback *= math.exp(-7f * dt);
                 manager.SetComponentData(entity, brain);
                 // Idle passengers already have an exact local pose. Re-projecting them onto
                 // last frame's rendered collider introduces drift and wastes surface probes.
                 if (state.SupportId != 0 && math.lengthsq(displacement) < 0.000001f)
                 {
-                    UpdateLocomotion(ref state, ref brain, 0, dt, true, now);
+                    UpdateLocomotion(ref state, ref brain, 0, dt, true, wantsToMove, now);
                     manager.SetComponentData(entity, state);
                     manager.SetComponentData(entity, brain);
                     continue;
@@ -442,7 +457,7 @@ namespace WaveByWave.Enemies
                 Vector3 from = state.Position;
                 var to = from + (Vector3)displacement;
                 var index = _probes.Count;
-                _probes.Add(new Probe { Entity = entity, DeltaTime = dt });
+                _probes.Add(new Probe { Entity = entity, DeltaTime = dt, WantsToMove = wantsToMove });
                 _groundCommands[index] = new RaycastCommand(to + Vector3.up * (Catalog.StepHeight + 0.08f),
                     Vector3.down, query, Catalog.StepHeight + Catalog.MaximumDrop + 0.1f);
             }
@@ -482,6 +497,7 @@ namespace WaveByWave.Enemies
                         if (TryBeginSurfaceTransfer(state, goal))
                         {
                             AdvanceSurfaceTransfer(ref state, ref brain, probe.DeltaTime, now);
+                            UpdateCrowdSnapshot(crowdBodies, state);
                             manager.SetComponentData(probe.Entity, state);
                             manager.SetComponentData(probe.Entity, brain);
                             continue;
@@ -493,7 +509,20 @@ namespace WaveByWave.Enemies
                 if (ground.collider != null)
                 {
                     var previous = state.Position;
-                    state.Position = ground.point;
+                    var candidate = state;
+                    candidate.Position = ground.point;
+                    AttachSurface(ref candidate, ground.collider);
+                    var accepted = LimitCrowdStep(state.Id, candidate.SupportId, previous,
+                        ground.point, crowdBodies, Catalog.CrowdSeparationRadius,
+                        Catalog.BodyRadius, Catalog.BodyHeight);
+                    var wantedHorizontal = math.distance(previous.xz, ((float3)ground.point).xz);
+                    var acceptedHorizontal = math.distance(previous.xz, ((float3)accepted).xz);
+                    var horizontalFraction = wantedHorizontal > 0.00001f
+                        ? math.saturate(acceptedHorizontal / wantedHorizontal) : 1f;
+                    var targetHeight = Mathf.Lerp(previous.y, ground.point.y, horizontalFraction);
+                    state.Position = new float3(accepted.x,
+                        SmoothSurfaceHeight(previous.y, targetHeight,
+                            Catalog.SurfaceVerticalSpeed, probe.DeltaTime), accepted.z);
                     movedDistance = math.distance(previous.xz, state.Position.xz);
                     if (math.lengthsq(brain.Direction) > 0.01f && state.StunUntil <= now && brain.Attacking == 0)
                         state.Rotation = math.slerp(state.Rotation, quaternion.LookRotationSafe(
@@ -501,8 +530,10 @@ namespace WaveByWave.Enemies
                             1 - math.exp(-12 * probe.DeltaTime));
                     AttachSurface(ref state, ground.collider);
                     ReleaseBoardedCrew(ref brain, state);
+                    UpdateCrowdSnapshot(crowdBodies, state);
                 }
-                UpdateLocomotion(ref state, ref brain, movedDistance, probe.DeltaTime, movementEvaluated, now);
+                UpdateLocomotion(ref state, ref brain, movedDistance, probe.DeltaTime,
+                    movementEvaluated, probe.WantsToMove, now);
                 manager.SetComponentData(probe.Entity, state);
                 manager.SetComponentData(probe.Entity, brain);
             }

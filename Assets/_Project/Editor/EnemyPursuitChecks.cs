@@ -19,12 +19,17 @@ namespace WaveByWave.Editor
     public static class EnemyPursuitChecks
     {
         private const string Request = "Temp/EnemyPursuitChecks.request";
+        private static int _safeEditorFrames;
         [InitializeOnLoadMethod]
         private static void Install() => EditorApplication.update += RunRequested;
         private static void RunRequested()
         {
-            if (!File.Exists(Request) || EditorApplication.isCompiling || EditorApplication.isUpdating ||
-                EditorApplication.isPlayingOrWillChangePlaymode) return;
+            if (!File.Exists(Request) || EditorApplication.isCompiling || EditorApplication.isUpdating) return;
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            { _safeEditorFrames = 0; return; }
+            // isPlayingOrWillChangePlaymode can turn false one update before the editor
+            // scene API leaves its play-mode transition state.
+            if (++_safeEditorFrames < 3) return;
             if (File.GetLastWriteTimeUtc("Assets/_Project/Editor/EnemyPursuitChecks.cs") >
                 File.GetLastWriteTimeUtc(typeof(EnemyPursuitChecks).Assembly.Location))
             { AssetDatabase.Refresh(); return; }
@@ -33,7 +38,8 @@ namespace WaveByWave.Editor
                 if (File.GetLastWriteTimeUtc("Assets/_Project/Runtime/Enemies/" + file) > compiled)
                 { AssetDatabase.Refresh(); return; }
             File.Delete(Request);
-            try { Run(); File.WriteAllText("Temp/EnemyPursuitChecks.result", "PASS: targeting, hulls, blocked facing, fair edge budget, water-gap limits and moving-deck transfers."); }
+            _safeEditorFrames = 0;
+            try { Run(); File.WriteAllText("Temp/EnemyPursuitChecks.result", "PASS: targeting, hulls, render bounds, stable locomotion, crowd spacing, edge pursuit and moving-deck transfers."); }
             catch (Exception error) { File.WriteAllText("Temp/EnemyPursuitChecks.result", "FAIL: " + error); Debug.LogException(error); }
         }
 
@@ -45,11 +51,42 @@ namespace WaveByWave.Editor
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) throw new InvalidOperationException("Run outside Play Mode.");
             CheckSteering();
+            CheckSkeletonCrowd();
             CheckHullCast();
             CheckAuthoredHull();
             CheckEdgeBudget();
+            CheckMovementStability();
+            CheckRenderBounds();
             CheckEdges();
             Debug.Log("[Enemy pursuit checks] PASS");
+        }
+
+        private static void CheckSkeletonCrowd()
+        {
+            using var world = new World("Skeleton crowd regression");
+            var system = world.GetOrCreateSystemManaged<EnemyServerSystem>();
+            var targets = new NativeArray<EnemyTarget>(1, Allocator.TempJob);
+            try
+            {
+                targets[0] = new EnemyTarget { Position = new float3(10, 0, 0), Index = 0 };
+                var left = world.EntityManager.CreateEntity(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
+                var right = world.EntityManager.CreateEntity(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
+                world.EntityManager.SetComponentData(left, new DotsEnemyState
+                    { Id = 1, Health = 60, Scene = 1, SupportId = 9, Position = float3.zero });
+                world.EntityManager.SetComponentData(right, new DotsEnemyState
+                    { Id = 2, Health = 60, Scene = 1, SupportId = 9, Position = new float3(0.4f,0,0) });
+                system.Seek(targets, 0, 0.82f, 1.2f);
+                Check(world.EntityManager.GetComponentData<DotsEnemyBrain>(left).Separation.x < 0 &&
+                      world.EntityManager.GetComponentData<DotsEnemyBrain>(right).Separation.x > 0,
+                    "Close skeletons on one surface were not directed apart.");
+                var separatedSurface = world.EntityManager.GetComponentData<DotsEnemyState>(right);
+                separatedSurface.SupportId = 10;
+                world.EntityManager.SetComponentData(right, separatedSurface);
+                system.Seek(targets, 0, 0.82f, 1.2f);
+                Check(math.lengthsq(world.EntityManager.GetComponentData<DotsEnemyBrain>(left).Separation) == 0,
+                    "Skeletons on different surfaces repelled each other.");
+            }
+            finally { targets.Dispose(); }
         }
 
         private static void CheckEdgeBudget()
@@ -66,6 +103,66 @@ namespace WaveByWave.Editor
                 }
                 Check(Array.TrueForAll(seen, value => value), $"Edge searches starved enemies in population {population}.");
             }
+        }
+
+        private static void CheckMovementStability()
+        {
+            var flags = BindingFlags.Static | BindingFlags.NonPublic;
+            var smooth = typeof(DotsEnemyRuntime).GetMethod("SmoothSurfaceHeight", flags);
+            var limitedHeight = (float)smooth.Invoke(null, new object[] { 0f, 10f, 4f, 0.05f });
+            Check(Mathf.Abs(limitedHeight - 0.2f) < 0.0001f,
+                "Surface height snapped instead of moving on the vertical axis at its configured speed.");
+            var locomotion = typeof(DotsEnemyRuntime).GetMethod("ResolveLocomotionAnimation", flags);
+            var animation = EnemyAnimationState.Run;
+            var idleTime = 0f;
+            for (var frame = 0; frame < 20; frame++)
+            {
+                object[] args = { animation, false, false, 0f, 0.05f, frame % 2 == 0, true, idleTime };
+                animation = (EnemyAnimationState)locomotion.Invoke(null, args);
+                idleTime = (float)args[7];
+            }
+            Check(animation == EnemyAnimationState.Run,
+                "Pursuit animation flickered to idle while surface progress was intermittent.");
+            for (var frame = 0; frame < 6; frame++)
+            {
+                object[] args = { animation, false, false, 0f, 0.05f, true, false, idleTime };
+                animation = (EnemyAnimationState)locomotion.Invoke(null, args);
+                idleTime = (float)args[7];
+            }
+            Check(animation == EnemyAnimationState.Idle,
+                "Skeleton did not return to idle after movement intent ended.");
+
+            var limit = typeof(DotsEnemyRuntime).GetMethod("LimitCrowdStep", flags);
+            var bodies = new NativeArray<DotsEnemyState>(1, Allocator.Temp);
+            try
+            {
+                bodies[0] = new DotsEnemyState { Id = 2, Health = 60, SupportId = 7,
+                    Position = new float3(1, 0, 0) };
+                Vector3 Step(Vector3 from, Vector3 to, ulong support = 7) => (Vector3)limit.Invoke(null,
+                    new object[] { 1, support, from, to, bodies, 0.82f, 0.4f, 1.7f });
+                var stopped = Step(Vector3.zero, new Vector3(0.5f, 10, 0));
+                Check(stopped.x < 0.17f && stopped.y == 10,
+                    "Crowd limiter allowed entry into personal space or mixed vertical correction into XZ.");
+                Check(Step(Vector3.zero, new Vector3(0.5f, 0, 0), 8).x == 0.5f,
+                    "Enemies on different support surfaces blocked each other.");
+                bodies[0] = new DotsEnemyState { Id = 2, Health = 60, SupportId = 7,
+                    Position = new float3(0.2f, 0, 0) };
+                Check(Step(Vector3.zero, new Vector3(-0.2f, 0, 0)).x < -0.19f,
+                    "An overlapping skeleton was not allowed to spread away.");
+                Check(Mathf.Abs(Step(Vector3.zero, new Vector3(0.1f, 0, 0)).x) < 0.001f,
+                    "An overlapping skeleton was allowed to compress the crowd further.");
+            }
+            finally { bodies.Dispose(); }
+        }
+
+        private static void CheckRenderBounds()
+        {
+            var job = typeof(DotsEnemyPresentation).Assembly.GetType("WaveByWave.Enemies.EnemyRenderJob");
+            var stable = job.GetMethod("StableRenderBounds", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+            var bounds = new AABB { Center = float3.zero, Extents = new float3(0.1f) };
+            var result = (AABB)stable.Invoke(null, new object[] { bounds });
+            Check(math.all(result.Extents >= new float3(1.25f, 1.5f, 1.25f)),
+                "Animated skeleton render bounds remained smaller than a full character.");
         }
 
         private static void CheckSteering()

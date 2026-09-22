@@ -79,6 +79,7 @@ namespace WaveByWave.Enemies
         public float Time;
         public float CrowdCellSize;
         public float CrowdRadius;
+        public float CrowdVerticalRange;
         private void Execute(in DotsEnemyState state, ref DotsEnemyBrain brain)
         {
             brain.Target = -1;
@@ -113,7 +114,9 @@ namespace WaveByWave.Enemies
                 do
                 {
                     var other = Bodies[index];
-                    if (other.Id == state.Id || other.Health <= 0 || other.Scene != state.Scene) continue;
+                    if (other.Id == state.Id || other.Health <= 0 || other.Scene != state.Scene ||
+                        other.SupportId != state.SupportId || math.abs(other.Position.y - state.Position.y) > CrowdVerticalRange)
+                        continue;
                     var delta = new float3(state.Position.x - other.Position.x, 0,
                         state.Position.z - other.Position.z);
                     var distanceSq = math.lengthsq(delta);
@@ -166,7 +169,7 @@ namespace WaveByWave.Enemies
             if (runtime != null && runtime.CanSimulate) runtime.TickServer(this);
         }
 
-        public void Seek(NativeArray<EnemyTarget> targets, float now, float crowdRadius)
+        public void Seek(NativeArray<EnemyTarget> targets, float now, float crowdRadius, float crowdVerticalRange)
         {
             using var bodies = _enemyQuery.ToComponentDataArray<DotsEnemyState>(Allocator.TempJob);
             var cellSize = math.max(0.01f, crowdRadius);
@@ -181,7 +184,8 @@ namespace WaveByWave.Enemies
                 {
                     Targets = targets, Bodies = bodies, CrowdGrid = crowdGrid,
                     Time = now,
-                    CrowdCellSize = cellSize, CrowdRadius = crowdRadius
+                    CrowdCellSize = cellSize, CrowdRadius = crowdRadius,
+                    CrowdVerticalRange = crowdVerticalRange
                 }
                 .ScheduleParallel(Dependency);
             Dependency.Complete();

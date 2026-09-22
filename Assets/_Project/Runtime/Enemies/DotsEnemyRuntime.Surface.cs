@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -16,23 +17,88 @@ namespace WaveByWave.Enemies
         }
         private readonly Dictionary<int, SurfaceTransfer> _surfaceTransfers = new();
 
-        private void UpdateLocomotion(ref DotsEnemyState state, ref DotsEnemyBrain brain,
-            float distance, float deltaTime, bool evaluated, float now)
+        private static float SmoothSurfaceHeight(float current, float target, float speed, float deltaTime) =>
+            Mathf.MoveTowards(current, target, Mathf.Max(0.1f, speed) * deltaTime);
+
+        private void UpdateCrowdSnapshot(NativeArray<DotsEnemyState> bodies, DotsEnemyState state)
         {
-            if (brain.Attacking != 0 || state.StunUntil > now) { brain.LocomotionIdleTime = 0; return; }
+            if (_crowdIndices.TryGetValue(state.Id, out var index)) bodies[index] = state;
+        }
+
+        private static Vector3 LimitCrowdStep(int id, ulong support, Vector3 from, Vector3 desired,
+            NativeArray<DotsEnemyState> bodies, float configuredDistance, float bodyRadius, float bodyHeight)
+        {
+            var minimum = Mathf.Max(configuredDistance, bodyRadius * 2f + 0.04f);
+            if (minimum <= 0) return desired;
+            var start = new float2(from.x, from.z);
+            var end = new float2(desired.x, desired.z);
+            var step = end - start;
+            var lengthSq = math.lengthsq(step);
+            if (lengthSq < 0.0000001f) return desired;
+            var minimumSq = minimum * minimum;
+            var maxFraction = 1f;
+            var startedInside = false;
+            var oldNearestSq = float.PositiveInfinity;
+            var newNearestSq = float.PositiveInfinity;
+            for (var i = 0; i < bodies.Length; i++)
+            {
+                var other = bodies[i];
+                if (other.Id == id || other.Health <= 0 || other.SupportId != support ||
+                    math.abs(other.Position.y - from.y) > bodyHeight * 0.75f) continue;
+                var center = other.Position.xz;
+                var oldOffset = start - center;
+                var newOffset = end - center;
+                var oldSq = math.lengthsq(oldOffset);
+                var newSq = math.lengthsq(newOffset);
+                if (oldSq < minimumSq - 0.0001f)
+                {
+                    startedInside = true;
+                    oldNearestSq = math.min(oldNearestSq, oldSq);
+                    newNearestSq = math.min(newNearestSq, newSq);
+                    continue;
+                }
+                // Sweep the horizontal movement against the neighbour's exclusion circle.
+                var b = 2f * math.dot(oldOffset, step);
+                var c = oldSq - minimumSq;
+                var discriminant = b * b - 4f * lengthSq * c;
+                if (discriminant < 0) continue;
+                var entry = (-b - math.sqrt(discriminant)) / (2f * lengthSq);
+                if (entry >= 0 && entry <= maxFraction) maxFraction = entry;
+            }
+            // Existing spawn overlap may only improve; this lets a stack spread out but
+            // never lets pursuit compress it further.
+            if (startedInside && newNearestSq <= oldNearestSq + 0.0001f) maxFraction = 0;
+            if (maxFraction < 1f)
+            {
+                var skin = 0.01f / math.sqrt(lengthSq);
+                end = math.lerp(start, end, math.max(0, maxFraction - skin));
+            }
+            return new Vector3(end.x, desired.y, end.y);
+        }
+
+        private void UpdateLocomotion(ref DotsEnemyState state, ref DotsEnemyBrain brain,
+            float distance, float deltaTime, bool evaluated, bool wantsToMove, float now)
+        {
+            var animation = ResolveLocomotionAnimation(state.Animation, brain.Attacking != 0,
+                state.StunUntil > now, distance, deltaTime, evaluated, wantsToMove,
+                ref brain.LocomotionIdleTime);
+            if (animation != state.Animation) SetAnimation(ref state, animation);
+        }
+
+        private static EnemyAnimationState ResolveLocomotionAnimation(EnemyAnimationState current,
+            bool attacking, bool stunned, float distance, float deltaTime, bool evaluated,
+            bool wantsToMove, ref float idleTime)
+        {
+            if (attacking || stunned) { idleTime = 0; return current; }
             // A deferred edge search is not evidence that the character has stopped.
-            if (!evaluated) return;
-            if (distance >= Mathf.Max(0.004f, deltaTime * 0.08f))
+            if (!evaluated) return current;
+            if (distance >= Mathf.Max(0.004f, deltaTime * 0.08f) || wantsToMove)
             {
-                brain.LocomotionIdleTime = 0;
-                SetAnimation(ref state, EnemyAnimationState.Run);
+                idleTime = 0;
+                return EnemyAnimationState.Run;
             }
-            else
-            {
-                brain.LocomotionIdleTime += deltaTime;
-                if (brain.LocomotionIdleTime >= 0.25f)
-                    SetAnimation(ref state, EnemyAnimationState.Idle);
-            }
+            idleTime += deltaTime;
+            return idleTime >= 0.25f ? EnemyAnimationState.Idle : current;
         }
 
         private void FaceTarget(ref DotsEnemyState state, DotsEnemyBrain brain, float deltaTime, float now)

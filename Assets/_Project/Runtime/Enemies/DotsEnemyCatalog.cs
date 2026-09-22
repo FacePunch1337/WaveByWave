@@ -138,6 +138,8 @@ namespace WaveByWave.Enemies
         public float StepHeight = 0.85f;
         [Min(0.1f), Tooltip("Maximum downward height change accepted in one surface probe.")]
         public float MaximumDrop = 1.5f;
+        [Min(0.1f), Tooltip("Maximum vertical feet adjustment per second. Horizontal movement remains independent.")]
+        public float SurfaceVerticalSpeed = 4f;
         [Min(0.1f)] public float BodyRadius = 0.38f;
         [Min(0.2f)] public float BodyHeight = 1.7f;
         [Min(0f), Tooltip("Preferred minimum center-to-center distance between enemies. Uses a DOTS spatial grid, not physics colliders.")]

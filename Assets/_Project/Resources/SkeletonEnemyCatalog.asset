@@ -1575,6 +1575,7 @@ MonoBehaviour:
   MaximumSlope: 70
   StepHeight: 10
   MaximumDrop: 10
+  SurfaceVerticalSpeed: 4
   BodyRadius: 0.4
   BodyHeight: 1.7
   CrowdSeparationRadius: 0.82

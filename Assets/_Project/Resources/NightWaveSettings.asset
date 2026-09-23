@@ -14,17 +14,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.NightWaveSettings
   VictoryDisplayDuration: 5
   Waves:
-  - Name: First night
-    Bots:
-    - Prefab: {fileID: 1751487147457462807, guid: 99d70853d7924a44a9d26df4d22e5deb, type: 3}
-      SkeletonType: 0
-      Count: 1
+  - Name: 1
+    Bots: []
     EnemyShips: 1
     SpawnRadius: 50
-  - Name: Second night
-    Bots:
-    - Prefab: {fileID: 1751487147457462807, guid: 99d70853d7924a44a9d26df4d22e5deb, type: 3}
-      SkeletonType: 0
-      Count: 1
+  - Name: 2
+    Bots: []
     EnemyShips: 3
     SpawnRadius: 50
+  - Name: 3
+    Bots: []
+    EnemyShips: 10
+    SpawnRadius: 100

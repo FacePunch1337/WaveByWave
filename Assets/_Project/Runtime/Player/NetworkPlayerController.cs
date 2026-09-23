@@ -860,7 +860,17 @@ namespace WaveByWave.Player
             if (velocityChange.sqrMagnitude < 0.0001f)
                 return;
             _kccMotor.ForceUnground();
-            _kccMotor.BaseVelocity += velocityChange;
+            // Multiple hits can arrive before the next motor tick. Let their
+            // directions combine without stacking their speed or lift endlessly.
+            var current = _kccMotor.BaseVelocity;
+            var currentPlanar = Vector3.ProjectOnPlane(current, Vector3.up);
+            var incomingPlanar = Vector3.ProjectOnPlane(velocityChange, Vector3.up);
+            var maximumPlanarSpeed = Mathf.Max(currentPlanar.magnitude, incomingPlanar.magnitude);
+            var planar = Vector3.ClampMagnitude(currentPlanar + incomingPlanar, maximumPlanarSpeed);
+            var maximumVerticalSpeed = Mathf.Max(Mathf.Abs(current.y), Mathf.Abs(velocityChange.y));
+            var vertical = Mathf.Clamp(current.y + velocityChange.y,
+                -maximumVerticalSpeed, maximumVerticalSpeed);
+            _kccMotor.BaseVelocity = planar + Vector3.up * vertical;
             _isGrounded = false;
             _platform = null;
             _airborneFromPlatform = true;

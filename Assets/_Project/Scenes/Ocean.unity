@@ -257,6 +257,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemyShipSpawnPoint
       objectReference: {fileID: 0}
+    - target: {fileID: 5603062432992959892, guid: fe38d9dd933f8bb47bfb0b3008b88cf5, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6247767238028406092, guid: fe38d9dd933f8bb47bfb0b3008b88cf5, type: 3}
       propertyPath: Mode
       value: 0
@@ -2837,7 +2841,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5384964854462884331, guid: 2b059a76f8890474d9a8d9e61a0460c1, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.6515619
+      value: -0.61116487
       objectReference: {fileID: 0}
     - target: {fileID: 5384964854462884331, guid: 2b059a76f8890474d9a8d9e61a0460c1, type: 3}
       propertyPath: m_LocalPosition.z
@@ -2845,11 +2849,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5384964854462884331, guid: 2b059a76f8890474d9a8d9e61a0460c1, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.9996734
+      value: 0.99992067
       objectReference: {fileID: 0}
     - target: {fileID: 5384964854462884331, guid: 2b059a76f8890474d9a8d9e61a0460c1, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0.02518341
+      value: 0.01259213
       objectReference: {fileID: 0}
     - target: {fileID: 5384964854462884331, guid: 2b059a76f8890474d9a8d9e61a0460c1, type: 3}
       propertyPath: m_LocalRotation.y
@@ -2857,7 +2861,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5384964854462884331, guid: 2b059a76f8890474d9a8d9e61a0460c1, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0.0043397862
+      value: -0.00033655614
       objectReference: {fileID: 0}
     - target: {fileID: 5384964854462884331, guid: 2b059a76f8890474d9a8d9e61a0460c1, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x

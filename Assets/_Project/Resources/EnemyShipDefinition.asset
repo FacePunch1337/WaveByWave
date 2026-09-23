@@ -44,7 +44,7 @@ MonoBehaviour:
   PreferredBroadsideRange: 20
   RangeCorrectionBand: 12
   OrbitWeight: 1
-  RangeCorrectionWeight: 1.25
+  RangeCorrectionWeight: 3
   BroadsideFireAngle: 18
   FireRange: 100
   FireCooldown: 5.5

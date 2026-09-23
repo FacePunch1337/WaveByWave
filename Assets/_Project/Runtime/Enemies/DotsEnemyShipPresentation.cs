@@ -17,6 +17,9 @@ namespace WaveByWave.Enemies
             public EnemyShipView Object;
             public float3 Position;
             public quaternion Rotation;
+            public float3 FromPosition, TargetPosition;
+            public quaternion FromRotation, TargetRotation;
+            public float LastSampleAt, BlendStarted, BlendDuration;
             public Matrix4x4 Frame;
             public uint Hit;
             public uint Shot;
@@ -63,7 +66,8 @@ namespace WaveByWave.Enemies
             var objectCount = 0;
             foreach (var cached in Views.Values)
                 if (cached.Object != null) objectCount++;
-            var blend = 1f - Mathf.Exp(-12f * Time.unscaledDeltaTime);
+            // Render time must advance between server simulation ticks on a host.
+            var now = Time.unscaledTime;
             using var states = _query.ToComponentDataArray<DotsEnemyShipState>(Allocator.Temp);
             foreach (var state in states)
             {
@@ -83,6 +87,9 @@ namespace WaveByWave.Enemies
                 if (!Views.TryGetValue(state.Id, out var view))
                 {
                     view = new View { Position = displayPosition, Rotation = displayRotation,
+                        FromPosition = displayPosition, TargetPosition = displayPosition,
+                        FromRotation = displayRotation, TargetRotation = displayRotation,
+                        LastSampleAt = now, BlendStarted = now,
                         Hit = state.HitRevision, Shot = state.ShotRevision, Impact = state.ImpactRevision };
                     Views.Add(state.Id, view);
                 }
@@ -125,11 +132,37 @@ namespace WaveByWave.Enemies
                 {
                     view.Position = displayPosition;
                     view.Rotation = displayRotation;
+                    view.FromPosition = view.TargetPosition = displayPosition;
+                    view.FromRotation = view.TargetRotation = displayRotation;
+                    view.LastSampleAt = now;
+                }
+                else if (runtime.CanSimulate)
+                {
+                    // The host reads an unsmoothed server world. Interpolate each new
+                    // simulation sample over its cadence instead of chasing stepwise poses.
+                    if (math.distancesq(view.TargetPosition, displayPosition) > 0.00000001f ||
+                        math.abs(math.dot(view.TargetRotation.value, displayRotation.value)) < 0.999999f)
+                    {
+                        view.FromPosition = view.Position;
+                        view.FromRotation = view.Rotation;
+                        view.TargetPosition = displayPosition;
+                        view.TargetRotation = displayRotation;
+                        view.BlendDuration = Mathf.Clamp(now - view.LastSampleAt,
+                            1f / Mathf.Max(1, _definition.SimulationRate),
+                            1f / Mathf.Max(1, _definition.DistantSimulationRate));
+                        view.BlendStarted = now;
+                        view.LastSampleAt = now;
+                    }
+                    var progress = Mathf.Clamp01((now - view.BlendStarted) /
+                        Mathf.Max(0.001f, view.BlendDuration));
+                    view.Position = math.lerp(view.FromPosition, view.TargetPosition, progress);
+                    view.Rotation = math.slerp(view.FromRotation, view.TargetRotation, progress);
                 }
                 else
                 {
-                    view.Position = math.lerp(view.Position, displayPosition, blend);
-                    view.Rotation = math.slerp(view.Rotation, displayRotation, blend);
+                    // NetCode already interpolates these ghost fields on clients.
+                    view.Position = displayPosition;
+                    view.Rotation = displayRotation;
                 }
                 view.Frame = Matrix4x4.TRS(view.Position, view.Rotation, _definition.ViewPrefab.transform.localScale);
                 if (view.Object == null)

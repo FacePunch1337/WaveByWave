@@ -8,7 +8,7 @@ namespace WaveByWave.Enemies
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Rigidbody))]
-    public sealed class EnemyShipView : MonoBehaviour, IEquipmentDamageReceiver
+    public sealed class EnemyShipView : MonoBehaviour
     {
         [SerializeField] private Rigidbody body;
         [SerializeField] private Collider[] hullColliders;
@@ -227,9 +227,6 @@ namespace WaveByWave.Enemies
                 point, normal, water, show, at,
                 _definition.WaterImpactPrefab, _definition.ImpactEffectPrefab);
         }
-
-        public void ReceiveEquipmentHitServer(float damage, Vector3 attackerPosition, bool canBlock = true) =>
-            DotsEnemyShipRuntime.Instance?.Damage(ShipId, damage, attackerPosition);
 
         private void OnDestroy()
         {

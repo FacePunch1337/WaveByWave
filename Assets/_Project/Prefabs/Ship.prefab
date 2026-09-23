@@ -2686,8 +2686,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4500667313592668005}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.01847667, y: 0, z: 0.0042097587, w: 0.9998205}
-  m_LocalPosition: {x: 5.9408994, y: -1.2175806, z: 0}
+  m_LocalRotation: {x: -0.031851556, y: 0, z: 0.003167441, w: 0.99948764}
+  m_LocalPosition: {x: 5.9408994, y: -3.0200381, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -2944,12 +2944,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Enemies.EnemyDeckNavigation
   Data: {fileID: 11400000, guid: 942a1dda025b7f746894ae2207777fd0, type: 2}
   Sources: []
-  CellSize: 0.2
+  CellSize: 0.1
   AgentRadius: 0.10000001
   AgentHeight: 1.7000002
   MaximumSlope: 70
-  StepHeight: 0.45
-  MaximumDrop: 2
+  StepHeight: 1
+  MaximumDrop: 10
   ShowNavigation: 1
 --- !u!1 &4509367749125075905
 GameObject:

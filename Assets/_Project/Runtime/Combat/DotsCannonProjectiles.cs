@@ -81,8 +81,8 @@ namespace WaveByWave.Combat
                 if (!TryImpact(in ball, out var point, out var normal, out var water,
                         out var kind, out var targetId, out var collider) && ball.Age < ball.Lifetime)
                     continue;
-                if (kind == 1)
-                    DotsEnemyShipRuntime.Instance?.Damage(targetId, ball.Damage, ball.Previous);
+                if (kind == 1 && ball.EnemyTeam == 0)
+                    DotsEnemyShipRuntime.Instance?.DamageFromPlayerCannon(targetId, ball.Damage, ball.Previous);
                 else if (kind == 2)
                     DotsEnemyRuntime.Instance?.Damage(targetId, ball.Damage, ball.Previous);
                 else if (kind == 3 && collider != null)

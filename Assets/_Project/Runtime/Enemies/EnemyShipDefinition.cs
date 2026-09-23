@@ -37,8 +37,10 @@ namespace WaveByWave.Enemies
         [Min(0f)] public float WindSpeedBonus = 2.4f;
         [Min(0f)] public float WindDriftSpeed = 0.3f;
         [Min(1f)] public float TurnSpeed = 16f;
-        [Min(0.1f)] public float WaterHeightResponse = 3.5f;
-        [Min(0.1f)] public float WaterTiltResponse = 2.8f;
+        [Min(0.1f)] public float WaterHeightResponse = 1.25f;
+        [Min(0.1f)] public float WaterTiltResponse = 1f;
+        [Range(0f, 8f), Tooltip("Wave-normal strength, like Align Transform To Water Roll Amount.")]
+        public float WaterRollAmount = 0.08f;
         [Tooltip("Local waterline offset above the sampled surface.")]
         public float WaterlineOffset;
         [Tooltip("Width and length used to sample the wave normal.")]

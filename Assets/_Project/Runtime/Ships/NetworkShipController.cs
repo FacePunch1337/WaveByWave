@@ -116,6 +116,12 @@ namespace WaveByWave.Ships
         private Transform _planarMotionTarget;
         private MovingPlatform _movingPlatform;
         private KinematicShipCollision _geometryCollision;
+        private EquipmentWaterQuery _shipWaterQuery;
+        private EquipmentWaterQuery.CachedSurface _shipWaterSource;
+        private WaveProfile _authoredWaterProfile;
+        private float _smoothedWaterHeight;
+        private Vector3 _smoothedWaterNormal = Vector3.up;
+        private bool _waterSampleInitialized;
         private readonly Dictionary<int, RigidTransform> _nearbyEnemyCollisionPoses = new();
         private uint _nearbyEnemyCollisionRevision;
         private Vector3 _collisionStartPosition;
@@ -221,6 +227,7 @@ namespace WaveByWave.Ships
             _anchorOperators = new NetworkList<ulong>();
             body ??= GetComponent<Rigidbody>();
             waterAlignment ??= GetComponent<AlignToWater>();
+            _authoredWaterProfile = waterAlignment != null ? waterAlignment.heightInterface.waveProfile : null;
             collisionHull ??= GetComponent<BoxCollider>();
             helm ??= GetComponentInChildren<ShipHelm>(true);
             wind ??= GetComponent<NetworkWindController>();
@@ -240,7 +247,7 @@ namespace WaveByWave.Ships
 
         public override void OnNetworkSpawn()
         {
-            // This vessel is driven explicitly by AlignToWater, never by dynamic physics.
+            // This vessel samples water from its spawn-time snapshot, never by dynamic physics.
             // Reassert after all NGO spawn callbacks so no networking component can change it.
             body.isKinematic = true;
             body.useGravity = false;
@@ -249,12 +256,17 @@ namespace WaveByWave.Ships
 
             if (waterAlignment != null)
             {
-                waterAlignment.enabled = IsServer;
-                waterAlignment.externalMotionControl = IsServer;
+                // Its authored footprint/offset/smoothing remain the configuration,
+                // but the hull samples a frozen water snapshot instead of live material.
+                waterAlignment.enabled = false;
+                waterAlignment.externalMotionControl = false;
             }
 
             if (IsServer)
             {
+                _shipWaterQuery = new EquipmentWaterQuery(_authoredWaterProfile);
+                _shipWaterSource = _shipWaterQuery.CacheSurface(body.position, _authoredWaterProfile);
+                _waterSampleInitialized = false;
                 if (!ServerShipRegistry.Contains(this)) ServerShipRegistry.Add(this);
                 _anchorOperators.Clear();
                 _anchorPushInputs = new AnchorPushInput[anchor != null ? anchor.HandleCount : 0];
@@ -300,6 +312,9 @@ namespace WaveByWave.Ships
 
             if (waterAlignment != null)
                 waterAlignment.externalMotionControl = false;
+            _shipWaterQuery?.Dispose();
+            _shipWaterQuery = null;
+            _shipWaterSource = null;
             _movingPlatform?.DisableKccMover();
             _geometryCollision?.Release();
             DestroyPlanarMotionTarget();
@@ -309,6 +324,9 @@ namespace WaveByWave.Ships
         {
             if (!IsSpawned || !IsServer)
                 return;
+
+            if (_shipWaterSource == null)
+                _shipWaterSource = _shipWaterQuery?.CacheSurface(body.position, _authoredWaterProfile);
 
             UpdateAnchorOperation();
 
@@ -406,8 +424,7 @@ namespace WaveByWave.Ships
 
         public bool TryGetKccMoverTarget(out Vector3 position, out Quaternion rotation)
         {
-            if (IsSpawned && IsServer && waterAlignment != null &&
-                waterAlignment.HasExternalMotionTarget)
+            if (IsSpawned && IsServer && waterAlignment != null && _shipWaterSource != null)
             {
                 if (_collisionTargetResolved)
                 {
@@ -417,10 +434,31 @@ namespace WaveByWave.Ships
                 }
 
                 var deltaTime = Mathf.Max(Time.fixedDeltaTime, 0.0001f);
-                ApplyBuoyancy(waterAlignment.ExternalMotionTargetPosition,
-                    waterAlignment.ExternalMotionTargetRotation, deltaTime);
+                var yaw = Quaternion.Euler(0f, _heading, 0f);
+                if (_shipWaterQuery.TrySurface(_planarPosition, waterAlignment.surfaceSize,
+                    yaw, waterAlignment.rollAmount, _shipWaterSource,
+                    out var waterHeight, out var waterNormal))
+                {
+                    if (!_waterSampleInitialized)
+                    {
+                        _smoothedWaterHeight = waterHeight;
+                        _smoothedWaterNormal = waterNormal;
+                        _waterSampleInitialized = true;
+                    }
+                    else
+                    {
+                        var smoothing = waterAlignment.smoothing;
+                        var blend = smoothing > 0f ? Mathf.Clamp01(deltaTime / smoothing) : 1f;
+                        _smoothedWaterHeight = Mathf.Lerp(_smoothedWaterHeight, waterHeight, blend);
+                        _smoothedWaterNormal = Vector3.Lerp(_smoothedWaterNormal, waterNormal, blend).normalized;
+                    }
+                    var waterTarget = _planarPosition;
+                    waterTarget.y = _smoothedWaterHeight + waterAlignment.heightOffset;
+                    var waterRotation = Quaternion.FromToRotation(Vector3.up, _smoothedWaterNormal) * yaw;
+                    ApplyBuoyancy(waterTarget, waterRotation, deltaTime);
+                }
                 // Buoyancy, propulsion, helm and contacts share one velocity state.
-                // AlignToWater is a sampled equilibrium, never a second pose writer.
+                // The cached water sample is an equilibrium, never a second pose writer.
                 var fleet = WaveByWave.Enemies.DotsEnemyShipRuntime.Instance;
                 // An anchored hull is a fixed obstacle to the fleet. Enemy ships
                 // still cast against its real colliders and must resolve the contact.
@@ -569,6 +607,7 @@ namespace WaveByWave.Ships
         public override void OnDestroy()
         {
             ServerShipRegistry.Remove(this);
+            _shipWaterQuery?.Dispose();
             DestroyPlanarMotionTarget();
             base.OnDestroy();
         }

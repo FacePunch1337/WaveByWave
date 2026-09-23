@@ -13,8 +13,8 @@ namespace WaveByWave.Enemies
         [GhostField] public int Id;
         [GhostField] public int Scene;
         [GhostField] public uint Seed;
-        [GhostField(Quantization = 1000)] public float3 Position;
-        [GhostField(Quantization = 1000)] public quaternion Rotation;
+        [GhostField(Quantization = 1000, Smoothing = SmoothingAction.Interpolate)] public float3 Position;
+        [GhostField(Quantization = 1000, Smoothing = SmoothingAction.Interpolate)] public quaternion Rotation;
         [GhostField(Quantization = 100)] public float Health;
         [GhostField] public uint HitRevision;
         [GhostField] public uint ShotRevision;

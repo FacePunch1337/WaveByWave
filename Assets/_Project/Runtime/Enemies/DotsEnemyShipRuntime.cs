@@ -464,8 +464,14 @@ namespace WaveByWave.Enemies
             var targetRotation = yaw;
             var waterHeight = 0f;
             var normal = Vector3.up;
-            var hasWater = _shipWater.TryGetValue(state.Id, out var waterSource) &&
-                _water.TrySurface(next + yaw * _buoyancyCenter, _buoyancySize, yaw, waterSource,
+            if (!_shipWater.TryGetValue(state.Id, out var waterSource) || waterSource == null)
+            {
+                waterSource = _water.CacheSurface(next, Definition.WaterProfile);
+                if (waterSource != null) _shipWater[state.Id] = waterSource;
+            }
+            var hasWater = waterSource != null &&
+                _water.TrySurface(next + yaw * _buoyancyCenter, _buoyancySize, yaw,
+                    Definition.WaterRollAmount, waterSource,
                     out waterHeight, out normal);
             if (hasWater)
             {
@@ -613,7 +619,7 @@ namespace WaveByWave.Enemies
             manager.SetComponentData(entity, state);
         }
 
-        public bool Damage(int id, float damage, Vector3 source)
+        internal bool DamageFromPlayerCannon(int id, float damage, Vector3 source)
         {
             if (!CanSimulate || !float.IsFinite(damage) || damage <= 0 || !AttachServer() ||
                 !_byId.TryGetValue(id, out var entity) || !_serverWorld.EntityManager.Exists(entity)) return false;

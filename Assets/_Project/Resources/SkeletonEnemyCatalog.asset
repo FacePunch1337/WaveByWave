@@ -2292,7 +2292,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   WaterProfile: {fileID: 11400000, guid: 1ca4610f5bf9e2f4bb39535503a79eeb, type: 2}
-  MaximumSurfaceGap: 3
+  MaximumSurfaceGap: 5
   SurfaceTransferHeight: 10
   EdgeSearchesPerFrame: 32
   EnableTargetSlots: 0

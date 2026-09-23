@@ -15,12 +15,15 @@ namespace WaveByWave.Player
         private struct WaveMaterialState
         {
             public int Frame, Layers;
-            public bool Enabled;
+            public bool Enabled, Initialized;
             public float Speed, Frequency, Height;
             public float2 Direction;
+            public Texture ProfileTexture;
+            public WaveProfile MatchedProfile;
+            public int RetryProfileAtFrame;
         }
         private static readonly Dictionary<Material, WaveMaterialState> MaterialStates = new();
-        private readonly Dictionary<WaterObject, CachedSurface> _cachedSurfaces = new();
+        private static readonly HashSet<Material> MissingProfileWarnings = new();
 
         public sealed class CachedSurface
         {
@@ -30,33 +33,63 @@ namespace WaveByWave.Player
             internal float Speed, Frequency, Height;
             internal float2 Direction;
             internal int Layers;
+            public WaveProfile ActiveProfile => Profile;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetMaterialStates() => MaterialStates.Clear();
+        private static void ResetMaterialStates()
+        {
+            MaterialStates.Clear();
+            MissingProfileWarnings.Clear();
+        }
+
+        private static WaveMaterialState GetMaterialState(Material material)
+        {
+            MaterialStates.TryGetValue(material, out var state);
+            if (state.Initialized && state.Frame == Time.frameCount) return state;
+            state.Frame = Time.frameCount;
+            state.Initialized = true;
+            var texture = material.GetTexture(ShaderParams.Properties._WaveProfile);
+            if (texture != state.ProfileTexture ||
+                texture != null && state.MatchedProfile == null && Time.frameCount >= state.RetryProfileAtFrame)
+            {
+                state.ProfileTexture = texture;
+                state.MatchedProfile = null;
+                state.RetryProfileAtFrame = Time.frameCount + 300;
+                if (texture != null)
+                {
+                    foreach (var candidate in Resources.FindObjectsOfTypeAll<WaveProfile>())
+                        if (candidate != null && candidate.shaderParametersLUT == texture)
+                        { state.MatchedProfile = candidate; break; }
+                }
+            }
+            state.Enabled = material.IsKeywordEnabled(ShaderParams.Keywords.Waves);
+            if (state.Enabled)
+            {
+                var direction = material.GetVector(ShaderParams.Properties._Direction);
+                state.Direction = new float2(direction.x, direction.y);
+                state.Speed = material.GetFloat(ShaderParams.Properties._Speed) *
+                    material.GetFloat(ShaderParams.Properties._WaveSpeed);
+                state.Frequency = material.GetFloat(ShaderParams.Properties._WaveFrequency);
+                state.Layers = material.GetInt(ShaderParams.Properties._WaveMaxLayers);
+                state.Height = material.GetFloat(ShaderParams.Properties._WaveHeight);
+            }
+            MaterialStates[material] = state;
+            return state;
+        }
+
+        private static WaveProfile ProfileFor(WaveMaterialState state, WaveProfile fallback)
+        {
+            if (state.ProfileTexture == null) return fallback;
+            if (fallback != null && fallback.shaderParametersLUT == state.ProfileTexture) return fallback;
+            return state.MatchedProfile != null ? state.MatchedProfile : fallback;
+        }
 
         private void ComputeSamples(float level)
         {
-            var profile = _water.waveProfile;
-            if (profile == null) return;
-            var material = _water.waterObject.material;
-            if (!MaterialStates.TryGetValue(material, out var state) || state.Frame != Time.frameCount)
-            {
-                state.Frame = Time.frameCount;
-                state.Enabled = material.IsKeywordEnabled(ShaderParams.Keywords.Waves);
-                if (state.Enabled)
-                {
-                    var direction = material.GetVector(ShaderParams.Properties._Direction);
-                    state.Direction = new float2(direction.x, direction.y);
-                    state.Speed = material.GetFloat(ShaderParams.Properties._Speed) *
-                        material.GetFloat(ShaderParams.Properties._WaveSpeed);
-                    state.Frequency = material.GetFloat(ShaderParams.Properties._WaveFrequency);
-                    state.Layers = material.GetInt(ShaderParams.Properties._WaveMaxLayers);
-                    state.Height = material.GetFloat(ShaderParams.Properties._WaveHeight);
-                }
-                MaterialStates[material] = state;
-            }
-            if (!state.Enabled) return;
+            var state = GetMaterialState(_water.waterObject.material);
+            var profile = ProfileFor(state, _water.waveProfile);
+            if (!state.Enabled || profile == null) return;
             // Let the asset apply its internal floating-origin offset and clock.
             Gerstner.ComputeHeight(profile, _samples, level, state.Speed, state.Frequency,
                 state.Direction, new float3(1f, state.Height, 1f), state.Layers);
@@ -64,36 +97,29 @@ namespace WaveByWave.Player
         public EquipmentWaterQuery(WaveProfile profile)
         { _water.waveProfile = profile; _samples.SetSampleCount(4, true); }
 
-        // The material's LUT selects the actual wave profile. Resolve it once per
-        // water body, then keep the material's wave settings for every ship spawned there.
+        // Capture the water material at spawn. Each ship keeps its own snapshot, so
+        // a later spawn can use new settings without changing ships already afloat.
         public CachedSurface CacheSurface(Vector3 point, WaveProfile fallback)
         {
             var water = WaterObject.Find(point, false);
             if (water == null || water.material == null) return null;
-            if (_cachedSurfaces.TryGetValue(water, out var cached)) return cached;
-            var material = water.material;
-            var texture = material.GetTexture(ShaderParams.Properties._WaveProfile);
-            var profile = fallback;
-            if (texture != null && (profile == null || profile.shaderParametersLUT != texture))
-                foreach (var candidate in Resources.FindObjectsOfTypeAll<WaveProfile>())
-                    if (candidate != null && candidate.shaderParametersLUT == texture)
-                    { profile = candidate; break; }
-            if (texture != null && (profile == null || profile.shaderParametersLUT != texture))
-                Debug.LogWarning($"[Enemy ships] No loaded WaveProfile matches water material '{material.name}'. Assign its profile through the water scene setup.");
-            cached = new CachedSurface { Water = water, Profile = profile,
-                WavesEnabled = material.IsKeywordEnabled(ShaderParams.Keywords.Waves) };
-            if (cached.WavesEnabled)
+            var state = GetMaterialState(water.material);
+            if (state.ProfileTexture != null && state.MatchedProfile == null &&
+                (fallback == null || fallback.shaderParametersLUT != state.ProfileTexture) &&
+                MissingProfileWarnings.Add(water.material))
+                Debug.LogWarning($"No loaded WaveProfile matches water material '{water.material.name}'. " +
+                    "Ships spawned now will use their fallback profile.");
+            return new CachedSurface
             {
-                var direction = material.GetVector(ShaderParams.Properties._Direction);
-                cached.Direction = new float2(direction.x, direction.y);
-                cached.Speed = material.GetFloat(ShaderParams.Properties._Speed) *
-                    material.GetFloat(ShaderParams.Properties._WaveSpeed);
-                cached.Frequency = material.GetFloat(ShaderParams.Properties._WaveFrequency);
-                cached.Layers = material.GetInt(ShaderParams.Properties._WaveMaxLayers);
-                cached.Height = material.GetFloat(ShaderParams.Properties._WaveHeight);
-            }
-            _cachedSurfaces.Add(water, cached);
-            return cached;
+                Water = water,
+                Profile = ProfileFor(state, fallback),
+                WavesEnabled = state.Enabled,
+                Direction = state.Direction,
+                Speed = state.Speed,
+                Frequency = state.Frequency,
+                Layers = state.Layers,
+                Height = state.Height
+            };
         }
 
         public bool TrySurface(Vector3 point, Vector2 size, CachedSurface source,
@@ -102,6 +128,10 @@ namespace WaveByWave.Player
 
         public bool TrySurface(Vector3 point, Vector2 size, Quaternion yaw, CachedSurface source,
             out float height, out Vector3 normal)
+            => TrySurface(point, size, yaw, 0.35f, source, out height, out normal);
+
+        public bool TrySurface(Vector3 point, Vector2 size, Quaternion yaw, float rollAmount,
+            CachedSurface source, out float height, out Vector3 normal)
         {
             height = 0f;
             normal = Vector3.up;
@@ -120,7 +150,7 @@ namespace WaveByWave.Player
             height = (_samples.heightValues[0] + _samples.heightValues[1] +
                 _samples.heightValues[2] + _samples.heightValues[3]) * 0.25f;
             normal = yaw * HeightQuerySystem.DeriveNormal(_samples.heightValues[0], _samples.heightValues[1],
-                _samples.heightValues[2], _samples.heightValues[3], 0.35f);
+                _samples.heightValues[2], _samples.heightValues[3], rollAmount);
             return true;
         }
         public bool TryWaterLevel(Vector3 point, out float level)
@@ -178,6 +208,6 @@ namespace WaveByWave.Player
             point.y = Mathf.Lerp(a, b, fraction);
             return true;
         }
-        public void Dispose() { _cachedSurfaces.Clear(); _samples.Dispose(); }
+        public void Dispose() => _samples.Dispose();
     }
 }

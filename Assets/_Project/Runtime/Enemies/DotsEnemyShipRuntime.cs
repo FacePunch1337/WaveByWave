@@ -10,6 +10,7 @@ using UnityEngine.SceneManagement;
 using Unity.Profiling;
 using StylizedWater3;
 using WaveByWave.Player;
+using WaveByWave.Combat;
 using WaveByWave.Ships;
 using Object = UnityEngine.Object;
 using Random = Unity.Mathematics.Random;
@@ -31,6 +32,7 @@ namespace WaveByWave.Enemies
             public float Radius;
             public int Remaining;
             public int Attempts;
+            public int WaveGroup;
             public Random Random;
         }
 
@@ -42,32 +44,22 @@ namespace WaveByWave.Enemies
             public float CollisionRadius;
         }
 
-        private struct Projectile
-        {
-            public int ShipId;
-            public uint Revision;
-            public Vector3 Origin;
-            public Vector3 Velocity;
-            public Vector3 Previous;
-            public float Started;
-            public int Sample;
-        }
-
         private readonly List<EnemyShipSpawnPoint> _points = new();
         private readonly HashSet<EnemyShipSpawnPoint> _activated = new();
         private readonly List<SpawnRequest> _spawns = new();
         private readonly List<Target> _targets = new();
-        private readonly List<Projectile> _projectiles = new();
         private readonly Dictionary<int, Entity> _byId = new();
         private readonly Dictionary<int, EnemyShipView> _views = new();
         private readonly Dictionary<int, Matrix4x4> _physicsFrames = new();
         private readonly Dictionary<int, RigidTransform> _collisionPoses = new();
+        private readonly Dictionary<int, EquipmentWaterQuery.CachedSurface> _shipWater = new();
         internal IReadOnlyDictionary<int, RigidTransform> CollisionPoses => _collisionPoses;
         internal uint CollisionRevision { get; private set; }
         private static readonly ProfilerMarker SimulationMarker = new("WaveByWave.Fleet.Simulation");
         private readonly List<Entity> _remove = new();
         private readonly EnemyShipSpatialIndex _fleet = new();
         private readonly List<int> _playerContactCandidates = new();
+        private readonly List<int> _projectileContactCandidates = new();
         private bool _fleetInitialized;
         private RaycastHit[] _collisionHits = new RaycastHit[64];
         private readonly Collider[] _spawnOverlaps = new Collider[64];
@@ -85,7 +77,8 @@ namespace WaveByWave.Enemies
         private bool _wasServer;
         private Vector3 _contactBoundsCenter;
         private Vector3 _contactBoundsHalfExtents;
-        private const float ProjectileStep = 1f / 60f;
+        private Vector3 _buoyancyCenter;
+        private Vector2 _buoyancySize;
 
         public int AliveCount => _byId.Count;
         public float Now => NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening
@@ -124,11 +117,15 @@ namespace WaveByWave.Enemies
             if (Definition == null) return;
             var center = Definition.CollisionCenter;
             var halfExtents = Definition.CollisionHalfExtents;
+            var buoyancyCenter = Vector3.zero;
+            var buoyancySize = Definition.WaterSampleSize;
             if (Definition.ViewPrefab != null &&
                 Definition.ViewPrefab.TryGetComponent<EnemyShipView>(out var view))
             {
                 center = view.ContactBoundsCenter;
                 halfExtents = view.ContactBoundsHalfExtents;
+                buoyancyCenter = view.BuoyancyCenter;
+                buoyancySize = view.BuoyancySize;
             }
             var scale = Definition.ViewPrefab != null
                 ? Definition.ViewPrefab.transform.localScale : Vector3.one;
@@ -136,6 +133,9 @@ namespace WaveByWave.Enemies
             _contactBoundsHalfExtents = Vector3.Max(Vector3.Scale(halfExtents,
                 new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z))),
                 Vector3.one * 0.05f);
+            _buoyancyCenter = Vector3.Scale(buoyancyCenter, scale);
+            _buoyancySize = new Vector2(Mathf.Max(0.1f, buoyancySize.x * Mathf.Abs(scale.x)),
+                Mathf.Max(0.1f, buoyancySize.y * Mathf.Abs(scale.z)));
         }
 
         internal Vector3 ContactBoundsCenter => _contactBoundsCenter;
@@ -180,6 +180,7 @@ namespace WaveByWave.Enemies
             _byId.Clear();
             _physicsFrames.Clear();
             _collisionPoses.Clear();
+            _shipWater.Clear();
             CollisionRevision++;
             _fleet.Clear();
             _fleetInitialized = false;
@@ -194,12 +195,11 @@ namespace WaveByWave.Enemies
             if (_scene != DotsEnemyRuntime.SceneKey(SceneManager.GetActiveScene().name)) return;
             RefreshTargets();
             ActivatePoints();
-            if (_ships.IsEmptyIgnoreFilter && _spawns.Count == 0 && _projectiles.Count == 0) return;
+            if (_ships.IsEmptyIgnoreFilter && _spawns.Count == 0) return;
             var now = Now;
             if (now < _nextSimulation)
             {
                 RestorePhysicsViews();
-                SimulateProjectiles();
                 return;
             }
             _nextSimulation = now + 1f / Mathf.Max(1, Definition.SimulationRate);
@@ -251,7 +251,6 @@ namespace WaveByWave.Enemies
                 else _simulationCursor = 0;
             }
             RestorePhysicsViews();
-            SimulateProjectiles();
             foreach (var entity in _remove)
             {
                 if (!manager.Exists(entity)) continue;
@@ -260,6 +259,7 @@ namespace WaveByWave.Enemies
                 _fleet.Remove(state.Id);
                 _physicsFrames.Remove(state.Id);
                 _collisionPoses.Remove(state.Id);
+                _shipWater.Remove(state.Id);
                 CollisionRevision++;
                 DotsEnemyRuntime.Instance?.DespawnGroup(DotsEnemyRuntime.CrewGroupForShip(state.Id));
                 manager.DestroyEntity(entity);
@@ -305,15 +305,28 @@ namespace WaveByWave.Enemies
             }
         }
 
-        public bool SpawnAt(Vector3 center, int count = 1, float radius = 5f, uint seed = 0)
+        public bool SpawnAt(Vector3 center, int count = 1, float radius = 5f, uint seed = 0,
+            int waveGroup = 0)
         {
             if (!CanSimulate || !AttachServer()) return false;
             count = Mathf.Min(count, Definition.MaximumShips - AliveCount);
             if (count <= 0) return false;
             _spawns.Add(new SpawnRequest { Center = center, Radius = Mathf.Max(1f, radius),
-                Remaining = count,
+                Remaining = count, WaveGroup = waveGroup,
                 Random = new Random((seed != 0 ? seed : (uint)Environment.TickCount) | 1u) });
             return true;
+        }
+
+        public int NightWaveRemaining(int group)
+        {
+            if (!CanSimulate || _serverWorld == null || !_serverWorld.IsCreated) return 0;
+            var count = 0;
+            foreach (var request in _spawns) if (request.WaveGroup == group) count += request.Remaining;
+            var manager = _serverWorld.EntityManager;
+            foreach (var entity in _byId.Values)
+                if (manager.Exists(entity) && manager.GetComponentData<DotsEnemyShipBrain>(entity).WaveGroup == group &&
+                    manager.GetComponentData<DotsEnemyShipState>(entity).Health > 0f) count++;
+            return count;
         }
 
         private void SpawnBatch()
@@ -333,7 +346,7 @@ namespace WaveByWave.Enemies
                 request.Attempts++;
                 if (_water.TryHeight(candidate, out var height))
                 {
-                    candidate.y = height + Definition.WaterlineOffset;
+                    candidate.y = height + Definition.WaterlineOffset - _buoyancyCenter.y;
                     if (IsSpawnClear(candidate))
                     {
                         var heading = request.Random.NextFloat(0, math.PI * 2);
@@ -355,9 +368,11 @@ namespace WaveByWave.Enemies
                             Heading = heading,
                             LastTick = Now,
                             NextFire = Now + request.Random.NextFloat(1f, Definition.FireCooldown),
-                            OrbitSide = (byte)(state.Seed & 1u)
+                            OrbitSide = (byte)(state.Seed & 1u),
+                            WaveGroup = request.WaveGroup
                         });
                         _byId.Add(id, entity);
+                        _shipWater[id] = _water.CacheSurface(candidate, Definition.WaterProfile);
                         CachePhysicsFrame(state);
                         _fleet.Set(id, state.Position.xz);
                         request.Remaining--;
@@ -405,9 +420,13 @@ namespace WaveByWave.Enemies
             if (deltaTime <= 0f) return;
             if (state.Health <= 0)
             {
-                state.Position.y -= Definition.SinkSpeed * deltaTime;
-                state.Rotation = math.mul(state.Rotation,
-                    quaternion.RotateZ(math.radians(4f * deltaTime)));
+                var elapsed = math.max(0f, now - state.DeathAt);
+                var t = math.saturate(elapsed / math.max(0.1f, Definition.SinkDuration));
+                var eased = t * t * (3f - 2f * t);
+                state.Position = state.DeathPosition + new float3(0f,
+                    -Definition.SinkSpeed * Definition.SinkDuration * eased, 0f);
+                state.Rotation = math.mul(state.DeathRotation,
+                    quaternion.RotateZ(math.radians(4f * Definition.SinkDuration * eased)));
                 if (now >= state.DeathAt + Definition.SinkDuration) _remove.Add(entity);
                 return;
             }
@@ -443,9 +462,14 @@ namespace WaveByWave.Enemies
 
             var yaw = Quaternion.Euler(0f, brain.Heading * Mathf.Rad2Deg, 0f);
             var targetRotation = yaw;
-            if (_water.TrySurface(next, Definition.WaterSampleSize, out var waterHeight, out var normal))
+            var waterHeight = 0f;
+            var normal = Vector3.up;
+            var hasWater = _shipWater.TryGetValue(state.Id, out var waterSource) &&
+                _water.TrySurface(next + yaw * _buoyancyCenter, _buoyancySize, yaw, waterSource,
+                    out waterHeight, out normal);
+            if (hasWater)
             {
-                next.y = Mathf.Lerp(state.Position.y, waterHeight + Definition.WaterlineOffset,
+                next.y = Mathf.Lerp(state.Position.y, waterHeight + Definition.WaterlineOffset - _buoyancyCenter.y,
                     1f - Mathf.Exp(-Definition.WaterHeightResponse * deltaTime));
                 targetRotation = Quaternion.FromToRotation(Vector3.up, normal) * yaw;
             }
@@ -495,7 +519,7 @@ namespace WaveByWave.Enemies
         private void TryFire(ref DotsEnemyShipState state, ref DotsEnemyShipBrain brain, float now)
         {
             if (brain.Target < 0 || brain.Target >= _targets.Count || now < brain.NextFire ||
-                brain.TargetDistance > Definition.FireRange || _projectiles.Count >= 128) return;
+                brain.TargetDistance > Definition.FireRange) return;
             var target = _targets[brain.Target];
             if (target.Ship == null) return;
             var rotation = (Quaternion)state.Rotation;
@@ -517,12 +541,19 @@ namespace WaveByWave.Enemies
             if (!TryBallisticVelocity(origin, aim, Definition.ProjectileSpeed, Definition.ProjectileGravity,
                     out var velocity))
                 velocity = (aim - origin).normalized * Definition.ProjectileSpeed;
-            state.ShotRevision++;
+            var revision = state.ShotRevision + 1;
+            if (!DotsCannonProjectileSystem.Spawn(new DotsCannonProjectile
+                {
+                    Position = origin, Previous = origin, Origin = origin, Velocity = velocity,
+                    Gravity = Vector3.down * Definition.ProjectileGravity, Started = now,
+                    Lifetime = Definition.ProjectileLifetime, Radius = Definition.ProjectileRadius,
+                    Damage = Definition.ProjectileDamage, EnemyTeam = 1,
+                    EnemyShipId = state.Id, ShotRevision = revision
+                })) return;
+            state.ShotRevision = revision;
             state.ShotOrigin = origin;
             state.ShotVelocity = velocity;
             state.ShotStarted = now;
-            _projectiles.Add(new Projectile { ShipId = state.Id, Revision = state.ShotRevision,
-                Origin = origin, Previous = origin, Velocity = velocity, Started = now });
             var random = new Random(math.hash(new uint3(state.Seed, state.ShotRevision, (uint)state.Id)) | 1u);
             brain.NextFire = now + Definition.FireCooldown + random.NextFloat(0, Definition.FireCooldownJitter);
         }
@@ -566,98 +597,20 @@ namespace WaveByWave.Enemies
             return true;
         }
 
-        private void SimulateProjectiles()
+        internal void ReportProjectileImpact(int shipId, uint revision, Vector3 point,
+            Vector3 normal, bool water, bool show)
         {
-            var now = Now;
-            var lastSample = Mathf.CeilToInt(Definition.ProjectileLifetime / ProjectileStep);
-            for (var i = _projectiles.Count - 1; i >= 0; i--)
-            {
-                var projectile = _projectiles[i];
-                var targetSample = Mathf.Min(lastSample,
-                    Mathf.FloorToInt((now - projectile.Started) / ProjectileStep));
-                var removed = false;
-                for (var step = 0; step < 12 && projectile.Sample < targetSample; step++)
-                {
-                    projectile.Sample++;
-                    var age = projectile.Sample * ProjectileStep;
-                    var position = projectile.Origin + projectile.Velocity * age +
-                                   Vector3.down * (0.5f * Definition.ProjectileGravity * age * age);
-                    if (SampleProjectile(projectile, position, age))
-                    {
-                        _projectiles.RemoveAt(i);
-                        removed = true;
-                        break;
-                    }
-                    projectile.Previous = position;
-                }
-                if (removed) continue;
-                if (projectile.Sample >= lastSample)
-                {
-                    SetImpact(projectile, projectile.Previous, Vector3.up, false, false,
-                        projectile.Started + Definition.ProjectileLifetime);
-                    _projectiles.RemoveAt(i);
-                }
-                else _projectiles[i] = projectile;
-            }
-        }
-
-        private bool SampleProjectile(Projectile projectile, Vector3 position, float age)
-        {
-            var delta = position - projectile.Previous;
-            var distance = delta.magnitude;
-            var nearest = float.PositiveInfinity;
-            var point = position;
-            var normal = Vector3.up;
-            ShipCannonBattery battery = null;
-            var solid = false;
-            if (distance > 0.0001f)
-            {
-                var count = Physics.SphereCastNonAlloc(projectile.Previous, Definition.ProjectileRadius,
-                    delta / distance, _collisionHits, distance, Definition.CollisionLayers, QueryTriggerInteraction.Ignore);
-                var hits = _collisionHits;
-                if (count == hits.Length)
-                {
-                    hits = Physics.SphereCastAll(projectile.Previous, Definition.ProjectileRadius,
-                        delta / distance, distance, Definition.CollisionLayers, QueryTriggerInteraction.Ignore);
-                    count = hits.Length;
-                }
-                for (var h = 0; h < count; h++)
-                {
-                    var hit = hits[h];
-                    if (hit.collider == null || hit.distance >= nearest ||
-                        hit.collider.GetComponentInParent<WaterObject>() != null) continue;
-                    var enemy = hit.collider.GetComponentInParent<EnemyShipView>();
-                    if (enemy != null) continue;
-                    nearest = hit.distance;
-                    point = hit.point;
-                    normal = hit.normal;
-                    battery = hit.collider.GetComponentInParent<ShipCannonBattery>();
-                    solid = true;
-                }
-            }
-            var water = _water.Crossing(projectile.Previous, position, out var waterPoint, out var waterFraction) &&
-                        waterFraction * distance <= nearest;
-            if (!solid && !water) return false;
-            if (water) point = waterPoint;
-            else battery?.ApplyDamageServer(Definition.ProjectileDamage);
-            var fraction = water ? waterFraction : Mathf.Clamp01(nearest / Mathf.Max(0.0001f, distance));
-            SetImpact(projectile, point, water ? Vector3.up : normal, water, true,
-                projectile.Started + (age - ProjectileStep) + ProjectileStep * fraction);
-            return true;
-        }
-
-        private void SetImpact(Projectile projectile, Vector3 point, Vector3 normal, bool water, bool show, float at)
-        {
-            if (!_byId.TryGetValue(projectile.ShipId, out var entity) ||
-                !_serverWorld.EntityManager.Exists(entity)) return;
-            var state = _serverWorld.EntityManager.GetComponentData<DotsEnemyShipState>(entity);
+            if (!_byId.TryGetValue(shipId, out var entity) || _serverWorld == null ||
+                !_serverWorld.IsCreated || !_serverWorld.EntityManager.Exists(entity)) return;
+            var manager = _serverWorld.EntityManager;
+            var state = manager.GetComponentData<DotsEnemyShipState>(entity);
             state.ImpactRevision++;
-            state.ImpactShotRevision = projectile.Revision;
+            state.ImpactShotRevision = revision;
             state.ImpactPoint = point;
             state.ImpactNormal = normal;
-            state.ImpactAt = at;
+            state.ImpactAt = Now;
             state.ImpactFlags = (byte)((water ? 1 : 0) | (show ? 2 : 0));
-            _serverWorld.EntityManager.SetComponentData(entity, state);
+            manager.SetComponentData(entity, state);
         }
 
         public bool Damage(int id, float damage, Vector3 source)
@@ -672,6 +625,8 @@ namespace WaveByWave.Enemies
             if (state.Health <= 0)
             {
                 state.DeathAt = Now;
+                state.DeathPosition = state.Position;
+                state.DeathRotation = state.Rotation;
                 _fleet.Remove(id);
                 DotsEnemyRuntime.Instance?.DespawnGroup(DotsEnemyRuntime.CrewGroupForShip(id));
             }
@@ -748,6 +703,58 @@ namespace WaveByWave.Enemies
             return true;
         }
 
+        public bool ProjectileHit(Vector3 from, Vector3 to, float radius,
+            out int shipId, out float fraction, out Vector3 normal)
+        {
+            shipId = 0;
+            fraction = 1f;
+            normal = Vector3.up;
+            if (!CanSimulate) return false;
+            _fleet.CollectCandidates(-1, from, to - from, _projectileContactCandidates);
+            var half = _contactBoundsHalfExtents + Vector3.one * radius;
+            foreach (var id in _projectileContactCandidates)
+            {
+                if (!_collisionPoses.TryGetValue(id, out var pose)) continue;
+                var rotation = (Quaternion)pose.rot;
+                var inverse = Quaternion.Inverse(rotation);
+                var start = inverse * (from - (Vector3)pose.pos) - _contactBoundsCenter;
+                var end = inverse * (to - (Vector3)pose.pos) - _contactBoundsCenter;
+                if (!SegmentBox(start, end, half, out var hit, out var face) || hit >= fraction) continue;
+                shipId = id;
+                fraction = hit;
+                normal = rotation * face;
+            }
+            return shipId != 0;
+        }
+
+        private static bool SegmentBox(Vector3 from, Vector3 to, Vector3 half,
+            out float fraction, out Vector3 normal)
+        {
+            fraction = 0f;
+            normal = Vector3.up;
+            var delta = to - from;
+            var exit = 1f;
+            for (var axis = 0; axis < 3; axis++)
+            {
+                var start = from[axis];
+                var movement = delta[axis];
+                if (Mathf.Abs(movement) < 0.000001f)
+                {
+                    if (start < -half[axis] || start > half[axis]) return false;
+                    continue;
+                }
+                var a = (-half[axis] - start) / movement;
+                var b = (half[axis] - start) / movement;
+                var face = Vector3.zero;
+                face[axis] = movement > 0f ? -1f : 1f;
+                if (a > b) (a, b) = (b, a);
+                if (a > fraction) { fraction = a; normal = face; }
+                exit = Mathf.Min(exit, b);
+                if (fraction > exit) return false;
+            }
+            return exit >= 0f && fraction <= 1f;
+        }
+
         private void RestorePhysicsViews()
         {
             var restored = false;
@@ -785,10 +792,10 @@ namespace WaveByWave.Enemies
             _byId.Clear();
             _physicsFrames.Clear();
             _collisionPoses.Clear();
+            _shipWater.Clear();
             CollisionRevision++;
             _views.Clear();
             _spawns.Clear();
-            _projectiles.Clear();
             _fleet.Clear();
             _fleetInitialized = false;
             ReleaseCollisionGeometry();

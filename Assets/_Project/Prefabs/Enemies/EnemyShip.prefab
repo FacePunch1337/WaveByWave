@@ -137,6 +137,8 @@ MonoBehaviour:
   - {fileID: 1446993805546293021}
   contactBoundsCenter: {x: 0, y: 2, z: 0}
   contactBoundsSize: {x: 4, y: 1.25, z: 12}
+  buoyancyCenter: {x: 0, y: 0, z: 0}
+  buoyancySize: {x: 6, y: 15}
 --- !u!114 &4115826564490745275
 MonoBehaviour:
   m_ObjectHideFlags: 0

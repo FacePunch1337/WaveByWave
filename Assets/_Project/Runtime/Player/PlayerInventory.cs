@@ -23,6 +23,8 @@ namespace WaveByWave.Player
         };
         [SerializeField] private int[] startingItemAmounts = { 1, 1, 1, 1, 1, 20, 5, 5 };
         private readonly NetworkVariable<int> _equippedSlot = new();
+        // A carried chest is a hand-held world object, never an inventory slot.
+        private readonly NetworkVariable<FixedString64Bytes> _carriedChestId = new();
 
         private NetworkList<InventorySlotState> _slots;
         private int _selectedIndex;
@@ -40,6 +42,7 @@ namespace WaveByWave.Player
         public int SelectedIndex => _selectedIndex;
         public int EquippedIndex => IsOwner ? _selectedIndex : _equippedSlot.Value;
         public int ServerSelectedIndex => _serverSelectedIndex;
+        public bool IsCarryingChest => !_carriedChestId.Value.IsEmpty;
         public uint SelectionRevision => _selectionRevision;
         public ItemCatalog Catalog => catalog;
         public int Count => _slots?.Count ?? 0;
@@ -57,6 +60,7 @@ namespace WaveByWave.Player
             LootStressTest.RegisterCatalog(catalog, rarityEffectPrefab,
                 GetComponent<PlayerEquipment>()?.WaterWaveProfile);
             _slots.OnListChanged += OnListChanged;
+            _carriedChestId.OnValueChanged += OnCarriedChestChanged;
 
             if (IsServer && _slots.Count == 0)
             {
@@ -79,13 +83,19 @@ namespace WaveByWave.Player
         public override void OnNetworkDespawn()
         {
             _slots.OnListChanged -= OnListChanged;
+            _carriedChestId.OnValueChanged -= OnCarriedChestChanged;
         }
 
         private void Update()
         {
-            if (IsSpawned && IsServer) UpdateChestOpeningServer();
+            if (IsSpawned && IsServer)
+            {
+                UpdateChestOpeningServer();
+                if (IsCarryingChest && _health != null && _health.IsDead)
+                    DropCarriedChestOnDeathServer();
+            }
             if (IsOwner && PlayerEquipment.InputCaptured) CancelLocalChestHold();
-            if (!IsSpawned || !IsOwner || Keyboard.current == null || PlayerEquipment.InputCaptured)
+            if (!IsSpawned || !IsOwner || IsCarryingChest || Keyboard.current == null || PlayerEquipment.InputCaptured)
                 return;
 
             var keys = new[]
@@ -120,7 +130,17 @@ namespace WaveByWave.Player
                 : slot.ItemId.ToString();
         }
 
-        public void UseSelected(bool special) => UseSelectedServerRpc(_selectedIndex, special);
+        public void UseSelected(bool special)
+        {
+            if (!IsCarryingChest) UseSelectedServerRpc(_selectedIndex, special);
+        }
+
+        public bool TryGetHeldDefinition(out ItemDefinition definition)
+        {
+            if (!IsCarryingChest) return TryGetDefinition(EquippedIndex, out definition);
+            definition = null;
+            return catalog != null && catalog.TryGet(_carriedChestId.Value.ToString(), out definition);
+        }
 
         public bool TryGetDefinition(int index, out ItemDefinition definition)
         {
@@ -133,7 +153,7 @@ namespace WaveByWave.Player
         public bool TryConsumeServer(int index, ushort amount, out ItemDefinition definition)
         {
             definition = null;
-            if (!IsServer || amount == 0 || !TryGetDefinition(index, out definition))
+            if (!IsServer || IsCarryingChest || amount == 0 || !TryGetDefinition(index, out definition))
                 return false;
             var slot = _slots[index];
             if (slot.Amount < amount)
@@ -148,7 +168,7 @@ namespace WaveByWave.Player
 
         public bool ApplySelectionServer(int index, uint revision)
         {
-            if (!IsServer || index < 0 || index >= _slots.Count || revision < _serverSelectionRevision) return false;
+            if (!IsServer || IsCarryingChest || index < 0 || index >= _slots.Count || revision < _serverSelectionRevision) return false;
             if (revision == _serverSelectionRevision) return index == _serverSelectedIndex;
             _serverSelectionRevision = revision;
             _serverSelectedIndex = index;
@@ -174,7 +194,7 @@ namespace WaveByWave.Player
         [ServerRpc]
         private void UseSelectedServerRpc(int selectedIndex, bool special, ServerRpcParams rpcParams = default)
         {
-            if (!NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var client))
+            if (IsCarryingChest || !NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var client))
                 return;
 
             var player = client.PlayerObject;
@@ -299,7 +319,9 @@ namespace WaveByWave.Player
                 !LootStressTest.TryGetServerItem(_serverChest, out var definition, out var position) ||
                 !definition.IsChest || !CanReachChest(position)) { _serverChest = int.MaxValue; return; }
             if (now - _serverChestStarted < Mathf.Max(0.3f, definition.ChestLoot.HoldDuration)) return;
-            LootStressTest.TryBeginChestOpening(_serverChest); _serverChest = int.MaxValue;
+            LootStressTest.TryBeginChestOpening(_serverChest,
+                GetComponent<NetworkPlayerController>()?.RingValue(PlayerRingStat.Luck) ?? 0f);
+            _serverChest = int.MaxValue;
         }
 
         private bool CanReachChest(Vector3 position)
@@ -323,13 +345,14 @@ namespace WaveByWave.Player
                 client.PlayerObject == null || client.PlayerObject != NetworkObject ||
                 !LootStressTest.TryGetServerItem(id, out var definition, out var position) ||
                 Vector3.Distance(ServerInteractionPosition(), position) > 4f ||
-                (definition.IsChest && !CanReachChest(position)) || !TryStoreSingleServer(definition)) return;
+                (definition.IsChest && !CanReachChest(position)) ||
+                !(definition.IsChest ? TryCarryChestServer(definition) : TryStoreSingleServer(definition))) return;
             LootStressTest.RemoveServerItem(id);
         }
 
         private bool TryStoreSingleServer(ItemDefinition definition)
         {
-            if (!IsServer || definition == null) return false;
+            if (!IsServer || IsCarryingChest || definition == null) return false;
             var id = new FixedString64Bytes(definition.Id);
             for (var pass = 0; pass < 2; pass++)
             for (var i = 0; i < _slots.Count; i++)
@@ -395,7 +418,7 @@ namespace WaveByWave.Player
         private void DropSelectedServerRpc(int selectedIndex, Vector3 position, Vector3 direction,
             NetworkObjectReference supportReference, ServerRpcParams rpcParams = default)
         {
-            if (selectedIndex < 0 || selectedIndex >= _slots.Count)
+            if (!IsCarryingChest && (selectedIndex < 0 || selectedIndex >= _slots.Count))
                 return;
 
             if (!NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var client))
@@ -425,6 +448,12 @@ namespace WaveByWave.Player
                 position = feet;
             }
 
+            if (IsCarryingChest)
+            {
+                var chestId = _carriedChestId.Value;
+                if (SpawnDropServer(chestId, position, direction, support)) _carriedChestId.Value = default;
+                return;
+            }
             var slot = _slots[selectedIndex];
             if (slot.IsEmpty)
                 return;
@@ -437,7 +466,8 @@ namespace WaveByWave.Player
         [ServerRpc]
         public void PickupServerRpc(NetworkObjectReference itemReference, ServerRpcParams rpcParams = default)
         {
-            if (!itemReference.TryGet(out var networkObject) || !networkObject.TryGetComponent<WorldItem>(out var item))
+            if (IsCarryingChest || !itemReference.TryGet(out var networkObject) ||
+                !networkObject.TryGetComponent<WorldItem>(out var item))
                 return;
 
             if (!NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var client))
@@ -460,6 +490,12 @@ namespace WaveByWave.Player
             var remaining = item.Amount;
             if (catalog == null || !catalog.TryGet(item.ItemId.ToString(), out var definition))
                 return;
+            if (definition.IsChest)
+            {
+                if (remaining != 1 || !TryCarryChestServer(definition)) return;
+                item.NetworkObject.Despawn(true);
+                return;
+            }
             // Merge stacks before allocating empty slots. A partial pickup keeps
             // the remaining units in the original world item.
             for (var pass = 0; pass < 2 && remaining > 0; pass++)
@@ -484,6 +520,26 @@ namespace WaveByWave.Player
         }
 
         private void OnListChanged(NetworkListEvent<InventorySlotState> changeEvent) => Changed?.Invoke();
+
+        private void OnCarriedChestChanged(FixedString64Bytes previous, FixedString64Bytes current) => Changed?.Invoke();
+
+        private bool TryCarryChestServer(ItemDefinition definition)
+        {
+            if (!IsServer || IsCarryingChest || definition == null || !definition.IsChest ||
+                (_health != null && _health.IsDead)) return false;
+            _carriedChestId.Value = new FixedString64Bytes(definition.Id);
+            _serverChest = int.MaxValue;
+            return true;
+        }
+
+        private void DropCarriedChestOnDeathServer()
+        {
+            if (!IsCarryingChest) return;
+            var position = ServerInteractionPosition() + Vector3.up * 0.4f;
+            var direction = transform.forward;
+            if (SpawnDropServer(_carriedChestId.Value, position, direction, null))
+                _carriedChestId.Value = default;
+        }
 
         private static bool IsFinite(Vector3 value) => !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
             !float.IsNaN(value.y) && !float.IsInfinity(value.y) && !float.IsNaN(value.z) && !float.IsInfinity(value.z);

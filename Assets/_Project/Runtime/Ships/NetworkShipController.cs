@@ -422,7 +422,9 @@ namespace WaveByWave.Ships
                 // Buoyancy, propulsion, helm and contacts share one velocity state.
                 // AlignToWater is a sampled equilibrium, never a second pose writer.
                 var fleet = WaveByWave.Enemies.DotsEnemyShipRuntime.Instance;
-                var hasFleet = fleet != null && fleet.CanSimulate;
+                // An anchored hull is a fixed obstacle to the fleet. Enemy ships
+                // still cast against its real colliders and must resolve the contact.
+                var hasFleet = !_anchorLowered.Value && fleet != null && fleet.CanSimulate;
                 if (hasFleet)
                 {
                     var hullRadius = ContactBoundsCenter.magnitude + ContactBoundsHalfExtents.magnitude;
@@ -452,6 +454,17 @@ namespace WaveByWave.Ships
                 rotation = resolved.Rotation;
                 _linearVelocity = resolved.Velocity;
                 _angularVelocity = resolved.AngularVelocity;
+                if (_anchorLowered.Value &&
+                    Vector3.ProjectOnPlane(incomingVelocity, Vector3.up).sqrMagnitude < 0.0025f)
+                {
+                    position.x = _collisionStartPosition.x;
+                    position.z = _collisionStartPosition.z;
+                    rotation = Quaternion.FromToRotation(Vector3.up, resolved.Rotation * Vector3.up) *
+                        Quaternion.Euler(0f, _collisionStartRotation.eulerAngles.y, 0f);
+                    _linearVelocity.x = 0f;
+                    _linearVelocity.z = 0f;
+                    _angularVelocity.y = 0f;
+                }
                 if (hasFleet && _geometryCollision.TryGetFleetContact(out var enemyId, out var contactNormal))
                 {
                     var planarNormal = Vector3.ProjectOnPlane(contactNormal, Vector3.up).normalized;
@@ -510,7 +523,7 @@ namespace WaveByWave.Ships
 
         internal void ApplyEnemyContactPush(Vector3 velocity, float maximumPushSpeed)
         {
-            if (!IsServer) return;
+            if (!IsServer || _anchorLowered.Value) return;
             velocity.y = 0f;
             var vertical = _linearVelocity.y;
             var planar = Vector3.ProjectOnPlane(_linearVelocity, Vector3.up) + velocity;

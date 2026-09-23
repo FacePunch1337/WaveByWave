@@ -36,7 +36,7 @@ namespace WaveByWave.Player
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider), typeof(NetworkObject))]
     [RequireComponent(typeof(OwnerNetworkTransform), typeof(NetworkRigidbody))]
     [RequireComponent(typeof(KinematicCharacterMotor))]
-    public sealed class NetworkPlayerController : NetworkBehaviour, ICharacterController
+    public sealed partial class NetworkPlayerController : NetworkBehaviour, ICharacterController
     {
         public const string LocalBodyLayerName = "LocalPlayerBody";
         private const float GroundCastStartOffset = 0.08f;
@@ -107,6 +107,12 @@ namespace WaveByWave.Player
         private bool _sprintHeld;
         private bool _jumpQueued;
         private bool _isGrounded;
+        public bool CameraGrounded => _kccMotor != null && _kccMotor.GroundingStatus.IsStableOnGround;
+        public bool CameraSprinting => _isSprinting;
+        public float CameraHorizontalSpeed => _kccMotor != null
+            ? Vector3.ProjectOnPlane(_kccMotor.BaseVelocity, transform.up).magnitude : 0f;
+        public float CameraVerticalSpeed => _kccMotor != null
+            ? Vector3.Dot(_kccMotor.BaseVelocity, transform.up) : 0f;
         private Vector3 _groundNormal = Vector3.up;
         private Quaternion _desiredBodyRotation = Quaternion.identity;
         private Transform _desiredRotationFrame;
@@ -252,6 +258,7 @@ namespace WaveByWave.Player
 
         private void Awake()
         {
+            _ringStats = new NetworkList<PlayerRingState>();
             body ??= GetComponent<Rigidbody>();
             bodyCollider ??= GetComponent<CapsuleCollider>();
             _kccMotor ??= GetComponent<KinematicCharacterMotor>();
@@ -566,7 +573,7 @@ namespace WaveByWave.Player
                 if (canPreviewJump && (_isSwimming || _kccMotor != null &&
                         _kccMotor.GroundingStatus.IsStableOnGround))
                     animationSync.BeginJump(_isSwimming ? waterJumpSpeed :
-                        Mathf.Sqrt(jumpHeight * -2f * gravity));
+                        Mathf.Sqrt(RingJumpHeight * -2f * gravity));
             }
         }
 
@@ -686,7 +693,7 @@ namespace WaveByWave.Player
             var sprinting = stableOnGround && !_sprintExhausted && _sprintHeld &&
                             _moveInput.y > 0.1f && Mathf.Abs(_moveInput.x) <= 0.25f;
             _isSprinting = sprinting;
-            var speed = moveSpeed * (sprinting ? sprintMultiplier : 1f);
+            var speed = RingMoveSpeed * (sprinting ? sprintMultiplier : 1f);
             var jumped = false;
             if (stableOnGround)
             {
@@ -711,7 +718,7 @@ namespace WaveByWave.Player
                     _airbornePlatformMomentum = Vector3.zero;
                     SetKccAirbornePlatformFrame(_platform);
                     _kccMotor.ForceUnground();
-                    var jumpSpeed = Mathf.Sqrt(jumpHeight * -2f * gravity);
+                    var jumpSpeed = Mathf.Sqrt(RingJumpHeight * -2f * gravity);
                     currentVelocity = Vector3.ProjectOnPlane(currentVelocity, characterUp) +
                                       characterUp * jumpSpeed;
                     if (_enemyShip != null)
@@ -1108,7 +1115,7 @@ namespace WaveByWave.Player
             // BaseVelocity may already be projected to zero by the kinematic client proxy
             // when this callback runs. Input intent remains stable and is the value the host
             // and remote client can reproduce identically.
-            var intendedSpeed = moveSpeed * (_isSprinting ? sprintMultiplier : 1f);
+            var intendedSpeed = RingMoveSpeed * (_isSprinting ? sprintMultiplier : 1f);
             var approachSpeed = Mathf.Max(
                 0f,
                 Vector3.Dot(intendedDirection * intendedSpeed, pushDirection));
@@ -1204,7 +1211,7 @@ namespace WaveByWave.Player
                 RefreshAirbornePlatformReference();
             }
 
-            var speed = moveSpeed * (_sprintHeld ? sprintMultiplier : 1f);
+            var speed = RingMoveSpeed * (_sprintHeld ? sprintMultiplier : 1f);
             var inputDirection = _desiredBodyRotation *
                                  new Vector3(_moveInput.x, 0f, _moveInput.y);
             if (inputDirection.sqrMagnitude > 1f)
@@ -1264,7 +1271,7 @@ namespace WaveByWave.Player
 
                 if (_jumpQueued)
                 {
-                    var jumpSpeed = Mathf.Sqrt(jumpHeight * -2f * gravity);
+                    var jumpSpeed = Mathf.Sqrt(RingJumpHeight * -2f * gravity);
                     body.linearVelocity = platformVelocity + relativeGroundVelocity + Vector3.up * jumpSpeed;
                     _usingClientPlatformRelativeVelocity = false;
                     _airbornePlatformMomentum = platformVelocity;
@@ -1307,7 +1314,7 @@ namespace WaveByWave.Player
                 : platformVelocity;
             var relativeVerticalVelocity = body.linearVelocity.y - animationPlatformVelocity.y;
             animationSync.SetLocomotion(
-                _moveInput.magnitude * (speed / Mathf.Max(0.01f, moveSpeed)),
+                _moveInput.magnitude * (speed / Mathf.Max(0.01f, RingMoveSpeed)),
                 _isGrounded,
                 relativeVerticalVelocity);
         }
@@ -1480,7 +1487,7 @@ namespace WaveByWave.Player
             if (Time.fixedTime - _lastPlatformContactTime <= platformContactGrace)
                 return;
 
-            var airborneProbeDistance = jumpHeight + bodyCollider.height * Mathf.Abs(transform.lossyScale.y) +
+            var airborneProbeDistance = RingJumpHeight + bodyCollider.height * Mathf.Abs(transform.lossyScale.y) +
                                         platformProbeDistance;
             if (TryFindPlatformBelow(out var platformBelow, airborneProbeDistance) && platformBelow == _platform)
                 return;
@@ -2252,7 +2259,7 @@ namespace WaveByWave.Player
                 return;
 
             var platformVelocity = _platform != null ? _platform.GetPointVelocity(body.position) : Vector3.zero;
-            var ladderJumpSpeed = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            var ladderJumpSpeed = Mathf.Sqrt(RingJumpHeight * -2f * gravity);
             var horizontalDirection = requestedDirection.sqrMagnitude > 0.0001f
                 ? Vector3.ProjectOnPlane(requestedDirection, Vector3.up).normalized
                 : ladder != null ? ladder.AwayDirection : Vector3.zero;
@@ -3071,6 +3078,7 @@ namespace WaveByWave.Player
 
         public override void OnNetworkDespawn()
         {
+            ClearLocalRingChoice();
             _enemyShip = null;
             _enemyPoseInitialized = false;
             _remoteEnemyShipId = 0;
@@ -3110,6 +3118,165 @@ namespace WaveByWave.Player
             if (ownerCamera != null)
                 ownerCamera.gameObject.SetActive(false);
             _camera = null;
+        }
+    }
+}
+namespace WaveByWave.Player
+{
+    using System;
+    public struct PlayerRingState : INetworkSerializable, IEquatable<PlayerRingState>
+    {
+        public byte Stat;
+        public ushort Level;
+        public float Value;
+
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+        {
+            serializer.SerializeValue(ref Stat);
+            serializer.SerializeValue(ref Level);
+            serializer.SerializeValue(ref Value);
+        }
+
+        public bool Equals(PlayerRingState other) => Stat == other.Stat && Level == other.Level &&
+            Value.Equals(other.Value);
+    }
+
+    public sealed partial class NetworkPlayerController
+    {
+        private NetworkList<PlayerRingState> _ringStats;
+        private static PlayerRingCatalog _ringCatalog;
+        private ulong _pendingRingOffers;
+        private ulong _localRingOffers;
+        private int _localRingLevel;
+        private bool _awaitingRingChoice;
+
+        private void ClearLocalRingChoice()
+        {
+            if (!IsOwner) return;
+            _localRingOffers = 0;
+            RingChoiceOpen = false;
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
+        public static bool RingChoiceOpen { get; private set; }
+        public int DistinctRingCount => _ringStats.Count;
+        private float RingMoveSpeed => moveSpeed * (1f + RingValue(PlayerRingStat.MoveSpeed));
+        private float RingJumpHeight => jumpHeight + RingValue(PlayerRingStat.JumpHeight);
+
+        public float RingValue(PlayerRingStat stat)
+        {
+            for (var i = 0; i < _ringStats.Count; i++)
+                if (_ringStats[i].Stat == (byte)stat) return _ringStats[i].Value;
+            return 0f;
+        }
+
+        public int RingLevel(PlayerRingStat stat)
+        {
+            for (var i = 0; i < _ringStats.Count; i++)
+                if (_ringStats[i].Stat == (byte)stat) return _ringStats[i].Level;
+            return 0;
+        }
+
+        internal void BeginRingChoiceServer(int level, uint seed)
+        {
+            if (!IsServer || !IsSpawned) return;
+            _ringCatalog ??= Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
+            if (_ringCatalog == null || _ringCatalog.Rings.Length == 0) return;
+            var random = new Unity.Mathematics.Random(seed | 1u);
+            var available = new System.Collections.Generic.List<PlayerRingStat>(9);
+            foreach (var ring in _ringCatalog.Rings)
+            {
+                if (_ringStats.Count >= _ringCatalog.MaximumDistinctRings && RingLevel(ring.Stat) == 0)
+                    continue;
+                if (!available.Contains(ring.Stat)) available.Add(ring.Stat);
+            }
+            if (available.Count == 0) return;
+            _pendingRingOffers = 0;
+            for (var i = 0; i < 3; i++)
+            {
+                var choice = random.NextInt(available.Count);
+                var stat = available[choice];
+                if (available.Count > 1) available.RemoveAt(choice);
+                var rarity = _ringCatalog.RollRarity(ref random);
+                _pendingRingOffers |= (ulong)((byte)stat | ((byte)rarity << 4)) << (i * 8);
+            }
+            _awaitingRingChoice = true;
+            var clients = new ClientRpcParams { Send = new ClientRpcSendParams
+                { TargetClientIds = new[] { OwnerClientId } } };
+            ShowRingChoiceClientRpc(_pendingRingOffers, level, clients);
+        }
+
+        [ClientRpc]
+        private void ShowRingChoiceClientRpc(ulong packed, int level, ClientRpcParams rpc = default)
+        {
+            if (!IsOwner) return;
+            _ringCatalog ??= Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
+            _localRingOffers = packed;
+            _localRingLevel = level;
+            RingChoiceOpen = true;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        [ServerRpc]
+        private void ChooseRingServerRpc(byte index)
+        {
+            if (!_awaitingRingChoice || index >= 3) return;
+            _ringCatalog ??= Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
+            if (_ringCatalog == null) return;
+            var offer = (byte)(_pendingRingOffers >> (index * 8));
+            var stat = (PlayerRingStat)(offer & 15);
+            var rarity = (ItemRarity)(offer >> 4);
+            if ((int)stat >= 9 || (int)rarity >= 5) return;
+            var bonus = _ringCatalog.Bonus(stat, rarity);
+            if (bonus <= 0f) return;
+            var found = -1;
+            for (var i = 0; i < _ringStats.Count; i++)
+                if (_ringStats[i].Stat == (byte)stat) { found = i; break; }
+            if (found < 0 && _ringStats.Count >= _ringCatalog.MaximumDistinctRings) return;
+            if (found >= 0)
+            {
+                var current = _ringStats[found];
+                current.Level++;
+                current.Value += bonus;
+                _ringStats[found] = current;
+            }
+            else _ringStats.Add(new PlayerRingState { Stat = (byte)stat, Level = 1, Value = bonus });
+            if (stat == PlayerRingStat.MaximumHealth)
+                GetComponent<WaveByWave.Combat.NetworkHealth>()?.ApplyRingHealthBonusServer(bonus);
+            if (stat == PlayerRingStat.Stamina)
+                _equipment?.ApplyRingStaminaBonusServer(bonus);
+            _awaitingRingChoice = false;
+            _pendingRingOffers = 0;
+            foreach (var ship in NetworkShipController.ServerShips)
+                if (ship != null && ship.TryGetComponent<ShipCannonBattery>(out var battery))
+                    battery.MarkRingChoiceComplete(OwnerClientId);
+        }
+
+        private void OnGUI()
+        {
+            if (!IsSpawned || !IsOwner || !RingChoiceOpen || _localRingOffers == 0 ||
+                _ringCatalog == null) return;
+            var width = Mathf.Min(720f, Screen.width - 40f);
+            var box = new Rect((Screen.width - width) * 0.5f, (Screen.height - 285f) * 0.5f,
+                width, 285f);
+            GUI.Box(box, $"Уровень {_localRingLevel} — выбери одно кольцо");
+            for (byte i = 0; i < 3; i++)
+            {
+                var offer = (byte)(_localRingOffers >> (i * 8));
+                var stat = (PlayerRingStat)(offer & 15);
+                var rarity = (ItemRarity)(offer >> 4);
+                var definition = _ringCatalog.Find(stat);
+                var label = $"{definition.DisplayName}\n{rarity} · +{_ringCatalog.Bonus(stat, rarity):0.##}\nУровень кольца {RingLevel(stat) + 1}";
+                if (!GUI.Button(new Rect(box.x + 15f + i * (width - 30f) / 3f,
+                        box.y + 65f, (width - 42f) / 3f, 165f), label)) continue;
+                _localRingOffers = 0;
+                RingChoiceOpen = false;
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+                ChooseRingServerRpc(i);
+            }
         }
     }
 }

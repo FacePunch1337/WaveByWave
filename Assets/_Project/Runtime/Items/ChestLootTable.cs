@@ -33,18 +33,22 @@ namespace WaveByWave.Items
 
         public ChestTierLoot FindTier(ItemRarity rarity) => Tiers.Find(tier => tier != null && tier.Tier == rarity);
 
-        public static ItemDefinition Choose(IReadOnlyList<WeightedLootEntry> entries, ref Unity.Mathematics.Random random)
+        public static ItemDefinition Choose(IReadOnlyList<WeightedLootEntry> entries,
+            ref Unity.Mathematics.Random random, float luck = 0f)
         {
             var sum = 0f;
             if (entries == null) return null;
             foreach (var entry in entries)
-                if (entry != null && entry.Item != null) sum += Mathf.Max(0f, entry.Weight);
+                if (entry != null && entry.Item != null)
+                    sum += Mathf.Max(0f, entry.Weight) *
+                        (1f + Mathf.Max(0f, luck) * (int)entry.Item.Rarity * 0.5f);
             if (sum <= 0f) return null;
             var choice = random.NextFloat(0f, sum);
             foreach (var entry in entries)
             {
                 if (entry == null || entry.Item == null || entry.Weight <= 0f) continue;
-                choice -= entry.Weight;
+                choice -= entry.Weight * (1f + Mathf.Max(0f, luck) *
+                    (int)entry.Item.Rarity * 0.5f);
                 if (choice <= 0f) return entry.Item;
             }
             return null;

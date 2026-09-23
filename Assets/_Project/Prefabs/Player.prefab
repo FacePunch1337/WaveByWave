@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 8705667183944250460}
   - component: {fileID: 7816831871517704105}
   - component: {fileID: 549253381987398897}
+  - component: {fileID: 549253381987398898}
   m_Layer: 0
   m_Name: Camera Holder
   m_TagString: MainCamera
@@ -156,6 +157,21 @@ MonoBehaviour:
   positionOffset: {x: 0, y: 0, z: 0}
   sensitivity: 0.08
   pitchLimits: {x: -82, y: 82}
+--- !u!114 &549253381987398898
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1046047231758138564}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aef98067dff2430aa2aa9d9b9d09a7d4, type: 3}
+  m_Name: ''
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Player.PlayerCameraEffects
+  effects:
+  - Enabled: 1
+    Profile: {fileID: 11400000, guid: 08cb324fbe8946dcbf2e5518f5b8a2c4, type: 2}
 --- !u!1 &3701689364900276936
 GameObject:
   m_ObjectHideFlags: 0

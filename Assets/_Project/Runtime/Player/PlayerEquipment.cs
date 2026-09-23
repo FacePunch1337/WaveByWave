@@ -43,7 +43,6 @@ namespace WaveByWave.Player
         [SerializeField, Min(0f)] private float successfulBlockStamina = 15f;
         [SerializeField, Min(0f)] private float sprintDrainPerSecond = 14f;
         [SerializeField, Min(0f)] private float swimDrainPerSecond = 8f;
-        [SerializeField, Min(0f)] private float jumpStamina = 10f;
         [SerializeField, Min(0f)] private float drowningDamagePerSecond = 12f;
         [SerializeField, Min(0.1f)] private float drowningDamageInterval = 1f;
         [SerializeField, Min(0.1f)] private float swordRange = 2.2f, swordSwingDuration = 0.55f;
@@ -133,8 +132,14 @@ namespace WaveByWave.Player
         public Material HandMaterial => handMaterial;
         public Material SleeveMaterial => sleeveMaterial;
         public float Stamina => _stamina.Value;
-        public float MaximumStamina => maximumStamina;
-        public bool CanJump => _stamina.Value + 0.001f >= jumpStamina;
+        public float MaximumStamina => maximumStamina +
+            (_player != null ? _player.RingValue(PlayerRingStat.Stamina) : 0f);
+        public void ApplyRingStaminaBonusServer(float bonus)
+        {
+            if (IsServer && bonus > 0f)
+                _stamina.Value = Mathf.Min(MaximumStamina, _stamina.Value + bonus);
+        }
+        public bool CanJump => true;
         public bool IsBlocking => _blocking.Value;
         public bool Available => _available.Value;
         public bool IsAiming => IsOwner ? _localAim : _aiming.Value;
@@ -167,7 +172,8 @@ namespace WaveByWave.Player
                 return _renderedHook;
             }
         }
-        public static bool InputCaptured => SessionMenuPresenter.InputCaptured || EquipmentAdminPanel.InputCaptured ||
+        public static bool InputCaptured => NetworkPlayerController.RingChoiceOpen ||
+            SessionMenuPresenter.InputCaptured || EquipmentAdminPanel.InputCaptured ||
             WaveByWave.Customization.CustomizationMenu.InputCaptured ||
             WaveByWave.Generation.OceanLoadingCurtain.InputCaptured;
         public event Action<float> SuccessfulBlock;
@@ -194,7 +200,7 @@ namespace WaveByWave.Player
             if (motions == null) motions = Resources.Load<EquipmentMotionSet>("EquipmentMotions");
             if (IsServer)
             {
-                _stamina.Value = maximumStamina; _water = new EquipmentWaterQuery(waterWaveProfile);
+                _stamina.Value = MaximumStamina; _water = new EquipmentWaterQuery(waterWaveProfile);
                 var hitbox = new GameObject("Server equipment hitbox"); hitbox.transform.SetParent(transform, false);
                 hitbox.AddComponent<EquipmentHitbox>();
                 _combatHitbox = hitbox.AddComponent<CapsuleCollider>(); _combatHitbox.isTrigger = true;
@@ -235,7 +241,8 @@ namespace WaveByWave.Player
                 _combatHitbox.enabled = _inventory.Health > 0f;
             }
             var selected = _inventory.ServerSelectedIndex;
-            _inventory.TryGetDefinition(selected, out var item);
+            ItemDefinition item = null;
+            if (!_inventory.IsCarryingChest) _inventory.TryGetDefinition(selected, out item);
             RefreshSelectedServer(selected, item);
             _available.Value = CanActServer();
             if (!_available.Value)
@@ -271,7 +278,8 @@ namespace WaveByWave.Player
                 }
             }
             else if (Now >= _recoverAfter)
-                _stamina.Value = Mathf.Min(maximumStamina, _stamina.Value + staminaRecovery * dt);
+                _stamina.Value = Mathf.Min(MaximumStamina, _stamina.Value +
+                    (staminaRecovery + _player.RingValue(PlayerRingStat.Regeneration)) * dt);
             if (_serverMovementSwimming && _stamina.Value <= 0f &&
                 (_health == null || !_health.IsDead) && Now >= _nextDrowningDamage)
             {
@@ -300,19 +308,7 @@ namespace WaveByWave.Player
 
         public bool TryUseJumpStamina()
         {
-            if (!IsOwner || !IsSpawned || !CanJump || _health != null && _health.IsDead)
-                return false;
-            SpendJumpStaminaServerRpc();
-            return true;
-        }
-
-        [ServerRpc]
-        private void SpendJumpStaminaServerRpc()
-        {
-            if (_health != null && _health.IsDead || _stamina.Value + 0.001f < jumpStamina)
-                return;
-            _stamina.Value = Mathf.Max(0f, _stamina.Value - jumpStamina);
-            _recoverAfter = Now + 0.6d;
+            return IsOwner && IsSpawned && (_health == null || !_health.IsDead);
         }
 
         [ServerRpc]
@@ -339,7 +335,8 @@ namespace WaveByWave.Player
         {
             var enabledInput = !InputCaptured && !_player.IsAtControlStation && _inventory.Health > 0f;
             var mouse = Mouse.current;
-            _inventory.TryGetDefinition(_inventory.SelectedIndex, out var item);
+            ItemDefinition item = null;
+            if (!_inventory.IsCarryingChest) _inventory.TryGetDefinition(_inventory.SelectedIndex, out item);
             if (_localSlot != _inventory.SelectedIndex || _localItem != item || !enabledInput || mouse == null)
             {
                 if (_localSlot != _inventory.SelectedIndex || _localItem != item || _localBlock || _localAim || _localReel || _localCharge)
@@ -422,7 +419,8 @@ namespace WaveByWave.Player
         }
         private void SendAction(EquipmentAction action)
         {
-            if (Now < _localActionNext || !_inventory.TryGetDefinition(_inventory.SelectedIndex, out _)) return;
+            if (_inventory.IsCarryingChest || Now < _localActionNext ||
+                !_inventory.TryGetDefinition(_inventory.SelectedIndex, out _)) return;
             if (action == EquipmentAction.MusketShot && Reloading ||
                 action == EquipmentAction.SwordSwing && (IsBlocking || Stamina < swingStamina) ||
                 action == EquipmentAction.BucketScoop && BucketFull ||
@@ -546,7 +544,8 @@ namespace WaveByWave.Player
                     if (_blocking.Value || _stamina.Value < swingStamina) return;
                     _stamina.Value -= swingStamina; _recoverAfter = Now + 0.7d;
                     PlayServer(action, swordSwingDuration);
-                    _swordHitAt = Now + swordSwingDuration * 0.4f; _swordDamage = item.Potency;
+                    _swordHitAt = Now + swordSwingDuration * 0.4f;
+                    _swordDamage = item.Potency * (1f + _player.RingValue(PlayerRingStat.MeleeDamage));
                     break;
                 case EquipmentAction.MusketShot when item.EquipmentKind == ItemEquipmentKind.Musket:
                     if (Reloading) return;
@@ -568,7 +567,7 @@ namespace WaveByWave.Player
                         Velocity = (aimPoint - muzzle).normalized * bulletSpeed + inherited,
                         Started = Now,
                         Simulated = Now,
-                        Damage = item.Potency
+                        Damage = item.Potency * (1f + _player.RingValue(PlayerRingStat.RangedDamage))
                     };
                     _bullets.Add(bullet);
                     _reloadEnd.Value = Now + reloadDuration;
@@ -839,7 +838,8 @@ namespace WaveByWave.Player
                 var recallDelta = Mathf.Min(0.05f, (float)(Now - _hookSampleTime));
                 _hookSampleTime = Now;
                 var recallPrevious = _hookPosition;
-                var recalledPosition = Vector3.MoveTowards(recallPrevious, hand, hookRecallSpeed * recallDelta);
+                var recalledPosition = Vector3.MoveTowards(recallPrevious, hand,
+                    hookRecallSpeed * (1f + _player.RingValue(PlayerRingStat.HookRetrievalSpeed)) * recallDelta);
                 _hookPosition = recalledPosition;
                 _hook.Value = new EquipmentHookState
                 {
@@ -866,23 +866,24 @@ namespace WaveByWave.Player
             var previous = _hookPosition;
             var toHand = hand - previous;
             var planarToHand = Vector3.ProjectOnPlane(toHand, Vector3.up);
+            var reelSpeed = hookReelSpeed * (1f + _player.RingValue(PlayerRingStat.HookRetrievalSpeed));
             Vector3 desiredVelocity;
             if (planarToHand.magnitude > hookLiftHorizontalDistance)
             {
                 var planarDirection = planarToHand.normalized;
-                var surfaceProbe = previous + planarDirection * hookReelSpeed * dt;
+                var surfaceProbe = previous + planarDirection * reelSpeed * dt;
                 var surfaceY = previous.y;
                 if (TryHookSurfaceAt(surfaceProbe, Mathf.Max(previous.y, hand.y) + 2f,
                     out var surfacePoint, out _))
                     surfaceY = surfacePoint.y;
                 var verticalSpeed = Mathf.Clamp((surfaceY - previous.y) / Mathf.Max(dt, 0.0001f),
                     -hookSurfaceHeightSpeed, hookSurfaceHeightSpeed);
-                desiredVelocity = planarDirection * hookReelSpeed + Vector3.up * verticalSpeed;
+                desiredVelocity = planarDirection * reelSpeed + Vector3.up * verticalSpeed;
             }
             else
             {
                 desiredVelocity = toHand.sqrMagnitude > 0.0001f
-                    ? toHand.normalized * hookReelSpeed : Vector3.zero;
+                    ? toHand.normalized * reelSpeed : Vector3.zero;
             }
             _hookReelVelocity = Vector3.MoveTowards(_hookReelVelocity, desiredVelocity,
                 hookReelAcceleration * dt);

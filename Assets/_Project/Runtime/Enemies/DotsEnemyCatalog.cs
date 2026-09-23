@@ -132,6 +132,11 @@ namespace WaveByWave.Enemies
         public GameObject DeathSmokePrefab;
         public GameObject StunEffectPrefab;
         [Min(0.1f)] public float VisualScale = 1.7f;
+        [Header("DOTS skeleton lighting")]
+        [Range(0f, 1f), Tooltip("Minimum linear brightness on the unlit side in daylight. Applied to new DOTS skeleton materials without rebaking.")]
+        public float DayMinimumLight = 0.65f;
+        [Range(0f, 1f), Tooltip("Minimum linear brightness on the unlit side at night. Applied to new DOTS skeleton materials without rebaking.")]
+        public float NightMinimumLight = 0.25f;
 
         [Header("Health and combat")]
         [Min(1f)] public float MaximumHealth = 60f;

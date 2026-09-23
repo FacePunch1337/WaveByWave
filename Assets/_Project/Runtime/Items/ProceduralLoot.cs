@@ -52,10 +52,11 @@ namespace WaveByWave.Items
             return id;
         }
 
-        public static bool TryBeginChestOpening(int id)
+        public static bool TryBeginChestOpening(int id, float luck = 0f)
         {
             if (!TryGetServerItem(id, out var definition, out _) || !definition.IsChest) return false;
             var item = ServerItems[id];
+            item.OpenerLuck = Mathf.Max(0f, luck);
             item.OpeningAt = NetworkManager.Singleton.ServerTime.Time + definition.ChestLoot.ShakeDuration;
             OpeningChests.Add(id);
             var delta = new LootStressDeltaCommand { Id = id, Kind = ChestOpening, OpeningAt = item.OpeningAt };
@@ -81,14 +82,17 @@ namespace WaveByWave.Items
                     var random = new Unity.Mathematics.Random(unchecked((uint)id * 747796405u + 2891336453u) | 1u);
                     var minimumRolls = Mathf.Clamp(tier.MinimumRolls, 1, 24);
                     var rolls = random.NextInt(minimumRolls, Mathf.Clamp(tier.MaximumRolls, minimumRolls, 24) + 1);
+                    rolls = Mathf.Min(48, rolls + Mathf.FloorToInt(item.OpenerLuck * 2f));
                     var emitted = 0;
                     for (var roll = 0; roll < rolls && emitted < 48; roll++)
                     {
-                        var reward = ChestLootTable.Choose(tier.Items, ref random);
+                        var reward = ChestLootTable.Choose(tier.Items, ref random, item.OpenerLuck);
                         if (reward == null || reward.IsChest) continue;
                         var entry = tier.Items.Find(e => e != null && e.Item == reward);
                         var amount = random.NextInt(Mathf.Clamp(entry.MinimumAmount, 1, 16),
                             Mathf.Clamp(entry.MaximumAmount, Mathf.Clamp(entry.MinimumAmount, 1, 16), 16) + 1);
+                        if (reward.IsCoinReward)
+                            amount = Mathf.Min(48, Mathf.CeilToInt(amount * (1f + item.OpenerLuck)));
                         for (var n = 0; n < amount && emitted < 48; n++, emitted++)
                         {
                             var angle = random.NextFloat(0f, Mathf.PI * 2f);

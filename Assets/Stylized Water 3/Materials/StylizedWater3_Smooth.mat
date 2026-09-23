@@ -249,7 +249,7 @@ Material:
     - _ReflectionFresnel: 5
     - _ReflectionFresnelMode: 0
     - _ReflectionLighting: 0
-    - _ReflectionStrength: 1
+    - _ReflectionStrength: 0.5
     - _Reflectivity: 1
     - _RefractionAmount: 0.05
     - _RefractionChromaticAberration: 1
@@ -304,7 +304,7 @@ Material:
     - _VertexColorWaveFlattening: 1
     - _WaveDistance: 0.944
     - _WaveFrequency: 1
-    - _WaveHeight: 0.15
+    - _WaveHeight: 0.2
     - _WaveMaxLayers: 64
     - _WaveNormalStr: 0.1
     - _WaveSpeed: 1

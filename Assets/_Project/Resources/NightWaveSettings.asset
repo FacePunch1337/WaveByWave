@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b19b4e6468364981acef8f30cdf13916, type: 3}
+  m_Name: NightWaveSettings
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.NightWaveSettings
+  VictoryDisplayDuration: 5
+  Waves:
+  - Name: First night
+    Bots:
+    - Prefab: {fileID: 1751487147457462807, guid: 99d70853d7924a44a9d26df4d22e5deb, type: 3}
+      SkeletonType: 0
+      Count: 1
+    EnemyShips: 1
+    SpawnRadius: 50
+  - Name: Second night
+    Bots:
+    - Prefab: {fileID: 1751487147457462807, guid: 99d70853d7924a44a9d26df4d22e5deb, type: 3}
+      SkeletonType: 0
+      Count: 1
+    EnemyShips: 3
+    SpawnRadius: 50

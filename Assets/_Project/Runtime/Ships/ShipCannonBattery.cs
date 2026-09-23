@@ -1,12 +1,14 @@
 using System.Collections.Generic;
-using StylizedWater3;
 using Unity.Netcode;
 using UnityEngine;
 using WaveByWave.Items;
 using WaveByWave.Player;
+using WaveByWave.Combat;
 
 namespace WaveByWave.Ships
 {
+    public enum VoyagePhase : byte { Day, Sunset, Night, Sunrise, Victory }
+
     [DefaultExecutionOrder(1250)]
     [RequireComponent(typeof(NetworkShipController))]
     public sealed class ShipCannonBattery : NetworkBehaviour
@@ -17,81 +19,138 @@ namespace WaveByWave.Ships
         [SerializeField] private GameObject cannonMuzzleEffectPrefab;
         [SerializeField] private GameObject cannonImpactEffectPrefab;
         [SerializeField] private ShipTreasureChest treasureChest;
-        [SerializeField] private LayerMask hitLayers = ~0;
         [SerializeField, Min(1f)] private float maximumHealth = 400f;
         private NetworkList<CannonState> _states;
         private readonly NetworkVariable<float> _health = new(400f);
         private readonly NetworkVariable<float> _damageBonus = new();
         private readonly NetworkVariable<float> _armorBonus = new();
         private readonly NetworkVariable<int> _treasureExperience = new();
-        private readonly List<Ball> _balls = new(32);
-        private readonly RaycastHit[] _hits = new RaycastHit[64];
-        private readonly Collider[] _overlaps = new Collider[32];
-        private HeightQuerySystem.Sampler _waterSampler;
-        private AlignToWater _alignment;
+        private readonly NetworkVariable<int> _crewLevel = new(1);
+        private readonly NetworkVariable<bool> _upgradePaused = new();
+        private readonly NetworkVariable<byte> _voyagePhase = new();
+        private readonly NetworkVariable<float> _voyageDayProgress = new();
+        private readonly NetworkVariable<float> _voyageHour = new(8f);
+        private readonly NetworkVariable<int> _voyageWave = new();
+        private readonly HashSet<ulong> _pendingRingSelections = new();
+        private PlayerRingCatalog _ringCatalog;
         private NetworkShipController _ship;
         private MovingPlatform _platform;
         private double[] _lastAimReceived;
         private int _nextBallId;
-        private const double CollisionSampleStep = 1d / 60d;
         private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
         public float Health => _health.Value;
         public float MaximumHealth => maximumHealth;
         public int TreasureExperience => _treasureExperience.Value;
-        public int CrewLevel => 1 + Mathf.FloorToInt(Mathf.Sqrt(TreasureExperience / 100f));
-        public ShipCannon[] Cannons => cannons;
-
-        private struct Ball
+        public int CrewLevel => _crewLevel.Value;
+        public bool UpgradePaused => _upgradePaused.Value;
+        public VoyagePhase Phase => (VoyagePhase)_voyagePhase.Value;
+        public float DayProgress => _voyageDayProgress.Value;
+        public float TimeOfDay => _voyageHour.Value;
+        public int WaveNumber => _voyageWave.Value;
+        public float LevelProgress
         {
-            public int Id;
-            public ulong Shooter;
-            public Vector3 Origin, Velocity, Gravity, Previous;
-            public double Started;
-            public float Radius, Lifetime, Damage;
-            public int SampleIndex;
+            get
+            {
+                var catalog = _ringCatalog != null ? _ringCatalog :
+                    (_ringCatalog = Resources.Load<PlayerRingCatalog>("PlayerRingCatalog"));
+                if (catalog == null) return 0f;
+                var previous = catalog.ExperienceForLevel(CrewLevel);
+                var next = catalog.ExperienceForLevel(CrewLevel + 1);
+                return Mathf.Clamp01((TreasureExperience - previous) /
+                    (float)Mathf.Max(1, next - previous));
+            }
         }
+        public ShipCannon[] Cannons => cannons;
 
         private void Awake()
         {
             _states = new NetworkList<CannonState>();
             _ship = GetComponent<NetworkShipController>();
             _platform = GetComponent<MovingPlatform>();
-            _alignment = GetComponent<AlignToWater>();
             if (cannons == null || cannons.Length == 0)
                 cannons = GetComponentsInChildren<ShipCannon>(true);
         }
 
         public override void OnNetworkSpawn()
         {
+            _ringCatalog = Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
+            _upgradePaused.OnValueChanged += OnUpgradePauseChanged;
+            OnUpgradePauseChanged(false, _upgradePaused.Value);
             if (!IsServer) return;
+            _crewLevel.Value = 1;
+            _treasureExperience.Value = 0;
             _states.Clear();
             _lastAimReceived = new double[cannons.Length];
             foreach (var cannon in cannons)
                 _states.Add(new CannonState { Operator = NetworkShipController.NoHelmsman });
             _health.Value = maximumHealth;
-            _waterSampler = new HeightQuerySystem.Sampler();
-            _waterSampler.SetSampleCount(2, true);
             NetworkManager.OnClientDisconnectCallback += OnDisconnected;
         }
 
         public override void OnNetworkDespawn()
         {
+            _upgradePaused.OnValueChanged -= OnUpgradePauseChanged;
+            Time.timeScale = 1f;
+            _pendingRingSelections.Clear();
             if (NetworkManager != null) NetworkManager.OnClientDisconnectCallback -= OnDisconnected;
-            _waterSampler?.Dispose();
-            _waterSampler = null;
-            _balls.Clear();
             CannonEffects.ClearShots(this);
         }
 
         public override void OnDestroy()
         {
-            _waterSampler?.Dispose();
-            _waterSampler = null;
+            if (_upgradePaused.Value) Time.timeScale = 1f;
             CannonEffects.ClearShots(this);
             base.OnDestroy();
         }
 
         public int GetCannonIndex(ShipCannon cannon) => System.Array.IndexOf(cannons, cannon);
+
+        private static void OnUpgradePauseChanged(bool previous, bool paused) =>
+            Time.timeScale = paused ? 0f : 1f;
+
+        private void CheckTreasureLevel()
+        {
+            if (!IsServer || _upgradePaused.Value || _ringCatalog == null ||
+                TreasureExperience < _ringCatalog.ExperienceForLevel(_crewLevel.Value + 1)) return;
+            _crewLevel.Value++;
+            _pendingRingSelections.Clear();
+            _upgradePaused.Value = true;
+            foreach (var client in NetworkManager.ConnectedClientsList)
+            {
+                if (client.PlayerObject == null ||
+                    !client.PlayerObject.TryGetComponent<NetworkPlayerController>(out var player)) continue;
+                _pendingRingSelections.Add(client.ClientId);
+                player.BeginRingChoiceServer(_crewLevel.Value,
+                    unchecked((uint)_crewLevel.Value * 7919u + (uint)client.ClientId * 104729u));
+            }
+            if (_pendingRingSelections.Count == 0) _upgradePaused.Value = false;
+        }
+
+        internal void MarkRingChoiceComplete(ulong clientId)
+        {
+            if (!IsServer || !_pendingRingSelections.Remove(clientId) ||
+                _pendingRingSelections.Count != 0) return;
+            _upgradePaused.Value = false;
+            CheckTreasureLevel();
+        }
+
+        internal void SetVoyageClockServer(VoyagePhase phase, float dayProgress, float hour)
+        {
+            if (!IsServer) return;
+            _voyagePhase.Value = (byte)phase;
+            _voyageDayProgress.Value = Mathf.Clamp01(dayProgress);
+            _voyageHour.Value = Mathf.Repeat(hour, 24f);
+        }
+        internal void SetVoyageWaveServer(int waveNumber)
+        {
+            if (IsServer) _voyageWave.Value = waveNumber;
+        }
+        internal void SetVoyageVictoryServer()
+        {
+            if (!IsServer) return;
+            _voyagePhase.Value = (byte)VoyagePhase.Victory;
+            _voyageDayProgress.Value = 1f;
+        }
         public CannonState GetState(int index) => index >= 0 && index < _states.Count ? _states[index] :
             new CannonState { Operator = NetworkShipController.NoHelmsman };
         public int GetOperatorCannon(ulong clientId)
@@ -150,7 +209,11 @@ namespace WaveByWave.Ships
             state.Operator = NetworkShipController.NoHelmsman;
             _states[index] = state;
         }
-        private void OnDisconnected(ulong sender) => ReleaseOperator(sender);
+        private void OnDisconnected(ulong sender)
+        {
+            ReleaseOperator(sender);
+            MarkRingChoiceComplete(sender);
+        }
 
         private static bool HasSelectedAmmo(PlayerInventory inventory) => inventory != null &&
             inventory.TryGetDefinition(inventory.ServerSelectedIndex, out var ammo) &&
@@ -231,15 +294,20 @@ namespace WaveByWave.Ships
             }
             if (state.Loaded)
             {
-                if (_balls.Count >= 32) { _states[index] = state; return; }
                 var cannon = cannons[index];
                 cannon.GetMuzzlePose(new Vector2(state.Yaw, state.Elevation), out var origin, out var forward);
                 var velocity = forward * cannon.MuzzleSpeed + _platform.GetPointVelocity(origin);
                 var id = ++_nextBallId;
                 var started = NetworkManager.ServerTime.Time;
-                _balls.Add(new Ball { Id = id, Shooter = sender, Origin = origin, Previous = origin,
-                    Velocity = velocity, Gravity = cannon.Gravity, Started = started, Radius = cannon.BallRadius,
-                    Lifetime = cannon.ProjectileLifetime, Damage = state.Damage * (1f + _damageBonus.Value) });
+                if (!DotsCannonProjectileSystem.Spawn(new DotsCannonProjectile
+                    {
+                        Position = origin, Previous = origin, Origin = origin, Velocity = velocity,
+                        Gravity = cannon.Gravity, Started = (float)started,
+                        Radius = cannon.BallRadius, Lifetime = cannon.ProjectileLifetime,
+                        Damage = state.Damage * (1f + _damageBonus.Value),
+                        ShooterClientId = sender, PlayerShipNetworkId = NetworkObjectId,
+                        ShotId = id
+                    })) { _states[index] = state; return; }
                 ShotClientRpc(index, id, origin, velocity, cannon.Gravity, started, cannon.BallRadius, cannon.ProjectileLifetime);
                 state.Loaded = false;
                 state.AmmoId = default;
@@ -272,126 +340,6 @@ namespace WaveByWave.Ships
                 { CompleteReload(ref state); changed = true; }
                 if (changed) _states[i] = state;
             }
-            for (var i = _balls.Count - 1; i >= 0; i--)
-            {
-                var ball = _balls[i];
-                var age = (float)(now - ball.Started);
-                var lastSample = (int)System.Math.Ceiling(ball.Lifetime / CollisionSampleStep);
-                var target = System.Math.Min(lastSample, (int)System.Math.Floor(age / CollisionSampleStep));
-                var removed = false;
-                // Sample fixed points of the analytic trajectory, independent of
-                // frame rate. A bounded catch-up avoids a long frame causing a spike.
-                for (var step = 0; step < 8 && ball.SampleIndex < target; step++)
-                {
-                    ball.SampleIndex++;
-                    if (!SampleBall(ref ball)) continue;
-                    _balls.RemoveAt(i);
-                    removed = true;
-                    break;
-                }
-                if (removed) continue;
-                if (ball.SampleIndex >= lastSample)
-                {
-                    ImpactClientRpc(ball.Id, ball.Previous, Vector3.up, false, false, ball.Started + ball.Lifetime);
-                    _balls.RemoveAt(i);
-                }
-                else _balls[i] = ball;
-            }
-        }
-
-        private bool SampleBall(ref Ball ball)
-        {
-            if (ball.SampleIndex == 1)
-            {
-                var count = Physics.OverlapSphereNonAlloc(ball.Origin, ball.Radius, _overlaps, hitLayers,
-                    QueryTriggerInteraction.Ignore);
-                var overlaps = count == _overlaps.Length ? Physics.OverlapSphere(ball.Origin, ball.Radius,
-                    hitLayers, QueryTriggerInteraction.Ignore) : _overlaps;
-                if (overlaps != _overlaps) count = overlaps.Length;
-                for (var i = 0; i < count; i++)
-                {
-                    var overlap = overlaps[i];
-                    if (overlap.GetComponentInParent<WaterObject>() != null) continue;
-                    if (overlap.GetComponentInParent<ShipCannonBattery>() == this) continue;
-                    var player = overlap.GetComponentInParent<NetworkPlayerController>();
-                    if (player != null && player.OwnerClientId == ball.Shooter) continue;
-                    overlap.GetComponentInParent<ShipCannonBattery>()?.ApplyDamageServer(ball.Damage);
-                    if (EquipmentDamageReceiverUtility.TryGet(overlap, out var receiver, out _))
-                        receiver.ReceiveEquipmentHitServer(ball.Damage, ball.Origin, false);
-                    ImpactClientRpc(ball.Id, overlap.ClosestPoint(ball.Origin), -ball.Velocity.normalized,
-                        false, true, ball.Started);
-                    return true;
-                }
-            }
-            var age = Mathf.Min(ball.Lifetime, (float)(ball.SampleIndex * CollisionSampleStep));
-            var position = ball.Origin + ball.Velocity * age + ball.Gravity * (0.5f * age * age);
-            var delta = position - ball.Previous;
-            var distance = delta.magnitude;
-            var nearest = float.PositiveInfinity;
-            var hitPoint = position;
-            var normal = Vector3.up;
-            Collider collider = null;
-            if (distance > 0.0001f)
-            {
-                var count = Physics.SphereCastNonAlloc(ball.Previous, ball.Radius, delta / distance,
-                    _hits, distance, hitLayers, QueryTriggerInteraction.Ignore);
-                // Dense overlaps must not silently discard a nearer solid.
-                var hits = count == _hits.Length ? Physics.SphereCastAll(ball.Previous, ball.Radius,
-                    delta / distance, distance, hitLayers, QueryTriggerInteraction.Ignore) : _hits;
-                if (hits != _hits) count = hits.Length;
-                for (var h = 0; h < count; h++)
-                {
-                    var candidate = hits[h];
-                    if (candidate.collider == null || candidate.distance >= nearest) continue;
-                    if (candidate.collider.GetComponentInParent<WaterObject>() != null) continue;
-                    if (age < 0.2f && candidate.collider.GetComponentInParent<ShipCannonBattery>() == this) continue;
-                    var player = candidate.collider.GetComponentInParent<NetworkPlayerController>();
-                    if (age < 0.2f && player != null && player.OwnerClientId == ball.Shooter) continue;
-                    nearest = candidate.distance;
-                    hitPoint = candidate.point;
-                    normal = candidate.normal;
-                    collider = candidate.collider;
-                }
-            }
-            var waterFraction = WaterCrossing(ball.Previous, position, ball.Radius);
-            var water = waterFraction >= 0f && waterFraction * distance <= nearest;
-            if (water || collider != null)
-            {
-                var fraction = water ? waterFraction : Mathf.Clamp01(nearest / Mathf.Max(0.0001f, distance));
-                if (water)
-                {
-                    hitPoint = Vector3.Lerp(ball.Previous, position, waterFraction);
-                    hitPoint.y -= ball.Radius;
-                }
-                if (collider != null && !water)
-                {
-                    collider.GetComponentInParent<ShipCannonBattery>()?.ApplyDamageServer(ball.Damage);
-                    if (EquipmentDamageReceiverUtility.TryGet(collider, out var receiver, out _))
-                        receiver.ReceiveEquipmentHitServer(ball.Damage, ball.Previous, false);
-                }
-                var previousAge = (ball.SampleIndex - 1) * CollisionSampleStep;
-                var impactTime = ball.Started + previousAge + (age - previousAge) * fraction;
-                ImpactClientRpc(ball.Id, hitPoint, water ? Vector3.up : normal, water, true, impactTime);
-                return true;
-            }
-            ball.Previous = position;
-            return false;
-        }
-
-        private float WaterCrossing(Vector3 from, Vector3 to, float radius)
-        {
-            var water = _alignment != null ? _alignment.heightInterface : null;
-            if (water == null || water.waterObject == null || water.waterObject.material == null) return -1f;
-            var level = water.GetWaterLevel();
-            _waterSampler.positions[0] = from;
-            _waterSampler.positions[1] = to;
-            _waterSampler.heightValues[0] = _waterSampler.heightValues[1] = level;
-            if (water.waveProfile != null) Gerstner.ComputeHeight(_waterSampler, water);
-            var above = from.y - _waterSampler.heightValues[0] - radius;
-            var below = to.y - _waterSampler.heightValues[1] - radius;
-            if (above <= 0f) return 0f;
-            if (below > 0f) return -1f;
-            return Mathf.Clamp01(above / (above - below));
         }
 
         [ClientRpc]
@@ -401,6 +349,9 @@ namespace WaveByWave.Ships
         [ClientRpc]
         private void ImpactClientRpc(int id, Vector3 point, Vector3 normal, bool water, bool show, double at)
             => CannonEffects.Impact(this, id, point, normal, water, show, at, waterSplashPrefab, cannonImpactEffectPrefab);
+
+        internal void ReportProjectileImpact(int id, Vector3 point, Vector3 normal,
+            bool water, bool show, double at) => ImpactClientRpc(id, point, normal, water, show, at);
 
         public void ApplyDamageServer(float amount)
         {
@@ -431,6 +382,7 @@ namespace WaveByWave.Ships
                 !player.Inventory.TryConsumeServer(selectedSlot, 1, out _)) return;
             _treasureExperience.Value = (int)System.Math.Min(int.MaxValue,
                 (long)_treasureExperience.Value + treasure.TreasureExperience);
+            CheckTreasureLevel();
         }
     }
 }

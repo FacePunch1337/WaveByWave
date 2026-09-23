@@ -429,6 +429,8 @@ namespace WaveByWave.Enemies
             for (var i = 0; i < materials.Length; i++)
             {
                 var material = new Material(part.Materials[i]) { enableInstancing = true };
+                material.SetFloat("_DayMinimumLight", _catalog.DayMinimumLight);
+                material.SetFloat("_NightMinimumLight", _catalog.NightMinimumLight);
                 if (part.Category == EnemyBakedPartCategory.Body && skin >= 0 && skin < _catalog.SkeletonMaterials.Length)
                 {
                     var source = _catalog.SkeletonMaterials[skin];

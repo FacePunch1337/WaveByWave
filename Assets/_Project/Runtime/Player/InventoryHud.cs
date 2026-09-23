@@ -10,6 +10,7 @@ namespace WaveByWave.Player
         private readonly List<Text> _labels = new();
         private PlayerInventory _inventory;
         private GameObject _canvasObject;
+        private Text _carriedLabel;
         private Font _font;
 
         public void Initialize(PlayerInventory inventory)
@@ -47,6 +48,19 @@ namespace WaveByWave.Player
             layout.childControlWidth = false;
             layout.childControlHeight = false;
 
+            var carriedObject = new GameObject("Carried chest", typeof(RectTransform), typeof(Text));
+            carriedObject.transform.SetParent(_canvasObject.transform, false);
+            var carriedRect = (RectTransform)carriedObject.transform;
+            carriedRect.anchorMin = carriedRect.anchorMax = new Vector2(0.5f, 0f);
+            carriedRect.pivot = new Vector2(0.5f, 0f);
+            carriedRect.anchoredPosition = new Vector2(0f, 128f);
+            carriedRect.sizeDelta = new Vector2(560f, 36f);
+            _carriedLabel = carriedObject.GetComponent<Text>();
+            _carriedLabel.font = _font;
+            _carriedLabel.fontSize = 20;
+            _carriedLabel.alignment = TextAnchor.MiddleCenter;
+            _carriedLabel.color = new Color(1f, 0.75f, 0.3f);
+
             for (var i = 0; i < _inventory.Capacity; i++)
             {
                 var slot = new GameObject($"Slot {i + 1}", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
@@ -79,6 +93,8 @@ namespace WaveByWave.Player
         {
             if (_inventory == null)
                 return;
+
+            _carriedLabel.text = _inventory.IsCarryingChest ? "СУНДУК В РУКАХ · G — положить" : "";
 
             for (var i = 0; i < _labels.Count; i++)
             {

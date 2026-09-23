@@ -52,9 +52,20 @@ namespace WaveByWave.Combat
         public event Action Respawned;
 
         public float CurrentHealth => _health.Value;
-        public float MaximumHealth => maximumHealth;
-        public float NormalizedHealth => maximumHealth > 0f ? Mathf.Clamp01(_health.Value / maximumHealth) : 0f;
+        public float MaximumHealth => maximumHealth + (_player != null
+            ? _player.RingValue(PlayerRingStat.MaximumHealth) : 0f);
+        public float NormalizedHealth => MaximumHealth > 0f ? Mathf.Clamp01(_health.Value / MaximumHealth) : 0f;
         public bool IsDead => _dead.Value;
+        public void DisableWaveRespawnServer()
+        {
+            if (IsServer) respawnAfterDeath = false;
+        }
+
+        public void ApplyRingHealthBonusServer(float bonus)
+        {
+            if (IsServer && bonus > 0f && !_dead.Value)
+                _health.Value = Mathf.Min(MaximumHealth, _health.Value + bonus);
+        }
 
         private sealed class RendererState
         {
@@ -81,7 +92,7 @@ namespace WaveByWave.Combat
             if (IsServer)
             {
                 maximumHealth = Mathf.Max(1f, maximumHealth);
-                _health.Value = maximumHealth;
+                _health.Value = MaximumHealth;
                 _dead.Value = false;
                 _spawnPosition = transform.position;
                 _spawnRotation = transform.rotation;
@@ -148,9 +159,9 @@ namespace WaveByWave.Combat
 
         public bool HealServer(float amount)
         {
-            if (!IsServer || _dead.Value || !IsFinite(amount) || amount <= 0f || _health.Value >= maximumHealth)
+            if (!IsServer || _dead.Value || !IsFinite(amount) || amount <= 0f || _health.Value >= MaximumHealth)
                 return false;
-            _health.Value = Mathf.Min(maximumHealth, _health.Value + amount);
+            _health.Value = Mathf.Min(MaximumHealth, _health.Value + amount);
             return true;
         }
 
@@ -195,7 +206,7 @@ namespace WaveByWave.Combat
                 }
             }
 
-            _health.Value = maximumHealth;
+            _health.Value = MaximumHealth;
             _dead.Value = false;
         }
 
@@ -224,8 +235,8 @@ namespace WaveByWave.Combat
 
         private void NotifyHealthChanged()
         {
-            _healthBar?.SetValue(NormalizedHealth, _health.Value, maximumHealth);
-            HealthChanged?.Invoke(_health.Value, maximumHealth);
+            _healthBar?.SetValue(NormalizedHealth, _health.Value, MaximumHealth);
+            HealthChanged?.Invoke(_health.Value, MaximumHealth);
         }
 
         private void ApplyDeadPresentation(bool dead, bool playEffect)

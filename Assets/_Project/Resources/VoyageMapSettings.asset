@@ -1,0 +1,248 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7c12bad94584bce8cc7b366da2a89b1, type: 3}
+  m_Name: VoyageMapSettings
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.VoyageMapSettings
+  DayDuration: 100
+  SunsetDuration: 20
+  NightDuration: 120
+  SunriseDuration: 20
+  OverrideTime: 0
+  TimeOfDay: 0
+  SunAzimuth: -50
+  SunMaximumIntensity: 1.25
+  MoonMaximumIntensity: 0.35
+  SunColor:
+    serializedVersion: 2
+    key0: {r: 1, g: 0.57, b: 0.3, a: 1}
+    key1: {r: 1, g: 0.57, b: 0.3, a: 1}
+    key2: {r: 1, g: 0.94, b: 0.8, a: 0}
+    key3: {r: 1, g: 0.46, b: 0.27, a: 0}
+    key4: {r: 1, g: 0.46, b: 0.27, a: 0}
+    key5: {r: 0, g: 0, b: 0, a: 0}
+    key6: {r: 0, g: 0, b: 0, a: 0}
+    key7: {r: 0, g: 0, b: 0, a: 0}
+    ctime0: 0
+    ctime1: 21845
+    ctime2: 32768
+    ctime3: 49151
+    ctime4: 65535
+    ctime5: 0
+    ctime6: 0
+    ctime7: 0
+    atime0: 0
+    atime1: 65535
+    atime2: 0
+    atime3: 0
+    atime4: 0
+    atime5: 0
+    atime6: 0
+    atime7: 0
+    m_Mode: 0
+    m_ColorSpace: -1
+    m_NumColorKeys: 5
+    m_NumAlphaKeys: 2
+  MoonColor: {r: 0.48, g: 0.62, b: 1, a: 1}
+  SunRotation:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: -90
+      inSlope: 0
+      outSlope: 360
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 270
+      inSlope: 360
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  SunIntensity:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.25
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.5
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.8333333
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  DaySkybox: {fileID: 2100000, guid: 2bd8959f5fbd3644aa33af1a155fc147, type: 2}
+  NightSkybox: {fileID: 2100000, guid: cc421da483ed06c49933077a621bff25, type: 2}
+  BlendedSkybox: {fileID: 2100000, guid: a3e1d322a3854841b59913735167460c, type: 2}
+  SkyboxBlend:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.25
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.33333334
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.7083333
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.8333333
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  DaySkyboxTint:
+    serializedVersion: 2
+    key0: {r: 1, g: 1, b: 1, a: 1}
+    key1: {r: 1, g: 1, b: 1, a: 1}
+    key2: {r: 0, g: 0, b: 0, a: 0}
+    key3: {r: 0, g: 0, b: 0, a: 0}
+    key4: {r: 0, g: 0, b: 0, a: 0}
+    key5: {r: 0, g: 0, b: 0, a: 0}
+    key6: {r: 0, g: 0, b: 0, a: 0}
+    key7: {r: 0, g: 0, b: 0, a: 0}
+    ctime0: 0
+    ctime1: 65535
+    ctime2: 0
+    ctime3: 0
+    ctime4: 0
+    ctime5: 0
+    ctime6: 0
+    ctime7: 0
+    atime0: 0
+    atime1: 65535
+    atime2: 0
+    atime3: 0
+    atime4: 0
+    atime5: 0
+    atime6: 0
+    atime7: 0
+    m_Mode: 0
+    m_ColorSpace: -1
+    m_NumColorKeys: 2
+    m_NumAlphaKeys: 2
+  CelestialSkyboxShader: {fileID: 4800000, guid: 521fd62b6ef74989b35accc363a46651, type: 3}
+  ShowSun: 1
+  SunSprite: {fileID: 0}
+  SunAngularRadius: 1.5
+  SunEdgeSoftness: 0.08
+  SunHaloRadius: 4
+  SunHaloStrength: 0.18
+  SunDiskIntensity: 2
+  SunDiskColor: {r: 1, g: 0.9, b: 0.65, a: 1}
+  ShowMoon: 1
+  MoonSprite: {fileID: 0}
+  MoonAngularRadius: 1.1
+  MoonEdgeSoftness: 0.06
+  MoonHaloRadius: 2
+  MoonHaloStrength: 0.12
+  MoonDiskIntensity: 1.25
+  MoonDiskColor: {r: 0.78, g: 0.88, b: 1, a: 1}
+  DayAmbient: {r: 0.6396227, g: 0.9691255, b: 1, a: 1}
+  NightAmbient: {r: 0.435849, g: 0.59480864, b: 1, a: 1}
+  DayEquator: {r: 0.28, g: 0.34, b: 0.42, a: 1}
+  NightEquator: {r: 0.02, g: 0.025, b: 0.045, a: 1}
+  DayGround: {r: 0.18, g: 0.22, b: 0.27, a: 1}
+  NightGround: {r: 0.01, g: 0.012, b: 0.02, a: 1}
+  DayFog: {r: 0.56, g: 0.66, b: 0.73, a: 1}
+  NightFog: {r: 0.04, g: 0.07, b: 0.12, a: 1}
+  NightReflectionIntensity: 0.15

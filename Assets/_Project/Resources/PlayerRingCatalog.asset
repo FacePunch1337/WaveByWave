@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50361192afe641bd8aef8e0318a2b683, type: 3}
+  m_Name: PlayerRingCatalog
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Player.PlayerRingCatalog
+  MaximumDistinctRings: 4
+  FirstLevelCost: 100
+  LevelCostGrowth: 1.4
+  Rings:
+  - Stat: 0
+    DisplayName: Max HP
+    BaseBonus: 20
+  - Stat: 1
+    DisplayName: Melee damage
+    BaseBonus: 0.12
+  - Stat: 2
+    DisplayName: Ranged damage
+    BaseBonus: 0.12
+  - Stat: 3
+    DisplayName: Move speed
+    BaseBonus: 0.08
+  - Stat: 4
+    DisplayName: Stamina
+    BaseBonus: 20
+  - Stat: 5
+    DisplayName: Regeneration
+    BaseBonus: 2
+  - Stat: 6
+    DisplayName: Jump height
+    BaseBonus: 0.15
+  - Stat: 7
+    DisplayName: Hook retrieval speed
+    BaseBonus: 0.12
+  - Stat: 8
+    DisplayName: Luck
+    BaseBonus: 0.1
+  RarityMultipliers:
+  - 1
+  - 1.35
+  - 1.8
+  - 2.5
+  - 3.5
+  RarityWeights:
+  - 55
+  - 26
+  - 12
+  - 5
+  - 2

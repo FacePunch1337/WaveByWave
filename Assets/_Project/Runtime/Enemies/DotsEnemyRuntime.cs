@@ -54,6 +54,16 @@ namespace WaveByWave.Enemies
         private readonly List<SpawnRequest> _spawns = new();
         private readonly List<PlayerTarget> _players = new();
         private readonly Dictionary<int, Entity> _byId = new();
+        private readonly Dictionary<int2, List<ProjectileTarget>> _projectileGrid = new();
+        private readonly Stack<List<ProjectileTarget>> _projectileGridPool = new();
+        private int _projectileGridFrame = -1;
+        private const float ProjectileCellSize = 4f;
+
+        private struct ProjectileTarget
+        {
+            public int Id;
+            public Vector3 Position;
+        }
         private readonly Dictionary<ulong, Transform> _surfaces = new();
         private readonly HashSet<int> _crewGroups = new();
         private readonly List<Entity> _remove = new();
@@ -278,6 +288,29 @@ namespace WaveByWave.Enemies
                 Group = -1, Type = EnemyCombatType.Random, Random = new Random((uint)Environment.TickCount | 1u)
             });
             return true;
+        }
+
+        public bool QueueNightWave(Vector3 center, int count, float radius,
+            EnemyCombatType type, int group)
+        {
+            if (count <= 0 || !CanSimulate || !AttachServer() || Catalog == null ||
+                !Catalog.IsBaked || !Catalog.CanSpawnType(type)) return false;
+            _spawns.Add(new SpawnRequest { Center = center, Radius = Mathf.Max(1f, radius),
+                Remaining = count, Group = group, Type = type,
+                Random = new Random(unchecked((uint)(group * 2654435761L + count)) | 1u) });
+            return true;
+        }
+
+        public int NightWaveRemaining(int group)
+        {
+            if (!CanSimulate || _serverWorld == null || !_serverWorld.IsCreated) return 0;
+            var count = 0;
+            foreach (var request in _spawns) if (request.Group == group) count += request.Remaining;
+            var manager = _serverWorld.EntityManager;
+            foreach (var entity in _byId.Values)
+                if (manager.Exists(entity) && manager.GetComponentData<DotsEnemyBrain>(entity).SpawnGroup == group &&
+                    manager.GetComponentData<DotsEnemyState>(entity).Health > 0) count++;
+            return count;
         }
         private void SpawnBatch()
         {
@@ -906,17 +939,51 @@ namespace WaveByWave.Enemies
         {
             id = 0; fraction = 1;
             if (!CanSimulate || !AttachServer()) return false;
+            PrepareProjectileGrid();
+            var clearance = Catalog.BodyRadius + radius;
+            var min = (int2)math.floor((new float2(math.min(from.x, to.x), math.min(from.z, to.z)) - clearance) /
+                ProjectileCellSize);
+            var max = (int2)math.floor((new float2(math.max(from.x, to.x), math.max(from.z, to.z)) + clearance) /
+                ProjectileCellSize);
+            for (var z = min.y; z <= max.y; z++)
+            for (var x = min.x; x <= max.x; x++)
+            {
+                if (!_projectileGrid.TryGetValue(new int2(x, z), out var targets)) continue;
+                foreach (var target in targets)
+                {
+                    if (!_byId.TryGetValue(target.Id, out var entity) ||
+                        !_serverWorld.EntityManager.Exists(entity) ||
+                        _serverWorld.EntityManager.GetComponentData<DotsEnemyState>(entity).Health <= 0) continue;
+                    var bottom = target.Position + Vector3.up * Catalog.BodyRadius;
+                    var top = target.Position + Vector3.up * (Catalog.BodyHeight - Catalog.BodyRadius);
+                    if (EnemyHitGeometry.SegmentCapsule(from, to, bottom, top,
+                            Catalog.BodyRadius + radius, out var hit) && hit < fraction)
+                    { fraction = hit; id = target.Id; }
+                }
+            }
+            return id != 0;
+        }
+
+        private void PrepareProjectileGrid()
+        {
+            if (_projectileGridFrame == Time.frameCount) return;
+            foreach (var list in _projectileGrid.Values) { list.Clear(); _projectileGridPool.Push(list); }
+            _projectileGrid.Clear();
+            _projectileGridFrame = Time.frameCount;
             using var states = _enemies.ToComponentDataArray<DotsEnemyState>(Allocator.Temp);
             foreach (var snapshot in states)
             {
                 if (snapshot.Health <= 0 || snapshot.Scene != _scene) continue;
-                var state = snapshot; Carry(ref state);
-                var bottom = (Vector3)state.Position + Vector3.up * Catalog.BodyRadius;
-                var top = (Vector3)state.Position + Vector3.up * (Catalog.BodyHeight - Catalog.BodyRadius);
-                if (EnemyHitGeometry.SegmentCapsule(from, to, bottom, top, Catalog.BodyRadius + radius, out var hit) && hit < fraction)
-                { fraction = hit; id = state.Id; }
+                var state = snapshot;
+                Carry(ref state);
+                var key = (int2)math.floor(state.Position.xz / ProjectileCellSize);
+                if (!_projectileGrid.TryGetValue(key, out var list))
+                {
+                    list = _projectileGridPool.Count > 0 ? _projectileGridPool.Pop() : new List<ProjectileTarget>(8);
+                    _projectileGrid.Add(key, list);
+                }
+                list.Add(new ProjectileTarget { Id = state.Id, Position = state.Position });
             }
-            return id != 0;
         }
         public EntityQuery ServerQuery => _enemies;
         public World ServerWorld => _serverWorld;
@@ -924,6 +991,8 @@ namespace WaveByWave.Enemies
         {
             if (_serverWorld != null && _serverWorld.IsCreated) _serverWorld.EntityManager.DestroyEntity(_enemies);
             _byId.Clear(); _crewGroups.Clear(); _spawns.Clear(); _surfaceTransfers.Clear();
+            foreach (var list in _projectileGrid.Values) { list.Clear(); _projectileGridPool.Push(list); }
+            _projectileGrid.Clear(); _projectileGridFrame = -1;
             ClearMovementCrowdIndex(); StressCount = 0;
         }
         private void DisposeProbes()

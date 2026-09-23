@@ -234,7 +234,7 @@ namespace WaveByWave.Player
             // Customization can replace the entire pirate Animator while this view survives.
             // Rebind before solving the arms so both locomotion and authored grip IK keep working.
             RefreshHumanoidRig();
-            _inventory.TryGetDefinition(_inventory.EquippedIndex, out var definition);
+            _inventory.TryGetHeldDefinition(out var definition);
             if (_definition != definition) SetItem(definition);
             var visible = definition != null && _equipment.Available && !_player.IsAtControlStation &&
                 !_player.IsCustomizing &&

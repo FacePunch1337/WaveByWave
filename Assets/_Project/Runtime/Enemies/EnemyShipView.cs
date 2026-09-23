@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using WaveByWave.Player;
 using WaveByWave.Ships;
+using WaveByWave.Combat;
 
 namespace WaveByWave.Enemies
 {
@@ -21,7 +22,12 @@ namespace WaveByWave.Enemies
         [SerializeField, Tooltip("Full size of the lightweight ship-contact box. This replaces mesh collision for ship-to-ship movement.")]
         private Vector3 contactBoundsSize = new(6.4f, 3f, 15f);
 
-        private readonly Dictionary<uint, EnemyShipProjectileVisual> _shots = new();
+        [Header("Buoyancy footprint")]
+        [SerializeField, Tooltip("Center of the wave-sampling area in prefab-local coordinates. The cyan gizmo shows the four sample points.")]
+        private Vector3 buoyancyCenter;
+        [SerializeField, Tooltip("Width (X) and length (Z) of the area that follows the water, like AlignTransformToWater.Surface Size.")]
+        private Vector2 buoyancySize = new(6f, 15f);
+
         private MaterialPropertyBlock _properties;
         private EnemyShipDefinition _definition;
         private float _flashUntil;
@@ -35,6 +41,8 @@ namespace WaveByWave.Enemies
         public int ShipId { get; private set; }
         public Vector3 ContactBoundsCenter => contactBoundsCenter;
         public Vector3 ContactBoundsHalfExtents => contactBoundsSize * 0.5f;
+        public Vector3 BuoyancyCenter => buoyancyCenter;
+        public Vector2 BuoyancySize => buoyancySize;
         public Matrix4x4 SimulationFrame => _hasSimulationPose
             ? Matrix4x4.TRS(_simulationPosition, _simulationRotation, transform.lossyScale)
             : transform.localToWorldMatrix;
@@ -58,10 +66,15 @@ namespace WaveByWave.Enemies
             _properties = new MaterialPropertyBlock();
         }
 
-        private void OnValidate() => contactBoundsSize = new Vector3(
-            Mathf.Max(0.1f, Mathf.Abs(contactBoundsSize.x)),
-            Mathf.Max(0.1f, Mathf.Abs(contactBoundsSize.y)),
-            Mathf.Max(0.1f, Mathf.Abs(contactBoundsSize.z)));
+        private void OnValidate()
+        {
+            contactBoundsSize = new Vector3(
+                Mathf.Max(0.1f, Mathf.Abs(contactBoundsSize.x)),
+                Mathf.Max(0.1f, Mathf.Abs(contactBoundsSize.y)),
+                Mathf.Max(0.1f, Mathf.Abs(contactBoundsSize.z)));
+            buoyancySize = new Vector2(Mathf.Max(0.1f, Mathf.Abs(buoyancySize.x)),
+                Mathf.Max(0.1f, Mathf.Abs(buoyancySize.y)));
+        }
 
         private void OnDrawGizmosSelected()
         {
@@ -69,6 +82,14 @@ namespace WaveByWave.Enemies
             Gizmos.matrix = transform.localToWorldMatrix;
             Gizmos.color = new Color(1f, 0.45f, 0.08f, 0.9f);
             Gizmos.DrawWireCube(contactBoundsCenter, contactBoundsSize);
+            Gizmos.color = new Color(0.1f, 0.9f, 1f, 0.95f);
+            var halfX = buoyancySize.x * 0.5f;
+            var halfZ = buoyancySize.y * 0.5f;
+            Gizmos.DrawWireCube(buoyancyCenter, new Vector3(buoyancySize.x, 0.02f, buoyancySize.y));
+            Gizmos.DrawWireSphere(buoyancyCenter + Vector3.left * halfX, 0.12f);
+            Gizmos.DrawWireSphere(buoyancyCenter + Vector3.right * halfX, 0.12f);
+            Gizmos.DrawWireSphere(buoyancyCenter + Vector3.back * halfZ, 0.12f);
+            Gizmos.DrawWireSphere(buoyancyCenter + Vector3.forward * halfZ, 0.12f);
             Gizmos.matrix = previous;
         }
 
@@ -192,27 +213,19 @@ namespace WaveByWave.Enemies
 
         public void PlayShot(uint revision, Vector3 origin, Vector3 velocity, float started)
         {
-            if (_definition == null || _definition.ProjectilePrefab == null || _shots.ContainsKey(revision)) return;
-            if (_shots.Count > 16)
-            {
-                var expired = new List<uint>();
-                foreach (var pair in _shots) if (pair.Value == null) expired.Add(pair.Key);
-                foreach (var key in expired) _shots.Remove(key);
-            }
-            var projectile = Object.Instantiate(_definition.ProjectilePrefab, origin, Quaternion.identity);
-            if (projectile.TryGetComponent<CannonBallVisual>(out var playerVisual)) playerVisual.enabled = false;
-            var visual = projectile.AddComponent<EnemyShipProjectileVisual>();
-            visual.Initialize(origin, velocity, Vector3.down * _definition.ProjectileGravity, started,
-                _definition.ProjectileLifetime, _definition.MuzzleEffectPrefab, _definition.WaterImpactPrefab,
-                _definition.ImpactEffectPrefab);
-            _shots[revision] = visual;
+            if (_definition == null || _definition.ProjectilePrefab == null) return;
+            DotsCannonProjectileVisuals.Add((ulong)ShipId, revision, true,
+                _definition.ProjectilePrefab, origin, velocity,
+                Vector3.down * _definition.ProjectileGravity, started,
+                _definition.ProjectileLifetime, _definition.MuzzleEffectPrefab);
         }
 
         public void PlayImpact(uint shotRevision, Vector3 point, Vector3 normal, bool water, bool show, float at)
         {
-            if (_shots.TryGetValue(shotRevision, out var visual) && visual != null)
-                visual.SetImpact(point, normal, water, show, at);
-            _shots.Remove(shotRevision);
+            if (_definition == null) return;
+            DotsCannonProjectileVisuals.Impact((ulong)ShipId, shotRevision, true,
+                point, normal, water, show, at,
+                _definition.WaterImpactPrefab, _definition.ImpactEffectPrefab);
         }
 
         public void ReceiveEquipmentHitServer(float damage, Vector3 attackerPosition, bool canBlock = true) =>
@@ -221,8 +234,6 @@ namespace WaveByWave.Enemies
         private void OnDestroy()
         {
             DotsEnemyShipRuntime.Instance?.UnregisterView(ShipId, this);
-            foreach (var shot in _shots.Values) if (shot != null) Destroy(shot.gameObject);
-            _shots.Clear();
         }
     }
 

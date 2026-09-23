@@ -68,9 +68,21 @@ namespace WaveByWave.Enemies
             foreach (var state in states)
             {
                 if (state.Id == 0 || state.Scene != scene) continue;
+                var displayPosition = state.Position;
+                var displayRotation = state.Rotation;
+                if (state.Health <= 0f && state.DeathAt > 0f)
+                {
+                    var duration = Mathf.Max(0.1f, _definition.SinkDuration);
+                    var t = Mathf.Clamp01((runtime.Now - state.DeathAt) / duration);
+                    var eased = t * t * (3f - 2f * t);
+                    displayPosition = state.DeathPosition + new float3(0f,
+                        -_definition.SinkSpeed * duration * eased, 0f);
+                    displayRotation = math.mul(state.DeathRotation,
+                        quaternion.RotateZ(math.radians(4f * duration * eased)));
+                }
                 if (!Views.TryGetValue(state.Id, out var view))
                 {
-                    view = new View { Position = state.Position, Rotation = state.Rotation,
+                    view = new View { Position = displayPosition, Rotation = displayRotation,
                         Hit = state.HitRevision, Shot = state.ShotRevision, Impact = state.ImpactRevision };
                     Views.Add(state.Id, view);
                 }
@@ -109,15 +121,15 @@ namespace WaveByWave.Enemies
                     objectCount--;
                 }
                 view.Seen = _generation;
-                if (math.distancesq(view.Position, state.Position) > 400f)
+                if (state.Health <= 0f || math.distancesq(view.Position, displayPosition) > 400f)
                 {
-                    view.Position = state.Position;
-                    view.Rotation = state.Rotation;
+                    view.Position = displayPosition;
+                    view.Rotation = displayRotation;
                 }
                 else
                 {
-                    view.Position = math.lerp(view.Position, state.Position, blend);
-                    view.Rotation = math.slerp(view.Rotation, state.Rotation, blend);
+                    view.Position = math.lerp(view.Position, displayPosition, blend);
+                    view.Rotation = math.slerp(view.Rotation, displayRotation, blend);
                 }
                 view.Frame = Matrix4x4.TRS(view.Position, view.Rotation, _definition.ViewPrefab.transform.localScale);
                 if (view.Object == null)

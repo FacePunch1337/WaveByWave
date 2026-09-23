@@ -8,6 +8,8 @@ Shader "WaveByWave/EnemyVertexAnimation"
         _NormalFrames("Baked vertex normals", 2D) = "white" {}
         _EnemyFrame("Frame A, Frame B, blend, white flash", Vector) = (0,0,0,0)
         _UseVertexColor("Combined mesh material colors", Float) = 0
+        _DayMinimumLight("Day minimum light", Range(0,1)) = 0.65
+        _NightMinimumLight("Night minimum light", Range(0,1)) = 0.25
     }
     SubShader
     {
@@ -23,6 +25,8 @@ Shader "WaveByWave/EnemyVertexAnimation"
             float4 _BaseColor;
             float4 _EnemyFrame;
             float _UseVertexColor;
+            float _DayMinimumLight;
+            float _NightMinimumLight;
         CBUFFER_END
         #ifdef UNITY_DOTS_INSTANCING_ENABLED
         UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
@@ -93,7 +97,12 @@ Shader "WaveByWave/EnemyVertexAnimation"
                 half3 normal = normalize(input.normalWS);
                 Light light = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
                 half3 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).rgb * _BaseColor.rgb * input.tint.rgb;
-                half3 color = albedo * (SampleSH(normal) + light.color * saturate(dot(normal, light.direction)) *
+                // The DOTS presentation uses no light probes, so do not rely on SH
+                // coefficients that may be missing for these renderer instances.
+                half mainBrightness = dot(light.color, half3(0.2126, 0.7152, 0.0722));
+                half daylight = saturate((mainBrightness - 0.14h) * 2.0h);
+                half minimumLight = lerp(_NightMinimumLight, _DayMinimumLight, daylight);
+                half3 color = albedo * (minimumLight + light.color * saturate(dot(normal, light.direction)) *
                     light.shadowAttenuation * light.distanceAttenuation);
                 color = lerp(color, half3(1,1,1), input.flash);
                 return half4(MixFog(color, input.fog), 1);

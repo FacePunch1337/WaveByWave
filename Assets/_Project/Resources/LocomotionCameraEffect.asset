@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8faeafc32d4a4c389479dc51ca11e15c, type: 3}
+  m_Name: LocomotionCameraEffect
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Player.LocomotionCameraEffect
+  IdleFrequency: 0.25
+  IdleHorizontalAmplitude: 0.002
+  IdleVerticalAmplitude: 0.004
+  IdlePitchAmplitude: 0.12
+  WalkFrequency: 1.8
+  WalkHorizontalAmplitude: 0.01
+  WalkVerticalAmplitude: 0.018
+  WalkRollAmplitude: 0.35
+  SprintFrequency: 2.6
+  SprintHorizontalAmplitude: 0.016
+  SprintVerticalAmplitude: 0.03
+  SprintRollAmplitude: 0.7
+  JumpDip: 0.02
+  JumpPitch: 0.45
+  LandingDip: 0.05
+  LandingPitch: 1.2
+  LandingReferenceSpeed: 8
+  BlendSpeed: 12
+  ImpulseReturnTime: 0.18
+  WalkReferenceSpeed: 5

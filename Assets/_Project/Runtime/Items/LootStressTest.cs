@@ -73,6 +73,7 @@ namespace WaveByWave.Items
 
         private sealed class ServerItem
         {
+            public float OpenerLuck;
             public int CatalogIndex;
             public Vector3 Position;
             public Vector3 RestPosition;

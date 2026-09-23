@@ -2257,6 +2257,8 @@ MonoBehaviour:
   DeathSmokePrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
   StunEffectPrefab: {fileID: 3851572283197178760, guid: da7da3015244d454580cb100bca9f23e, type: 3}
   VisualScale: 1.7
+  DayMinimumLight: 0.65
+  NightMinimumLight: 0.25
   MaximumHealth: 60
   MoveSpeed: 3.8
   MeleeRange: 1.45

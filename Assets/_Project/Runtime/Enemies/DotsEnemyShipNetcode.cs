@@ -28,6 +28,8 @@ namespace WaveByWave.Enemies
         [GhostField(Quantization = 1000)] public float ImpactAt;
         [GhostField] public byte ImpactFlags;
         [GhostField(Quantization = 1000)] public float DeathAt;
+        [GhostField(Quantization = 1000)] public float3 DeathPosition;
+        [GhostField(Quantization = 1000)] public quaternion DeathRotation;
     }
 
     [GhostComponent(PrefabType = GhostPrefabType.Server)]
@@ -43,6 +45,7 @@ namespace WaveByWave.Enemies
         public float NextFire;
         public byte OrbitSide;
         public byte CrewSpawned;
+        public int WaveGroup;
     }
 
     public struct DotsEnemyShipPrefab : IComponentData { public Entity Value; }
@@ -108,12 +111,14 @@ namespace WaveByWave.Enemies
             {
                 var side = brain.OrbitSide == 0 ? -1f : 1f;
                 var tangent = new float3(-radial.z, 0, radial.x) * side;
-                var broadsideBlend = math.saturate((PreferredRange - brain.TargetDistance) /
+                // A logarithmic spiral keeps the target off the bow throughout the
+                // approach. The positive radial component still closes the distance.
+                var closeBlend = math.saturate((PreferredRange - brain.TargetDistance) /
                     math.max(0.1f, RangeBand));
-                // Closing pressure never changes sign. Broadside alignment only starts
-                // close to the player; neither range correction nor neighbours repel us.
-                brain.DesiredDirection = math.normalizesafe(tangent * (OrbitWeight * broadsideBlend) +
-                    radial * math.max(0.5f, RangeWeight));
+                var tangentWeight = math.max(0.1f, OrbitWeight) * math.lerp(3f, 4f, closeBlend);
+                var closingWeight = math.max(0.25f, RangeWeight * 0.5f);
+                brain.DesiredDirection = math.normalizesafe(tangent * tangentWeight +
+                    radial * closingWeight);
             }
         }
     }

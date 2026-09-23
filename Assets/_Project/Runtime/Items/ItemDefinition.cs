@@ -53,6 +53,8 @@ namespace WaveByWave.Items
         [SerializeField] private SupplyKind supplyKind;
         [SerializeField, Min(0f)] private float potency = 40f;
         [SerializeField, Min(0)] private int treasureExperience = 25;
+        [SerializeField, Tooltip("Luck increases this reward's coin amount when it drops from a chest.")]
+        private bool coinReward;
         [SerializeField] private ShipUpgradeStat upgradeStat;
         [SerializeField, Range(0f, 1f)] private float upgradeBonus = 0.1f;
         [SerializeField, Tooltip("Полный prefab предмета с одним MeshFilter. Его меш и материалы используются в мире, в руках и DOTS-спавне.")]
@@ -120,6 +122,8 @@ namespace WaveByWave.Items
         public SupplyKind SupplyKind => supplyKind;
         public float Potency => Mathf.Max(0f, potency);
         public int TreasureExperience => Mathf.Max(0, treasureExperience);
+        public bool IsCoinReward => coinReward || id != null &&
+            id.Contains("coin", System.StringComparison.OrdinalIgnoreCase);
         public ShipUpgradeStat UpgradeStat => upgradeStat;
         public float UpgradeBonus => upgradeBonus;
         public GameObject WorldVisualPrefab => worldVisualPrefab;

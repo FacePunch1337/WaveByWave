@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &7722462632762557731
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2836230343841673288}
+  - component: {fileID: 4023447091488907092}
+  - component: {fileID: 4709657057923299319}
+  m_Layer: 0
+  m_Name: Voyage Day Night
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2836230343841673288
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7722462632762557731}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4023447091488907092
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7722462632762557731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6965016f4af4ef585f2f6046a26642e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.VoyageDayNightController
+  settings: {fileID: 11400000, guid: 41c9a23d183641aebbb7f8ed8c4c8eb7, type: 2}
+  sun: {fileID: 0}
+  moon: {fileID: 0}
+  nightMaterials: {fileID: 4709657057923299319}
+--- !u!114 &4709657057923299319
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7722462632762557731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a85afcf116cc4adbbcbdf54c7c939489, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.DayNightMaterialController
+  lamps: []
+  emissiveMaterials: []

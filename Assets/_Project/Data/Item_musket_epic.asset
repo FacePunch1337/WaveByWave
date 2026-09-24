@@ -26,7 +26,7 @@ MonoBehaviour:
   coinReward: 0
   upgradeStat: 0
   upgradeBonus: 0.1
-  worldVisualPrefab: {fileID: 3692177591442134904, guid: 2742e212bde05d80adec65d6631e6b14, type: 3}
+  worldVisualPrefab: {fileID: 3692177591442134904, guid: 5a9b19e1b3885246b5108481efbf1664, type: 3}
   restingEulerAngles: {x: 0, y: 0, z: 0}
   chestLoot: {fileID: 0}
   equipmentKind: 3

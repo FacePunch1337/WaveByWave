@@ -64,7 +64,7 @@ namespace WaveByWave.Player
         private readonly NetworkVariable<Vector3> _lookPose = new(
             default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
         private readonly NetworkVariable<Vector3> _cameraPositionOffset = new(
-            default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+            default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
         private NetworkPlayerController _player;
         private FirstPersonCamera _ownerCamera;
@@ -80,6 +80,9 @@ namespace WaveByWave.Player
         private float _previousAimYaw;
         private bool _aimYawInitialized;
         private float _nextLookPublish;
+        private float _nextCameraPositionHeartbeat;
+        private Vector3 _lastSubmittedCameraOffset;
+        private bool _cameraOffsetSubmitted;
 
         public Animator CurrentAnimator => animator;
 
@@ -224,10 +227,36 @@ namespace WaveByWave.Player
             _nextLookPublish = Time.unscaledTime + 1f / 15f;
             if ((_lookPose.Value - pose).sqrMagnitude > 0.04f)
                 _lookPose.Value = pose;
-            if (_ownerCamera != null &&
-                (_cameraPositionOffset.Value - _ownerCamera.NetworkPositionOffset).sqrMagnitude > 0.000001f)
-                _cameraPositionOffset.Value = _ownerCamera.NetworkPositionOffset;
+            if (_ownerCamera == null)
+                return;
+
+            var cameraOffset = _ownerCamera.NetworkPositionOffset;
+            var changed = !_cameraOffsetSubmitted ||
+                          (_lastSubmittedCameraOffset - cameraOffset).sqrMagnitude > 0.000001f;
+            if (!changed && Time.unscaledTime < _nextCameraPositionHeartbeat)
+                return;
+
+            _lastSubmittedCameraOffset = cameraOffset;
+            _cameraOffsetSubmitted = true;
+            _nextCameraPositionHeartbeat = Time.unscaledTime + 0.5f;
+            if (IsServer)
+                _cameraPositionOffset.Value = cameraOffset;
+            else
+                SubmitCameraPositionOffsetServerRpc(cameraOffset);
         }
+
+        [ServerRpc(Delivery = RpcDelivery.Unreliable)]
+        private void SubmitCameraPositionOffsetServerRpc(Vector3 offset, ServerRpcParams rpcParams = default)
+        {
+            if (rpcParams.Receive.SenderClientId != OwnerClientId || !IsFinite(offset) || offset.sqrMagnitude > 25f)
+                return;
+            _cameraPositionOffset.Value = offset;
+        }
+
+        private static bool IsFinite(Vector3 value) =>
+            !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
+            !float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
+            !float.IsNaN(value.z) && !float.IsInfinity(value.z);
 
         private void ApplyRemoteCameraPosition()
         {

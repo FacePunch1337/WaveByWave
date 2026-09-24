@@ -152,7 +152,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Player.FirstPersonCamera
   eyeTarget: {fileID: 5452713979007667154}
-  characterBody: {fileID: 8103309754370004181}
+  characterBody: {fileID: 5700666384040051339}
   referenceFrame: {fileID: 0}
   positionOffset: {x: 0, y: 0, z: 0}
   usePitchPositionOffset: 1

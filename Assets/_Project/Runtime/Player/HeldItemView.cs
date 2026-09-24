@@ -22,6 +22,7 @@ namespace WaveByWave.Player
         private ItemDefinition _definition;
         private ItemDefinition _lastDrinkItem;
         private GripPose _rightGrip, _leftGrip;
+        private GripPose _muzzlePoint;
         private bool _hasAuthoredGrips;
         private Camera _camera;
         private float _fov, _aimBlend, _blockBlend, _blockHitUntil;
@@ -137,9 +138,10 @@ namespace WaveByWave.Player
             if (_itemPose != null) Destroy(_itemPose.gameObject);
             if (_hookVisual != null) Destroy(_hookVisual);
             _itemPose = null; _item = null; _bucketWater = null; _hookVisual = null;
-            _rightGrip = default; _leftGrip = default; _hasAuthoredGrips = false;
+            _rightGrip = default; _leftGrip = default; _muzzlePoint = default; _hasAuthoredGrips = false;
             if (definition == null || definition.WorldVisualPrefab == null) return;
             ReadGripPoints(definition.WorldVisualPrefab);
+            ReadMuzzlePoint(definition.WorldVisualPrefab);
             _itemPose = new GameObject("Held " + definition.Id).transform;
             _itemPose.SetParent(_motion, false);
             _item = ItemVisualUtility.InstantiatePresentation(definition.WorldVisualPrefab, _itemPose,
@@ -188,6 +190,19 @@ namespace WaveByWave.Player
         private static void WarnDuplicateGrip(GameObject prefab, ItemGripHand hand) =>
             Debug.LogWarning($"Item prefab '{prefab.name}' has more than one {hand} grip. " +
                              "Only the first point is used.", prefab);
+        private void ReadMuzzlePoint(GameObject prefab)
+        {
+            var points = prefab.GetComponentsInChildren<ItemMuzzlePoint>(true);
+            if (points.Length == 0)
+                return;
+
+            var root = prefab.transform;
+            var prefabParentInverse = root.parent != null ? root.parent.worldToLocalMatrix : Matrix4x4.identity;
+            _muzzlePoint = new GripPose(prefabParentInverse * points[0].transform.localToWorldMatrix);
+            if (points.Length > 1)
+                Debug.LogWarning($"Item prefab '{prefab.name}' has more than one muzzle point. " +
+                                 "Only the first point is used.", prefab);
+        }
         private bool TryGetGripPose(ItemGripHand hand, out Pose pose)
         {
             if (_definition != null && _definition.OverridesHandGripPoints)
@@ -226,8 +241,36 @@ namespace WaveByWave.Player
             return null;
         }
         public void BlockImpact() => _blockHitUntil = Time.unscaledTime + 0.2f;
-        public Vector3 MuzzlePosition(Vector3 fallback) => _item != null && _definition != null &&
-            _definition.EquipmentKind == ItemEquipmentKind.Musket ? _item.TransformPoint(new Vector3(0f, 0.8f, 0.04f)) : fallback;
+        public bool TryGetMuzzlePose(out Pose pose)
+        {
+            if (_item == null || _itemPose == null || _definition == null ||
+                _definition.EquipmentKind != ItemEquipmentKind.Musket)
+            {
+                pose = default;
+                return false;
+            }
+
+            if (_muzzlePoint.IsSet)
+            {
+                var matrix = _itemPose.localToWorldMatrix * _muzzlePoint.RootLocalMatrix;
+                pose = new Pose(matrix.GetColumn(3), matrix.rotation);
+                return true;
+            }
+
+            // Keep newly added muskets usable before an authored point is placed: their local
+            // +Z end is the barrel end in the weapon content convention.
+            var filter = _item.GetComponent<MeshFilter>();
+            if (filter != null && filter.sharedMesh != null)
+            {
+                var local = filter.sharedMesh.bounds.center;
+                local.z = filter.sharedMesh.bounds.max.z;
+                pose = new Pose(_item.TransformPoint(local), _item.rotation);
+                return true;
+            }
+
+            pose = default;
+            return false;
+        }
 
         private void LateUpdate()
         {

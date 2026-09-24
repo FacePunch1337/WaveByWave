@@ -479,9 +479,19 @@ namespace WaveByWave.Player
             _localActionNext = Now + duration;
             BuildAim(out var origin, out var direction, out var support);
             if (action == EquipmentAction.MusketShot && _player.OwnerView != null)
-                CannonEffects.Muzzle(_view != null ? _view.MuzzlePosition(_player.OwnerView.position + _player.OwnerView.forward * 0.8f)
-                    : _player.OwnerView.position + _player.OwnerView.forward * 0.8f, _player.OwnerView.forward, muzzleEffectPrefab);
+                PlayMusketMuzzle(_player.OwnerView.position + _player.OwnerView.forward * 0.8f,
+                    _player.OwnerView.forward);
             ActionServerRpc(action, _inventory.SelectedIndex, _inventory.SelectionRevision, origin, direction, support);
+        }
+
+        private void PlayMusketMuzzle(Vector3 fallbackPosition, Vector3 fallbackDirection)
+        {
+            if (_view != null && _view.TryGetMuzzlePose(out var muzzle))
+            {
+                fallbackPosition = muzzle.position;
+                fallbackDirection = muzzle.rotation * Vector3.forward;
+            }
+            CannonEffects.Muzzle(fallbackPosition, fallbackDirection, muzzleEffectPrefab);
         }
         private void BuildAim(out Vector3 origin, out Vector3 direction, out NetworkObjectReference supportReference)
         {
@@ -1229,7 +1239,7 @@ namespace WaveByWave.Player
                 bulletLifetime, musketProjectilePrefab);
             if (visual != null) _bulletVisuals[id] = visual;
             if (!IsOwner || extra)
-                CannonEffects.Muzzle(_view != null ? _view.MuzzlePosition(origin) : origin, velocity.normalized, muzzleEffectPrefab);
+                PlayMusketMuzzle(origin, velocity.normalized);
         }
         [ClientRpc]
         private void BulletImpactClientRpc(int id, Vector3 point, Vector3 normal, bool water, bool show, double at)

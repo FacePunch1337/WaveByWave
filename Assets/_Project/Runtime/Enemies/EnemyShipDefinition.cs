@@ -90,6 +90,8 @@ namespace WaveByWave.Enemies
         public EnemyCombatType CrewCombatType = EnemyCombatType.Random;
 
         [Header("Sinking")]
+        [Tooltip("Sink after the last spawned crew member dies, including crew that boarded another ship. Ships with no spawned crew are unaffected. Updated on deaths only; no per-frame crew scan.")]
+        public bool SinkWhenCrewDefeated = true;
         [Min(0.1f)] public float SinkDuration = 8f;
         [Min(0f)] public float SinkSpeed = 0.9f;
 

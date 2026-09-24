@@ -34,12 +34,12 @@ namespace WaveByWave.Editor
                 File.GetLastWriteTimeUtc(typeof(EnemyPursuitChecks).Assembly.Location))
             { AssetDatabase.Refresh(); return; }
             var compiled = File.GetLastWriteTimeUtc(typeof(DotsEnemyShipRuntime).Assembly.Location);
-            foreach (var file in new[] { "DotsEnemyShipRuntime.cs", "DotsEnemyShipRuntime.Collisions.cs", "DotsEnemyRuntime.cs", "DotsEnemyRuntime.Surface.cs", "DotsEnemyCatalog.cs" })
+            foreach (var file in new[] { "DotsEnemyShipRuntime.cs", "DotsEnemyShipRuntime.Collisions.cs", "DotsEnemyRuntime.cs", "DotsEnemyRuntime.Surface.cs", "DotsEnemyCatalog.cs", "DotsEnemyNetcode.cs", "EnemyShipDefinition.cs" })
                 if (File.GetLastWriteTimeUtc("Assets/_Project/Runtime/Enemies/" + file) > compiled)
                 { AssetDatabase.Refresh(); return; }
             File.Delete(Request);
             _safeEditorFrames = 0;
-            try { Run(); File.WriteAllText("Temp/EnemyPursuitChecks.result", "PASS: targeting, hulls, render bounds, stable locomotion, crowd spacing, edge pursuit and moving-deck transfers."); }
+            try { Run(); File.WriteAllText("Temp/EnemyPursuitChecks.result", "PASS: targeting, hulls, render bounds, stable locomotion, crowd spacing, edge pursuit, moving-deck transfers and crew-defeat sinking."); }
             catch (Exception error) { File.WriteAllText("Temp/EnemyPursuitChecks.result", "FAIL: " + error); Debug.LogException(error); }
         }
 
@@ -58,7 +58,80 @@ namespace WaveByWave.Editor
             CheckMovementStability();
             CheckRenderBounds();
             CheckEdges();
+            CheckCrewSinking();
             Debug.Log("[Enemy pursuit checks] PASS");
+        }
+
+        private static void CheckCrewSinking()
+        {
+            var root = new GameObject("Crew sinking regression") { hideFlags = HideFlags.HideAndDontSave };
+            root.SetActive(false);
+            var definition = ScriptableObject.CreateInstance<EnemyShipDefinition>();
+            try
+            {
+                var runtime = root.AddComponent<DotsEnemyRuntime>();
+                var ships = root.AddComponent<DotsEnemyShipRuntime>();
+                typeof(DotsEnemyShipRuntime).GetProperty("Definition").SetValue(ships, definition);
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var register = typeof(DotsEnemyRuntime).GetMethod("RegisterCrewMember", flags);
+                var death = typeof(DotsEnemyRuntime).GetMethod("RecordCrewDeath", flags);
+                var board = typeof(DotsEnemyRuntime).GetMethod("ReleaseBoardedCrew", BindingFlags.Static | BindingFlags.NonPublic);
+                var begin = typeof(DotsEnemyShipRuntime).GetMethod("BeginSinking", flags);
+                int Kill(ref DotsEnemyBrain brain)
+                {
+                    object[] args = { brain };
+                    var defeatedShip = (int)death.Invoke(runtime, args);
+                    brain = (DotsEnemyBrain)args[0];
+                    return defeatedShip;
+                }
+                register.Invoke(runtime, new object[] { 1 });
+                register.Invoke(runtime, new object[] { 1 });
+                register.Invoke(runtime, new object[] { 2 });
+                var first = new DotsEnemyBrain { CrewShipId = 1 };
+                var boarder = new DotsEnemyBrain { CrewShipId = 1, SpawnGroup = DotsEnemyRuntime.CrewGroupForShip(1) };
+                var otherShip = new DotsEnemyBrain { CrewShipId = 2 };
+                var islandEnemy = new DotsEnemyBrain();
+                var neverSpawned = new DotsEnemyBrain { CrewShipId = 3 };
+                Check(Kill(ref islandEnemy) == 0 && Kill(ref neverSpawned) == 0,
+                    "An island enemy or an unspawned/disabled crew triggered sinking.");
+                Check(Kill(ref first) == 0 && Kill(ref first) == 0,
+                    "An early or duplicate crew death sank the ship.");
+                object[] boardingArgs = { boarder, new DotsEnemyState { SupportId = 0 } };
+                board.Invoke(null, boardingArgs);
+                boarder = (DotsEnemyBrain)boardingArgs[0];
+                Check(boarder.SpawnGroup == 0 && boarder.CrewShipId == 1,
+                    "Leaving the original deck lost the crew's home ship.");
+                Check(Kill(ref boarder) == 1 && Kill(ref boarder) == 0,
+                    "The last boarder's death did not signal exactly one sinking.");
+                Check(Kill(ref otherShip) == 2, "One ship's crew count affected another ship.");
+                register.Invoke(runtime, new object[] { 4 });
+                typeof(DotsEnemyRuntime).GetMethod("ClearServer", flags).Invoke(runtime, null);
+                var previousSession = new DotsEnemyBrain { CrewShipId = 4 };
+                Check(Kill(ref previousSession) == 0, "Crew tracking survived a server/scene reset.");
+
+                var ship = new DotsEnemyShipState { Id = 1, Health = 500,
+                    Position = new float3(12, 3, -7), Rotation = quaternion.RotateY(0.7f) };
+                object[] sinkArgs = { ship };
+                Check((bool)begin.Invoke(ships, sinkArgs), "Crew defeat failed to begin sinking.");
+                ship = (DotsEnemyShipState)sinkArgs[0];
+                Check(ship.Health == 0 && math.all(ship.DeathPosition == ship.Position) &&
+                    math.all(ship.DeathRotation.value == ship.Rotation.value),
+                    "Sinking did not preserve the replicated death pose.");
+                var deathAt = ship.DeathAt;
+                Check(!(bool)begin.Invoke(ships, sinkArgs) && ((DotsEnemyShipState)sinkArgs[0]).DeathAt == deathAt,
+                    "Repeated defeat restarted sinking.");
+                var brainState = new DotsEnemyShipBrain { LastTick = deathAt };
+                object[] simulateArgs = { Entity.Null, ship, brainState, deathAt + definition.SinkDuration * 0.5f };
+                typeof(DotsEnemyShipRuntime).GetMethod("Simulate", flags).Invoke(ships, simulateArgs);
+                var sinking = (DotsEnemyShipState)simulateArgs[1];
+                Check(sinking.Position.y < ship.Position.y && math.all(sinking.Position.xz == ship.Position.xz),
+                    "The defeated ship did not follow its existing sinking animation.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+                Object.DestroyImmediate(definition);
+            }
         }
 
         private static void CheckSkeletonCrowd()

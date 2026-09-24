@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using StylizedWater3;
 using Unity.Mathematics;
 using UnityEngine;
+using WaveByWave.Ships;
 
 namespace WaveByWave.Player
 {
@@ -156,12 +157,18 @@ namespace WaveByWave.Player
         public bool TryWaterLevel(Vector3 point, out float level)
         {
             level = 0f;
+            var ship = ShipFlooding.CompartmentAt(point);
+            if (ship != null)
+            { level = ship.WaterVolume.HeightAt(point, ship.Fill); return ship.WaterLitres > 0.001f; }
             if (_water.GetWaterObject(point) == null || _water.waterObject.material == null) return false;
             level = _water.GetWaterLevel(); return true;
         }
         public bool TryHeight(Vector3 point, out float height)
         {
             height = 0f;
+            var ship = ShipFlooding.CompartmentAt(point);
+            if (ship != null)
+            { height = ship.WaterVolume.HeightAt(point, ship.Fill); return ship.WaterLitres > 0.001f; }
             if (_water.GetWaterObject(point) == null || _water.waterObject.material == null) return false;
             _samples.positions[0] = _samples.positions[1] = point;
             height = _water.GetWaterLevel();
@@ -175,6 +182,9 @@ namespace WaveByWave.Player
         {
             height = 0f;
             normal = Vector3.up;
+            var ship = ShipFlooding.CompartmentAt(point);
+            if (ship != null)
+                return false; // Internal floodwater can be scooped, but never drives swimming/buoyancy.
             if (_water.GetWaterObject(point) == null || _water.waterObject.material == null) return false;
             var halfX = Mathf.Max(0.05f, size.x * 0.5f);
             var halfZ = Mathf.Max(0.05f, size.y * 0.5f);

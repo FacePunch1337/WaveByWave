@@ -11,27 +11,33 @@ namespace WaveByWave.Generation
         [Tooltip("Time for the night sky to reach dawn. The night itself waits for the wave to be defeated.")]
         [Min(1f)] public float NightDuration = 120f;
         [Min(1f)] public float SunriseDuration = 20f;
+        [Tooltip("Hour at which the first day and every day after a night begin. Sunrise advances to this hour before the day timer starts.")]
+        [Range(8f, 18f)] public float DayStartHour = 10f;
 
         [Header("Time scrubbing")]
         [Tooltip("In Edit Mode previews lighting. In Play Mode pauses the automatic clock and sets the actual networked game time on the host.")]
         public bool OverrideTime;
-        [Tooltip("Drag in the asset Inspector to rewind or fast-forward time; 0/24 = midnight, 8 = morning, 20 = night.")]
-        [Range(0f, 24f)] public float TimeOfDay = 8f;
+        [Tooltip("Drag in the asset Inspector to rewind or fast-forward time; 0/24 = midnight, 10 = morning, 20 = night.")]
+        [Range(0f, 24f)] public float TimeOfDay = 10f;
 
         [Header("Sun and moon")]
-        public float SunAzimuth = -50f;
+        [Tooltip("The scene-authored Sun rotation represents this hour. Disable Override Time before adjusting the Sun transform.")]
+        [Range(0f, 24f)] public float SceneSunHour = 10f;
+        [Tooltip("Optional yaw offset from the scene-authored Sun, in degrees. Keep 0 to use its exact direction.")]
+        public float SunAzimuth;
         [Min(0f)] public float SunMaximumIntensity = 1.25f;
         [Min(0f)] public float MoonMaximumIntensity = 0.35f;
         [Tooltip("Gradient time is hour / 24; changing it updates lighting immediately.")]
         public Gradient SunColor = CreateSunColor();
         public Color MoonColor = new(0.48f, 0.62f, 1f);
-        [Tooltip("Curve X is hour / 24; Y is the sun's elevation angle in degrees.")]
+        [Tooltip("Curve X is hour / 24; Y controls orbital rotation around the scene Sun's local X axis. The 0..1 interval is normalized to one full turn, with Scene Sun Hour anchored to the scene rotation.")]
         public AnimationCurve SunRotation = AnimationCurve.Linear(0f, -90f, 1f, 270f);
         [Tooltip("Curve X is hour / 24; Y multiplies Sun Maximum Intensity.")]
         public AnimationCurve SunIntensity = new(
             new Keyframe(0f, 0f), new Keyframe(6f / 24f, 0f),
-            new Keyframe(8f / 24f, 0.3f), new Keyframe(12f / 24f, 1f),
-            new Keyframe(17f / 24f, 0.35f), new Keyframe(20f / 24f, 0f),
+            new Keyframe(8f / 24f, 0.4f), new Keyframe(10f / 24f, 1f),
+            new Keyframe(12f / 24f, 1f), new Keyframe(16f / 24f, 0.8f),
+            new Keyframe(18f / 24f, 0.25f), new Keyframe(20f / 24f, 0f),
             new Keyframe(1f, 0f));
 
         [Header("Smooth skybox transition")]

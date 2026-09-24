@@ -87,7 +87,7 @@ namespace WaveByWave.Combat
                     DotsEnemyRuntime.Instance?.Damage(targetId, ball.Damage, ball.Previous);
                 else if (kind == 3 && collider != null)
                 {
-                    collider.GetComponentInParent<ShipCannonBattery>()?.ApplyDamageServer(ball.Damage);
+                    collider.GetComponentInParent<ShipCannonBattery>()?.ApplyDamageServer(ball.Damage, point);
                     if (EquipmentDamageReceiverUtility.TryGet(collider, out var receiver, out _))
                         receiver.ReceiveEquipmentHitServer(ball.Damage, ball.Previous, false);
                 }

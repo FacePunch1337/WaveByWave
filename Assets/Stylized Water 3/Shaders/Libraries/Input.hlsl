@@ -7,6 +7,7 @@
 #define WATER_INPUT_INCLUDED
 
 CBUFFER_START(UnityPerMaterial)
+    float _WBWInteriorWater;
 	float4 _ShallowColor;
 	float4 _BaseColor;
 	half _ColorAbsorption;

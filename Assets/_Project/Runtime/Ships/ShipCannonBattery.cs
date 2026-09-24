@@ -7,7 +7,7 @@ using WaveByWave.Combat;
 
 namespace WaveByWave.Ships
 {
-    public enum VoyagePhase : byte { Day, Sunset, Night, Sunrise, Victory }
+    public enum VoyagePhase : byte { Day, Sunset, Night, Sunrise, Victory, Defeat }
 
     [DefaultExecutionOrder(1250)]
     [RequireComponent(typeof(NetworkShipController))]
@@ -29,8 +29,11 @@ namespace WaveByWave.Ships
         private readonly NetworkVariable<bool> _upgradePaused = new();
         private readonly NetworkVariable<byte> _voyagePhase = new();
         private readonly NetworkVariable<float> _voyageDayProgress = new();
-        private readonly NetworkVariable<float> _voyageHour = new(8f);
+        private readonly NetworkVariable<float> _voyageHour = new(10f);
         private readonly NetworkVariable<int> _voyageWave = new();
+        private readonly NetworkVariable<double> _returnToPortAt = new();
+        private bool _returnRequested;
+        private ShipFlooding _flooding;
         private readonly HashSet<ulong> _pendingRingSelections = new();
         private PlayerRingCatalog _ringCatalog;
         private NetworkShipController _ship;
@@ -38,12 +41,14 @@ namespace WaveByWave.Ships
         private double[] _lastAimReceived;
         private int _nextBallId;
         private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
-        public float Health => _health.Value;
+        public float Health => _flooding != null ? maximumHealth * (1f - _flooding.Fill) : _health.Value;
         public float MaximumHealth => maximumHealth;
         public int TreasureExperience => _treasureExperience.Value;
         public int CrewLevel => _crewLevel.Value;
         public bool UpgradePaused => _upgradePaused.Value;
         public VoyagePhase Phase => (VoyagePhase)_voyagePhase.Value;
+        public bool VoyageEnded => Phase == VoyagePhase.Victory || Phase == VoyagePhase.Defeat;
+        public float ReturnToPortIn => IsSpawned ? Mathf.Max(0f, (float)(_returnToPortAt.Value - NetworkManager.ServerTime.Time)) : 0f;
         public float DayProgress => _voyageDayProgress.Value;
         public float TimeOfDay => _voyageHour.Value;
         public int WaveNumber => _voyageWave.Value;
@@ -67,6 +72,7 @@ namespace WaveByWave.Ships
             _states = new NetworkList<CannonState>();
             _ship = GetComponent<NetworkShipController>();
             _platform = GetComponent<MovingPlatform>();
+            _flooding = GetComponent<ShipFlooding>();
             if (cannons == null || cannons.Length == 0)
                 cannons = GetComponentsInChildren<ShipCannon>(true);
         }
@@ -110,7 +116,7 @@ namespace WaveByWave.Ships
 
         private void CheckTreasureLevel()
         {
-            if (!IsServer || _upgradePaused.Value || _ringCatalog == null ||
+            if (!IsServer || VoyageEnded || _upgradePaused.Value || _ringCatalog == null ||
                 TreasureExperience < _ringCatalog.ExperienceForLevel(_crewLevel.Value + 1)) return;
             _crewLevel.Value++;
             _pendingRingSelections.Clear();
@@ -136,7 +142,7 @@ namespace WaveByWave.Ships
 
         internal void SetVoyageClockServer(VoyagePhase phase, float dayProgress, float hour)
         {
-            if (!IsServer) return;
+            if (!IsServer || VoyageEnded) return;
             _voyagePhase.Value = (byte)phase;
             _voyageDayProgress.Value = Mathf.Clamp01(dayProgress);
             _voyageHour.Value = Mathf.Repeat(hour, 24f);
@@ -145,11 +151,25 @@ namespace WaveByWave.Ships
         {
             if (IsServer) _voyageWave.Value = waveNumber;
         }
-        internal void SetVoyageVictoryServer()
+        internal void SetVoyageVictoryServer(float displayDuration = 5f) => FinishVoyageServer(true, displayDuration);
+
+        public void FinishVoyageServer(bool won, float displayDuration)
         {
-            if (!IsServer) return;
-            _voyagePhase.Value = (byte)VoyagePhase.Victory;
-            _voyageDayProgress.Value = 1f;
+            if (!IsServer || !IsSpawned || VoyageEnded) return;
+            _voyagePhase.Value = (byte)(won ? VoyagePhase.Victory : VoyagePhase.Defeat);
+            _returnToPortAt.Value = NetworkManager.ServerTime.Time + Mathf.Max(1f, displayDuration);
+            _upgradePaused.Value = false;
+            _pendingRingSelections.Clear();
+            FindFirstObjectByType<WaveByWave.Generation.VoyageDayNightController>()?.PauseClockServer();
+        }
+
+        private void Update()
+        {
+            if (!IsSpawned || !IsServer || !VoyageEnded || _returnRequested || ReturnToPortIn > 0f) return;
+            var session = WaveByWave.Networking.NetworkSessionCoordinator.Instance;
+            if (session == null) return;
+            _returnRequested = session.TryReturnToPort();
+            if (!_returnRequested) _returnToPortAt.Value = NetworkManager.ServerTime.Time + 2d;
         }
         public CannonState GetState(int index) => index >= 0 && index < _states.Count ? _states[index] :
             new CannonState { Operator = NetworkShipController.NoHelmsman };
@@ -167,6 +187,7 @@ namespace WaveByWave.Ships
         }
         private bool Near(ulong clientId, Transform point, float range = 4f)
         {
+            if (VoyageEnded) return false;
             if (!TryPlayer(clientId, out var player)) return false;
             var position = player.TryGetPositionOnPlatform(NetworkObject, out var onShip)
                 ? onShip : player.transform.position;
@@ -354,13 +375,14 @@ namespace WaveByWave.Ships
             bool water, bool show, double at) => ImpactClientRpc(id, point, normal, water, show, at);
 
         public void ApplyDamageServer(float amount)
+            => ApplyDamageServer(amount, transform.position);
+
+        public void ApplyDamageServer(float amount, Vector3 hitPoint)
         {
-            if (IsServer && IsFinite(amount))
-                _health.Value = Mathf.Max(0f, _health.Value - Mathf.Max(0f, amount) / (1f + _armorBonus.Value));
-        }
-        public void RepairServer(float amount)
-        {
-            if (IsServer) _health.Value = Mathf.Min(maximumHealth, _health.Value + Mathf.Max(0f, amount));
+            if (!IsServer || VoyageEnded || !IsFinite(amount) || amount <= 0f) return;
+            amount /= 1f + _armorBonus.Value;
+            if (_flooding != null) _flooding.HitServer(amount, hitPoint);
+            else _health.Value = Mathf.Max(0f, _health.Value - amount);
         }
         public void ApplyUpgradeServer(ItemDefinition upgrade)
         {

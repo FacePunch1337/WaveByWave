@@ -34,6 +34,8 @@ namespace WaveByWave.Enemies
     {
         public int Target;
         public int SpawnGroup;
+        // Original crew membership survives boarding; server-only, never replicated.
+        public int CrewShipId;
         public float3 Direction;
         public float3 MoveDirection;
         public float3 MoveTarget;

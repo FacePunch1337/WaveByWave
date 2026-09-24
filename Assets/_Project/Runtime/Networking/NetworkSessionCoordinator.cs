@@ -241,7 +241,9 @@ namespace WaveByWave.Networking
                 : $"Не удалось загрузить сцену: {result}");
         }
 
-        public void ReturnToPort()
+        public void ReturnToPort() => TryReturnToPort();
+
+        public bool TryReturnToPort()
         {
             if (networkManager != null && networkManager.IsServer)
             {
@@ -253,7 +255,9 @@ namespace WaveByWave.Networking
                     CancelLocalSceneTransition();
                     SetStatus($"Не удалось вернуться в порт: {result}");
                 }
+                return result == SceneEventProgressStatus.Started;
             }
+            return false;
         }
 
         public async void StartLocalClient()

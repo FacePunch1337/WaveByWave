@@ -52,7 +52,8 @@ namespace WaveByWave.Player
             _stamina.fillAmount = _equipment.Stamina / Mathf.Max(1f, _equipment.MaximumStamina);
             _stamina.color = _stamina.fillAmount < 0.2f ? new Color(1f, 0.35f, 0.2f) : new Color(0.35f, 0.9f, 0.65f);
             _state.text = _inventory.TryGetDefinition(_inventory.SelectedIndex, out var item) &&
-                item.EquipmentKind == ItemEquipmentKind.Bucket && _equipment.BucketFull ? "Ведро наполнено" : "";
+                item.EquipmentKind == ItemEquipmentKind.Bucket ? (_equipment.BucketFull
+                    ? $"Ведро: {_equipment.BucketLitres:0.#} л — ПКМ: выплеснуть" : "ЛКМ: зачерпнуть воду") : "";
         }
         private void OnDestroy()
         {

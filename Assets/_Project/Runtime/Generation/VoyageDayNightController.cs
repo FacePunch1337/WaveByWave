@@ -19,8 +19,8 @@ namespace WaveByWave.Generation
 
         private ShipCannonBattery _battery;
         private VoyagePhase _phase;
-        private float _elapsed, _hour = 8f, _sunriseFromHour = 6f, _nextNetworkUpdate;
-        private float _displayHour = 8f;
+        private float _elapsed, _hour = 10f, _sunriseFromHour = 6f, _nextNetworkUpdate;
+        private float _displayHour = 10f;
         private bool _displayInitialized;
         private bool _started, _advanceWhenManualEnds, _wasOverridden, _clockPaused;
 
@@ -31,11 +31,12 @@ namespace WaveByWave.Generation
         private AmbientMode _initialAmbientMode;
         private Color _initialAmbientSky, _initialAmbientEquator, _initialAmbientGround, _initialFog;
         private float _initialReflection;
-        private bool _initialSunEnabled, _initialMoonEnabled, _initialSunColorTemperature;
+        private bool _initialSunEnabled, _initialMoonEnabled, _initialSunColorTemperature, _initialMoonColorTemperature;
         private bool _lightingCaptured, _lightingApplied;
         private float _initialSunIntensity, _initialMoonIntensity;
         private Color _initialSunColor, _initialMoonColor;
         private Quaternion _initialSunRotation, _initialMoonRotation;
+        private float DayStartHour => Mathf.Clamp(settings.DayStartHour, 8f, 18f);
 
 
         private static readonly string[] SkyboxFloatProperties =
@@ -47,6 +48,7 @@ namespace WaveByWave.Generation
         private void OnEnable()
         {
             settings ??= Resources.Load<VoyageMapSettings>("VoyageMapSettings");
+            if (sun == null) sun = RenderSettings.sun;
         }
 
         private void OnDisable()
@@ -82,6 +84,7 @@ namespace WaveByWave.Generation
             if (moon != null)
             {
                 _initialMoonEnabled = moon.enabled;
+                _initialMoonColorTemperature = moon.useColorTemperature;
                 _initialMoonIntensity = moon.intensity;
                 _initialMoonColor = moon.color;
                 _initialMoonRotation = moon.transform.rotation;
@@ -104,6 +107,7 @@ namespace WaveByWave.Generation
             if (moon != null)
             {
                 moon.enabled = _initialMoonEnabled;
+                moon.useColorTemperature = _initialMoonColorTemperature;
                 moon.intensity = _initialMoonIntensity;
                 moon.color = _initialMoonColor;
                 moon.transform.rotation = _initialMoonRotation;
@@ -182,7 +186,8 @@ namespace WaveByWave.Generation
             switch (_phase)
             {
                 case VoyagePhase.Day:
-                    _hour = Mathf.Lerp(8f, 18f, Mathf.Clamp01(_elapsed / Mathf.Max(1f, settings.DayDuration)));
+                    _hour = Mathf.Lerp(DayStartHour, 18f,
+                        Mathf.Clamp01(_elapsed / Mathf.Max(1f, settings.DayDuration)));
                     if (_elapsed >= settings.DayDuration) SetPhase(VoyagePhase.Sunset);
                     break;
                 case VoyagePhase.Sunset:
@@ -195,7 +200,8 @@ namespace WaveByWave.Generation
                         _elapsed / Mathf.Max(1f, settings.NightDuration)), 24f);
                     break;
                 case VoyagePhase.Sunrise:
-                    var endHour = _sunriseFromHour > 8f ? 32f : 8f;
+                    var endHour = _sunriseFromHour > DayStartHour
+                        ? DayStartHour + 24f : DayStartHour;
                     _hour = Mathf.Repeat(Mathf.Lerp(_sunriseFromHour, endHour,
                         Mathf.Clamp01(_elapsed / Mathf.Max(1f, settings.SunriseDuration))), 24f);
                     if (_elapsed >= settings.SunriseDuration) SetPhase(VoyagePhase.Day);
@@ -209,17 +215,17 @@ namespace WaveByWave.Generation
             var selectedHour = Mathf.Repeat(requestedHour, 24f);
             _hour = selectedHour;
             var phase = _hour >= 20f || _hour < 6f ? VoyagePhase.Night :
-                _hour < 8f ? VoyagePhase.Sunrise :
+                _hour < DayStartHour ? VoyagePhase.Sunrise :
                 _hour < 18f ? VoyagePhase.Day : VoyagePhase.Sunset;
             if (_phase != phase) SetPhase(phase);
             _hour = selectedHour;
             if (phase == VoyagePhase.Sunrise) _sunriseFromHour = 6f;
             var normalized = phase switch
             {
-                VoyagePhase.Day => (_hour - 8f) / 10f,
+                VoyagePhase.Day => (_hour - DayStartHour) / Mathf.Max(0.01f, 18f - DayStartHour),
                 VoyagePhase.Sunset => (_hour - 18f) / 2f,
                 VoyagePhase.Night => (_hour >= 20f ? _hour - 20f : _hour + 4f) / 10f,
-                _ => (_hour - 6f) / 2f
+                _ => (_hour - 6f) / Mathf.Max(0.01f, DayStartHour - 6f)
             };
             _elapsed = normalized * PhaseDuration(phase);
         }
@@ -239,7 +245,7 @@ namespace WaveByWave.Generation
             _phase = phase;
             _elapsed = 0f;
             _nextNetworkUpdate = 0f;
-            if (phase == VoyagePhase.Day) _hour = 8f;
+            if (phase == VoyagePhase.Day) _hour = DayStartHour;
             else if (phase == VoyagePhase.Sunset) _hour = 18f;
             else if (phase == VoyagePhase.Night) _hour = 20f;
             PublishClockServer();
@@ -277,25 +283,32 @@ namespace WaveByWave.Generation
             var time = Mathf.Repeat(hour, 24f) / 24f;
             var night = Mathf.Clamp01(settings.SkyboxBlend?.Evaluate(time) ?? 0f);
             var tint = settings.DaySkyboxTint?.Evaluate(time) ?? Color.white;
-            var sunRotation = Quaternion.Euler(
-                settings.SunRotation?.Evaluate(time) ?? 0f, settings.SunAzimuth, 0f);
+            var referenceTime = Mathf.Repeat(settings.SceneSunHour, 24f) / 24f;
+            var orbit = EvaluateSunOrbit(time) - EvaluateSunOrbit(referenceTime);
+            var referenceRotation = sun != null ? _initialSunRotation : Quaternion.Euler(60f, 0f, 0f);
+            var sunRotation = Quaternion.AngleAxis(settings.SunAzimuth, Vector3.up) *
+                referenceRotation * Quaternion.Euler(orbit, 0f, 0f);
+            var sunAltitude = (sunRotation * Vector3.back).y;
             if (sun != null)
             {
                 sun.useColorTemperature = false;
                 sun.transform.rotation = sunRotation;
                 sun.intensity = settings.SunMaximumIntensity * Mathf.Max(0f,
-                    settings.SunIntensity?.Evaluate(time) ?? 0f);
+                    settings.SunIntensity?.Evaluate(time) ?? 0f) * HorizonLight(sunAltitude);
                 sun.color = settings.SunColor?.Evaluate(time) ?? Color.white;
-                sun.enabled = sun.intensity > 0.001f;
+                sun.enabled = true;
             }
             if (moon != null)
             {
                 moon.transform.rotation = sunRotation * Quaternion.Euler(180f, 0f, 0f);
+                moon.useColorTemperature = false;
                 moon.color = settings.MoonColor;
-                moon.intensity = settings.MoonMaximumIntensity * night;
-                moon.enabled = moon.intensity > 0.001f;
+                moon.intensity = settings.MoonMaximumIntensity * night * HorizonLight(-sunAltitude);
+                moon.enabled = true;
             }
-            RenderSettings.sun = night >= 0.5f && moon != null ? moon : sun;
+            // URP's main light also drives water highlights and shadows. Hand over only
+            // at the horizon, where both opposing lights have faded to zero.
+            RenderSettings.sun = moon != null && (sun == null || sunAltitude < 0f) ? moon : sun;
             UpdateSkybox(night, tint);
             var ambientSky = Color.Lerp(settings.DayAmbient, settings.NightAmbient, night);
             var ambientEquator = Color.Lerp(settings.DayEquator, settings.NightEquator, night);
@@ -310,6 +323,20 @@ namespace WaveByWave.Generation
             if (nightMaterials != null && nightMaterials.isActiveAndEnabled)
                 nightMaterials.ApplyNight(night);
         }
+
+        private float EvaluateSunOrbit(float time)
+        {
+            var curve = settings.SunRotation;
+            if (curve == null || curve.length < 2) return time * 360f;
+            var start = curve.Evaluate(0f);
+            var span = curve.Evaluate(1f) - start;
+            // A partial turn in the authored curve used to teleport the sun at midnight.
+            return Mathf.Abs(span) < 0.001f ? time * 360f :
+                (curve.Evaluate(time) - start) * (360f / span);
+        }
+
+        private static float HorizonLight(float altitude) =>
+            Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, 0.1f, altitude));
 
         private void UpdateSkybox(float night, Color tint)
         {
@@ -396,10 +423,10 @@ namespace WaveByWave.Generation
                 Mathf.Max(0f, settings.MoonDiskIntensity));
             var sunAltitude = Vector3.Dot(sunDirection, Vector3.up);
             var moonAltitude = Vector3.Dot(moonDirection, Vector3.up);
-            var sunVisibility = settings.ShowSun && sun != null && sun.enabled
+            var sunVisibility = settings.ShowSun && sun != null
                 ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-0.06f, 0.06f, sunAltitude))
                 : 0f;
-            var moonVisibility = settings.ShowMoon && moon != null && moon.enabled
+            var moonVisibility = settings.ShowMoon && moon != null
                 ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-0.06f, 0.06f, moonAltitude)) * night
                 : 0f;
             _runtimeSkybox.SetFloat("_SunVisibility", sunVisibility);

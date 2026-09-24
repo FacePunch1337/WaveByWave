@@ -214,12 +214,7 @@ namespace WaveByWave.Player
             var ship = controller != null ? controller.GetSupportingShipOnServer() : null;
             if (ship != null && ship.TryGetComponent<ShipCannonBattery>(out var battery))
             {
-                if (definition.Category == ItemCategory.Supply && definition.SupplyKind == SupplyKind.Plank)
-                {
-                    if (battery.Health < battery.MaximumHealth && TryConsumeServer(selectedIndex, 1, out _))
-                        battery.RepairServer(definition.Potency);
-                }
-                else if (definition.Category == ItemCategory.ShipUpgrade && TryConsumeServer(selectedIndex, 1, out _))
+                if (definition.Category == ItemCategory.ShipUpgrade && TryConsumeServer(selectedIndex, 1, out _))
                     battery.ApplyUpgradeServer(definition);
             }
         }

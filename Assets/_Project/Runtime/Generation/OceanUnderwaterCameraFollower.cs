@@ -89,7 +89,23 @@ namespace WaveByWave.Generation
 
         private void FollowCamera(Camera camera)
         {
-            BindOceanMaterial();
+            var compartment = WaveByWave.Ships.ShipFlooding.CompartmentAt(camera.transform.position);
+            BindWaterMaterial(compartment);
+            if (underwaterArea != null)
+            {
+                var insideWater = compartment != null && compartment.WaterLitres > 0.001f &&
+                    camera.transform.position.y < compartment.WaterVolume.HeightAt(camera.transform.position, compartment.Fill);
+                // A dry masked cabin may be below sea level. Ocean fog must not
+                // make it look flooded before water has actually reached the camera.
+                var active = compartment == null || insideWater;
+                if (underwaterArea.enabled != active)
+                {
+                    underwaterArea.enabled = active;
+                    if (!active) foreach (var particles in _spawnedParticles)
+                        if (particles != null) particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                }
+                underwaterArea.waterLevelSource = compartment != null ? UnderwaterArea.WaterLevelSource.FixedValue : UnderwaterArea.WaterLevelSource.Ocean;
+            }
 
             var position = transform.position;
             position.x = camera.transform.position.x;
@@ -99,6 +115,11 @@ namespace WaveByWave.Generation
                 position.y = OceanFollowBehaviour.Instance.transform.position.y;
                 if (underwaterArea != null)
                     underwaterArea.waterLevel = position.y;
+            }
+            if (compartment != null)
+            {
+                position.y = compartment.WaterVolume.HeightAt(camera.transform.position, compartment.Fill);
+                if (underwaterArea != null) underwaterArea.waterLevel = position.y;
             }
             transform.position = position;
         }
@@ -117,6 +138,14 @@ namespace WaveByWave.Generation
             if (Application.isPlaying && material.HasProperty("_Cull") &&
                 material.GetInt("_Cull") != (int)CullMode.Off)
                 material.SetInt("_Cull", (int)CullMode.Off);
+        }
+
+        private void BindWaterMaterial(WaveByWave.Ships.ShipFlooding compartment)
+        {
+            if (underwaterArea == null) return;
+            var interior = compartment?.WaterVolume?.RuntimeWaterMaterial;
+            if (interior != null) underwaterArea.waterMaterial = interior;
+            else BindOceanMaterial();
         }
 
         private void EnsureParticleEffects()

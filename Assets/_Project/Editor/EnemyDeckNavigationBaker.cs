@@ -11,6 +11,15 @@ namespace WaveByWave.Editor
 {
     public static class EnemyDeckNavigationBaker
     {
+        public static bool BakingEnabled
+        {
+            get
+            {
+                var catalog = AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(EnemyContentSetup.CatalogPath);
+                return catalog == null || catalog.UseBakedDeckNavigation;
+            }
+        }
+
         private struct Triangle { public Vector3 A, B, C, Normal; }
         private sealed class Geometry
         {
@@ -131,6 +140,11 @@ namespace WaveByWave.Editor
         public static void Bake(EnemyDeckNavigation nav, string assetPath = null)
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) throw new InvalidOperationException("Bake navigation outside Play Mode.");
+            if (!BakingEnabled)
+            {
+                Debug.Log("[Enemies] Deck-map baking is disabled in SkeletonEnemyCatalog. Ship movement uses colliders.", nav);
+                return;
+            }
             var sources = Sources(nav);
             if (sources.Length == 0) throw new InvalidOperationException("No solid MeshColliders or BoxColliders were selected.");
             var geometry = new Geometry { Cell = Mathf.Clamp(nav.CellSize, 0.1f, 1f),
@@ -317,7 +331,15 @@ namespace WaveByWave.Editor
         public override void OnInspectorGUI()
         {
             var nav = (EnemyDeckNavigation)target;
-            if (DrawDefaultInspector() || _dirty)
+            if (DrawDefaultInspector()) _dirty = true;
+            if (!EnemyDeckNavigationBaker.BakingEnabled)
+            {
+                EditorGUILayout.HelpBox("Запечённая навигация отключена. Боты перемещаются по текущим коллайдерам корабля; карта палубы не используется и не запекается. Сохранённые карты можно снова включить через Use Baked Deck Navigation в SkeletonEnemyCatalog.", MessageType.Info);
+                if (GUILayout.Button("Открыть настройки движения"))
+                    Selection.activeObject = AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(EnemyContentSetup.CatalogPath);
+                return;
+            }
+            if (_dirty)
             { _hash = EnemyDeckNavigationBaker.SourceHash(nav); _dirty = false; }
             if (nav.Data == null || !nav.Data.IsBaked)
                 EditorGUILayout.HelpBox("No baked map. Skeletons use the existing collider-based movement until you bake.", MessageType.Warning);

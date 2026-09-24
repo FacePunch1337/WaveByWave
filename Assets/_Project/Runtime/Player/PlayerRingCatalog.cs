@@ -14,7 +14,8 @@ namespace WaveByWave.Player
         Regeneration,
         JumpHeight,
         HookRetrievalSpeed,
-        Luck
+        Luck,
+        Repair
     }
 
     [Serializable]

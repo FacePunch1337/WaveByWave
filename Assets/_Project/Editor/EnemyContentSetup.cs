@@ -437,6 +437,9 @@ namespace WaveByWave.Editor
                     EnemyCombinedVariantBaker.Bake((DotsEnemyCatalog)target);
             }
             var catalog = (DotsEnemyCatalog)target;
+            EditorGUILayout.HelpBox(catalog.UseBakedDeckNavigation
+                ? "Движение по кораблям: используется запечённая карта палубы. Выключите Use Baked Deck Navigation для перемещения по текущим коллайдерам без запекания."
+                : "Движение по кораблям: боты идут по текущим коллайдерам, запекание карт палубы отключено. Для обхода краёв и проверки опоры используются Surface Edge Following и Surface Continuity Checks. Сохранённые карты остаются доступными при обратном включении.", MessageType.Info);
             EditorGUILayout.HelpBox("Performance diagnostics: переключатели действуют на существующих скелетов во время игры, без повторного спавна. Отключайте по одному и возвращайте перед следующей проверкой. На клиенте без сервера переключатели серверного движения не влияют на симуляцию.", MessageType.Info);
             if (catalog.EnableTargetSlots)
                 EditorGUILayout.HelpBox("Target Slots: каждому скелету назначена постоянная точка в спирали вокруг игрока. Режим не строит сетку и не ищет соседей, поэтому сам по себе не гарантирует столкновения. Для дешёвого A/B оставьте три Crowd-переключателя выключенными и меняйте только Enable Target Slots.", MessageType.Info);

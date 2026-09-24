@@ -850,7 +850,8 @@ namespace WaveByWave.Collision
             var rootFrame = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one).inverse;
             foreach (var filter in filters)
             {
-                if (filter == null || filter.sharedMesh == null || !filter.gameObject.activeInHierarchy)
+                if (filter == null || filter.sharedMesh == null || !filter.gameObject.activeInHierarchy ||
+                    filter.GetComponentInParent<ShipWaterVolume>(true) != null || filter.GetComponent<ShipOceanCutout>() != null)
                     continue;
                 if (solidGeometry.Length == 0 && !IsSolidModel(filter))
                     continue;
@@ -965,6 +966,8 @@ namespace WaveByWave.Collision
 
         public static bool IsSolidModel(MeshFilter filter)
         {
+            // Water and its depth mask are visual volumes, never solid hull geometry.
+            if (filter.GetComponentInParent<ShipWaterVolume>(true) != null || filter.GetComponent<ShipOceanCutout>() != null) return false;
             // Placing a loot prefab under the ship in a scene must not make
             // its preview/model part of the ship's cached collision geometry.
             if (filter.GetComponentInParent<WorldItem>() != null) return false;

@@ -197,6 +197,8 @@ float3 GetWaterColor(SceneData scene, float3 scatterColor, float density, float 
 #define FRONT_FACE_TYPE_REAL FRONT_FACE_TYPE
 #endif
 
+#include "Assets/_Project/Shaders/ShipOceanCutout.hlsl"
+
 float4 ForwardPass(Varyings input, FRONT_FACE_TYPE_REAL vertexFace : FRONT_FACE_SEMANTIC_REAL)
 {
 	UNITY_SETUP_INSTANCE_ID(input);
@@ -248,6 +250,7 @@ float4 ForwardPass(Varyings input, FRONT_FACE_TYPE_REAL vertexFace : FRONT_FACE_
 	#endif
 
 	water.positionWS = positionWS;
+	WBWClipWater(positionWS);
 	//Not normalized for depth-pos reconstruction. Normalization required for lighting (otherwise breaks on mobile)
 	water.viewDelta = GetCurrentViewPosition() - positionWS;
 	//water.viewDir = GetWorldSpaceViewDir(positionWS); //Uses the camera's forward vector for orthographic projection, the result isn't as useful

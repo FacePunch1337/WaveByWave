@@ -11,7 +11,7 @@ namespace WaveByWave.Ships
         private void OnGUI()
         {
             _battery ??= GetComponentInParent<ShipCannonBattery>();
-            if (_battery == null || !_battery.IsSpawned || Camera.main == null) return;
+            if (_battery == null || !_battery.IsSpawned || _battery.VoyageEnded || Camera.main == null) return;
             var screen = Camera.main.WorldToScreenPoint(transform.TransformPoint(levelBarOffset));
             if (screen.z <= 0f) return;
             var rect = new Rect(screen.x - 70f, Screen.height - screen.y - 30f, 140f, 28f);

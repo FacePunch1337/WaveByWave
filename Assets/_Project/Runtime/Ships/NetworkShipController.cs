@@ -116,6 +116,7 @@ namespace WaveByWave.Ships
         private Transform _planarMotionTarget;
         private MovingPlatform _movingPlatform;
         private KinematicShipCollision _geometryCollision;
+        private ShipFlooding _flooding;
         private EquipmentWaterQuery _shipWaterQuery;
         private EquipmentWaterQuery.CachedSurface _shipWaterSource;
         private WaveProfile _authoredWaterProfile;
@@ -236,6 +237,7 @@ namespace WaveByWave.Ships
             mastControl ??= GetComponentInChildren<ShipMastControl>(true);
             _movingPlatform = GetComponent<MovingPlatform>();
             _geometryCollision = GetComponent<KinematicShipCollision>();
+            _flooding = GetComponent<ShipFlooding>();
             if (_geometryCollision == null)
                 _geometryCollision = gameObject.AddComponent<KinematicShipCollision>();
             body.isKinematic = true;
@@ -324,6 +326,9 @@ namespace WaveByWave.Ships
         {
             if (!IsSpawned || !IsServer)
                 return;
+
+            if (_flooding != null && _flooding.IsSinking)
+            { _linearVelocity = Vector3.zero; _angularVelocity = Vector3.zero; return; }
 
             if (_shipWaterSource == null)
                 _shipWaterSource = _shipWaterQuery?.CacheSurface(body.position, _authoredWaterProfile);
@@ -424,6 +429,8 @@ namespace WaveByWave.Ships
 
         public bool TryGetKccMoverTarget(out Vector3 position, out Quaternion rotation)
         {
+            if (_flooding != null && _flooding.TrySinkingPose(out position, out rotation))
+                return true;
             if (IsSpawned && IsServer && waterAlignment != null && _shipWaterSource != null)
             {
                 if (_collisionTargetResolved)

@@ -66,6 +66,7 @@ namespace WaveByWave.Enemies
         }
         private readonly Dictionary<ulong, Transform> _surfaces = new();
         private readonly HashSet<int> _crewGroups = new();
+        private readonly Dictionary<int, int> _livingCrew = new();
         private readonly List<Entity> _remove = new();
         private readonly List<Probe> _probes = new();
         private readonly RaycastHit[] _hits = new RaycastHit[48];
@@ -161,6 +162,7 @@ namespace WaveByWave.Enemies
                 _enemies = world.EntityManager.CreateEntityQuery(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
                 _byId.Clear();
                 _crewGroups.Clear();
+                _livingCrew.Clear();
             }
             return true;
         }
@@ -808,19 +810,42 @@ namespace WaveByWave.Enemies
                 {
                     Target = -1,
                     SpawnGroup = group,
+                    CrewShipId = shipId,
                     LastSurfaceTime = now,
                     NextAttack = now + random.NextFloat(0.5f, 1.5f)
                 });
                 _byId.Add(state.Id, entity);
+                RegisterCrewMember(shipId);
                 UpdateCrowdSnapshot(in state);
             }
             _crewGroups.Add(group);
             return true;
         }
 
+        private void RegisterCrewMember(int shipId)
+        {
+            _livingCrew.TryGetValue(shipId, out var alive);
+            _livingCrew[shipId] = alive + 1;
+        }
+
+        private int RecordCrewDeath(ref DotsEnemyBrain brain)
+        {
+            var shipId = brain.CrewShipId;
+            brain.CrewShipId = 0;
+            if (shipId == 0 || !_livingCrew.TryGetValue(shipId, out var alive)) return 0;
+            if (alive > 1)
+            {
+                _livingCrew[shipId] = alive - 1;
+                return 0;
+            }
+            _livingCrew.Remove(shipId);
+            return shipId;
+        }
+
         public void DespawnGroup(int group)
         {
             _crewGroups.Remove(group);
+            if (group <= -1000000) _livingCrew.Remove(-1000000 - group);
             if (!AttachServer()) return;
             var manager = _serverWorld.EntityManager;
             using var entities = _enemies.ToEntityArray(Allocator.Temp);
@@ -898,10 +923,12 @@ namespace WaveByWave.Enemies
             state.Health = Mathf.Max(0, state.Health - damage);
             state.HitRevision++;
             brain.Knockback = math.normalizesafe(state.Position - (float3)attacker) * Catalog.DamageKnockback;
+            var defeatedCrewShip = 0;
             if (state.Health <= 0)
             {
                 state.DeathAt = Now;
                 brain.Attacking = 0;
+                defeatedCrewShip = RecordCrewDeath(ref brain);
                 if (Catalog.LootDrops != null && Catalog.LootDrops.Length > 0)
                 {
                     var random = new Random(state.Seed | 1u);
@@ -917,6 +944,9 @@ namespace WaveByWave.Enemies
             }
             manager.SetComponentData(entity, state);
             manager.SetComponentData(entity, brain);
+            // Publish the death before notifying the ship; sinking must not invalidate
+            // an enemy entity while its damage result is still being written.
+            if (defeatedCrewShip != 0) DotsEnemyShipRuntime.Instance?.SinkAfterCrewDefeated(defeatedCrewShip);
             return true;
         }
         public void Melee(Vector3 origin, Vector3 direction, float range, float damage)
@@ -991,6 +1021,7 @@ namespace WaveByWave.Enemies
         {
             if (_serverWorld != null && _serverWorld.IsCreated) _serverWorld.EntityManager.DestroyEntity(_enemies);
             _byId.Clear(); _crewGroups.Clear(); _spawns.Clear(); _surfaceTransfers.Clear();
+            _livingCrew.Clear();
             foreach (var list in _projectileGrid.Values) { list.Clear(); _projectileGridPool.Push(list); }
             _projectileGrid.Clear(); _projectileGridFrame = -1;
             ClearMovementCrowdIndex(); StressCount = 0;

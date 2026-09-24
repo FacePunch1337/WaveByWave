@@ -25,12 +25,12 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _BeamHeight: 1.5
-    - _BeamWidth: 1.5
-    - _DetailDistance: 60
+    - _BeamHeight: 1.3
+    - _BeamWidth: 1.3
+    - _DetailDistance: 30
     - _EffectSeed: 0
     - _HaloSize: 1.1
-    - _Intensity: 1
+    - _Intensity: 0.5
     - _RingSize: 1
     - _SparkRadius: 0.48
     - _SparkSize: 0.115

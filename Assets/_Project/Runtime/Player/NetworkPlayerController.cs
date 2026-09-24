@@ -69,6 +69,11 @@ namespace WaveByWave.Player
         [SerializeField, Min(0f), Tooltip("После полного истощения спринт снова доступен с этого запаса стамины.")]
         private float sprintResumeStamina = 15f;
 
+        [Header("Repair")]
+        [SerializeField, Min(0.05f), Tooltip("Базовая скорость ремонта. Кольца добавляют процентный бонус к этой характеристике.")]
+        private float repairSpeed = 1f;
+        public float RepairSpeed => repairSpeed * (1f + Mathf.Max(0f, RingValue(PlayerRingStat.Repair)));
+
         [Header("Moving platforms")]
         [SerializeField, Min(0.02f)] private float platformProbeDistance = 0.22f;
         [Tooltip("Maximum gap at which a client may attach to a network-interpolated deck.")]
@@ -3194,7 +3199,7 @@ namespace WaveByWave.Player
             _ringCatalog ??= Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
             if (_ringCatalog == null || _ringCatalog.Rings.Length == 0) return;
             var random = new Unity.Mathematics.Random(seed | 1u);
-            var available = new System.Collections.Generic.List<PlayerRingStat>(9);
+            var available = new System.Collections.Generic.List<PlayerRingStat>(_ringCatalog.Rings.Length);
             foreach (var ring in _ringCatalog.Rings)
             {
                 if (_ringStats.Count >= _ringCatalog.MaximumDistinctRings && RingLevel(ring.Stat) == 0)
@@ -3238,7 +3243,7 @@ namespace WaveByWave.Player
             var offer = (byte)(_pendingRingOffers >> (index * 8));
             var stat = (PlayerRingStat)(offer & 15);
             var rarity = (ItemRarity)(offer >> 4);
-            if ((int)stat >= 9 || (int)rarity >= 5) return;
+            if (!System.Enum.IsDefined(typeof(PlayerRingStat), stat) || (int)rarity >= 5) return;
             var bonus = _ringCatalog.Bonus(stat, rarity);
             if (bonus <= 0f) return;
             var found = -1;

@@ -626,18 +626,42 @@ namespace WaveByWave.Enemies
             var manager = _serverWorld.EntityManager;
             var state = manager.GetComponentData<DotsEnemyShipState>(entity);
             if (state.Health <= 0) return false;
-            state.Health = Mathf.Max(0, state.Health - damage);
+            var remainingHealth = Mathf.Max(0, state.Health - damage);
             state.HitRevision++;
-            if (state.Health <= 0)
+            if (remainingHealth <= 0)
             {
-                state.DeathAt = Now;
-                state.DeathPosition = state.Position;
-                state.DeathRotation = state.Rotation;
-                _fleet.Remove(id);
+                BeginSinking(ref state);
                 DotsEnemyRuntime.Instance?.DespawnGroup(DotsEnemyRuntime.CrewGroupForShip(id));
             }
+            else state.Health = remainingHealth;
             manager.SetComponentData(entity, state);
             CachePhysicsFrame(state);
+            return true;
+        }
+
+        internal void SinkAfterCrewDefeated(int id)
+        {
+            if (!CanSimulate || !Definition.SinkWhenCrewDefeated ||
+                _serverWorld == null || !_serverWorld.IsCreated ||
+                !_byId.TryGetValue(id, out var entity)) return;
+            var manager = _serverWorld.EntityManager;
+            if (!manager.Exists(entity)) return;
+            var state = manager.GetComponentData<DotsEnemyShipState>(entity);
+            if (state.Scene != _scene || !BeginSinking(ref state)) return;
+            manager.SetComponentData(entity, state);
+            CachePhysicsFrame(state);
+            // Every crew member is already dead. Keep their normal corpse/loot cleanup
+            // instead of running DespawnGroup's full enemy scan on the final kill.
+        }
+
+        private bool BeginSinking(ref DotsEnemyShipState state)
+        {
+            if (state.Health <= 0) return false;
+            state.Health = 0;
+            state.DeathAt = Now;
+            state.DeathPosition = state.Position;
+            state.DeathRotation = state.Rotation;
+            _fleet.Remove(state.Id);
             return true;
         }
 

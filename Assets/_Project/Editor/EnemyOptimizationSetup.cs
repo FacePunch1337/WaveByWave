@@ -16,8 +16,12 @@ namespace WaveByWave.Editor
             if (catalog == null) throw new InvalidOperationException("Skeleton catalog is missing.");
             if (!catalog.IsBaked || catalog.BakeSourceHash != EnemyContentSetup.SourceHash(catalog)) EnemyContentSetup.Bake(catalog);
             if (catalog.CombinedSourceHash != EnemyCombinedVariantBaker.SourceHash(catalog)) EnemyCombinedVariantBaker.Bake(catalog);
-            BakeShip("Assets/_Project/Prefabs/Enemies/EnemyShip.prefab", "Assets/_Project/Data/Enemies/EnemyShipNavigation.asset", catalog);
-            BakeShip("Assets/_Project/Prefabs/Ship.prefab", "Assets/_Project/Data/Enemies/PlayerShipNavigation.asset", catalog);
+            if (catalog.UseBakedDeckNavigation)
+            {
+                BakeShip("Assets/_Project/Prefabs/Enemies/EnemyShip.prefab", "Assets/_Project/Data/Enemies/EnemyShipNavigation.asset", catalog);
+                BakeShip("Assets/_Project/Prefabs/Ship.prefab", "Assets/_Project/Data/Enemies/PlayerShipNavigation.asset", catalog);
+            }
+            else Debug.Log("[Enemies] Deck-map baking is disabled. Ship movement uses the current colliders.");
             AssetDatabase.SaveAssets();
         }
 

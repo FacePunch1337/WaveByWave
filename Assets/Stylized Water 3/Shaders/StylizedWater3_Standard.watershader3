@@ -15,6 +15,7 @@
 		[Toggle] _ZWrite("Depth writing", Float) = 0
         [Toggle] _ZClip("Camera frustum clipping", Float) = 1
 		[Enum(Both,0,Back,1,Front,2)] _Cull("Render faces", Float) = 2
+        [HideInInspector] _WBWInteriorWater("Ship interior water", Float) = 0
 		[MaterialEnum(Performance, 0,Appearance, 1)] _ShadingMode("Shading mode", Float) = 1
 
 		[MaterialEnum(Mesh UV,0,World XZ projected ,1)]_WorldSpaceUV("UV Coordinates", Float) = 1
@@ -455,11 +456,13 @@
             #pragma vertex HeightPassVertex
 
             #pragma fragment DepthOnlyFragment
+            #include "Assets/_Project/Shaders/ShipOceanCutout.hlsl"
             float4 DepthOnlyFragment(HeightPassVaryings input) : SV_TARGET
             {
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
+                WBWClipWater(input.positionWS.xyz + float3(0, input.positionWS.w, 0));
                 return float4(input.positionCS.z, 0, 0, 1);
             }
             ENDHLSL

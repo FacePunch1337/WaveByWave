@@ -14,8 +14,7 @@ namespace WaveByWave.Player
 {
     public interface IBucketWaterSource
     {
-        // Future flooded ship compartments can implement this without changing input or animations.
-        bool TryScoopWaterServer(float litres, Vector3 point);
+        float ScoopWaterServer(float litres, Vector3 point);
         void AddWaterServer(float litres, Vector3 point);
     }
 
@@ -76,6 +75,8 @@ namespace WaveByWave.Player
 
         private readonly NetworkVariable<float> _stamina = new(100f);
         private readonly NetworkVariable<bool> _blocking = new(), _aiming = new(), _bucketFull = new();
+        private readonly NetworkVariable<float> _bucketAmount = new();
+        private double _lastRepairPulse;
         // Зарядка крюка видна всем клиентам: флаг и время начала (серверное время).
         private readonly NetworkVariable<bool> _charging = new();
         private readonly NetworkVariable<double> _chargeStartNet = new();
@@ -144,6 +145,7 @@ namespace WaveByWave.Player
         public bool Available => _available.Value;
         public bool IsAiming => IsOwner ? _localAim : _aiming.Value;
         public bool BucketFull => _bucketFull.Value;
+        public float BucketLitres => _bucketAmount.Value;
         public bool ChargingHook => IsOwner ? _localCharge : _charging.Value;
         public float HookCharge => IsOwner
             ? (_localCharge ? Mathf.Clamp01((Time.unscaledTime - _localChargeStarted) / hookChargeDuration) : 0f)
@@ -172,7 +174,7 @@ namespace WaveByWave.Player
                 return _renderedHook;
             }
         }
-        public static bool InputCaptured => NetworkPlayerController.RingChoiceOpen ||
+        public static bool InputCaptured => ShipFlooding.VoyageOver || NetworkPlayerController.RingChoiceOpen ||
             SessionMenuPresenter.InputCaptured || EquipmentAdminPanel.InputCaptured ||
             WaveByWave.Customization.CustomizationMenu.InputCaptured ||
             WaveByWave.Generation.OceanLoadingCurtain.InputCaptured;
@@ -392,7 +394,8 @@ namespace WaveByWave.Player
             if (block != _localBlock || aim != _localAim || reel != _localReel || _localCharge != _sentCharge || Now >= _inputHeartbeat)
             {
                 _localBlock = block; _localAim = aim; _localReel = reel;
-                SendHeldInput(block, aim, reel, _localCharge);
+                SendHeldInput(block, aim, reel, _localCharge,
+                    item.SupplyKind == SupplyKind.Plank && mouse.leftButton.isPressed);
                 _inputHeartbeat = Now + 0.1d;
             }
             if (mouse.leftButton.wasPressedThisFrame)
@@ -410,11 +413,11 @@ namespace WaveByWave.Player
             if (item.EquipmentKind == ItemEquipmentKind.Bucket && mouse.rightButton.wasPressedThisFrame)
                 SendAction(EquipmentAction.BucketSplash);
         }
-        private void SendHeldInput(bool block, bool aim, bool reel, bool charge)
+        private void SendHeldInput(bool block, bool aim, bool reel, bool charge, bool repair = false)
         {
             _sentCharge = charge;
             BuildAim(out var origin, out var direction, out var support);
-            HeldInputServerRpc(_inventory.SelectedIndex, _inventory.SelectionRevision, block, aim, reel, charge,
+            HeldInputServerRpc(_inventory.SelectedIndex, _inventory.SelectionRevision, block, aim, reel, charge, repair,
                 origin, direction, support);
         }
         private void SendAction(EquipmentAction action)
@@ -486,18 +489,26 @@ namespace WaveByWave.Player
             if (_inventory.Health <= 0f) return false;
             var ship = _player.GetSupportingShipOnServer();
             return ship == null || (!ship.IsClientOperatingNavigationStation(OwnerClientId) &&
-                (!ship.TryGetComponent<ShipCannonBattery>(out var battery) || battery.GetOperatorCannon(OwnerClientId) < 0));
+                (!ship.TryGetComponent<ShipCannonBattery>(out var battery) ||
+                    !battery.VoyageEnded && battery.GetOperatorCannon(OwnerClientId) < 0));
         }
         [ServerRpc]
-        private void HeldInputServerRpc(int slot, uint revision, bool block, bool aim, bool reel, bool charge,
+        private void HeldInputServerRpc(int slot, uint revision, bool block, bool aim, bool reel, bool charge, bool repair,
             Vector3 requestedOrigin, Vector3 requestedDirection, NetworkObjectReference support)
         {
             if (!_inventory.ApplySelectionServer(slot, revision) || !CanActServer() ||
                 !_inventory.TryGetDefinition(slot, out var item) ||
-                !ResolveAimServer(requestedOrigin, requestedDirection, support, out _, out var direction)) return;
+                !ResolveAimServer(requestedOrigin, requestedDirection, support, out var origin, out var direction)) return;
             RefreshSelectedServer(slot, item);
             _serverHeartbeat = Now;
             _look.Value = direction;
+            if (Now - _lastRepairPulse >= 0.08d)
+            {
+                var elapsed = Mathf.Min(0.15f, (float)(Now - _lastRepairPulse));
+                _lastRepairPulse = Now;
+                if (repair && item.SupplyKind == SupplyKind.Plank && Time.timeScale > 0f)
+                    ShipFlooding.RepairTarget(origin, direction, out _)?.RepairServer(_player, _inventory, origin, direction, elapsed);
+            }
             if (!block) _blockExhausted = false;
             _blocking.Value = block && !_blockExhausted && item.EquipmentKind == ItemEquipmentKind.Sword && _stamina.Value > 0f && Now >= _cooldown;
             _aiming.Value = aim && item.EquipmentKind == ItemEquipmentKind.Musket;
@@ -596,29 +607,22 @@ namespace WaveByWave.Player
                     break;
                 case EquipmentAction.BucketScoop when item.EquipmentKind == ItemEquipmentKind.Bucket:
                     if (_bucketFull.Value) return;
-                    var filled = TryBucketSource(origin, direction, out var source, out var scoopPoint) &&
-                        source.TryScoopWaterServer(bucketLitres, scoopPoint);
-                    if (!filled)
-                    {
-                        var probe = FeetServer(out _) + Vector3.up * 0.35f + direction * 0.9f;
-                        filled = _water.TryHeight(probe, out var height) && probe.y <= height + 0.55f &&
-                            !HasSolidBetween(origin, new Vector3(probe.x, height, probe.z));
-                        scoopPoint = new Vector3(probe.x, height, probe.z);
-                    }
+                    var amount = ScoopBucketServer(origin, direction, out var scoopPoint);
                     PlayServer(action, 0.8f);
-                    if (!filled) return;
-                    _bucketFull.Value = true; onWaterScooped.Invoke(scoopPoint, bucketLitres);
+                    if (amount <= 0f) return;
+                    _bucketAmount.Value = amount;
+                    _bucketFull.Value = true; onWaterScooped.Invoke(scoopPoint, amount);
                     ToolEffectClientRpc(scoopPoint, true);
                     break;
                 case EquipmentAction.BucketSplash when item.EquipmentKind == ItemEquipmentKind.Bucket:
                     if (!_bucketFull.Value) return;
                     _bucketFull.Value = false;
                     PlayServer(action, 0.65f);
-                    var pourPoint = origin + direction * 1.2f;
-                    if (TryBucketSource(origin, direction, out var destination, out var targetPoint))
-                    { destination.AddWaterServer(bucketLitres, targetPoint); pourPoint = targetPoint; }
-                    onWaterPoured.Invoke(pourPoint, bucketLitres);
-                    PourClientRpc(origin + direction * 0.4f, direction);
+                    var pourOrigin = origin + direction * 0.35f - Vector3.up * 0.2f;
+                    var pourPoint = PourBucketServer(pourOrigin, direction, _bucketAmount.Value);
+                    onWaterPoured.Invoke(pourPoint, _bucketAmount.Value);
+                    _bucketAmount.Value = 0f;
+                    PourClientRpc(pourOrigin, direction);
                     break;
                 case EquipmentAction.ShovelDig when item.EquipmentKind == ItemEquipmentKind.Shovel:
                     // Unlike item throwing, digging must follow the reticle exactly. The old
@@ -696,14 +700,50 @@ namespace WaveByWave.Player
                     receiver.ReceiveEquipmentHitServer(damage, origin);
             }
         }
-        private bool TryBucketSource(Vector3 origin, Vector3 direction, out IBucketWaterSource source, out Vector3 point)
+        private float ScoopBucketServer(Vector3 origin, Vector3 direction, out Vector3 point)
         {
-            source = null; point = origin;
-            if (!SegmentHit(origin, origin + direction * 2.5f, 0.03f, null, out var hit, out _)) return false;
-            point = hit.point;
-            foreach (var component in hit.collider.GetComponentsInParent<MonoBehaviour>())
-                if (component is IBucketWaterSource candidate) { source = candidate; return true; }
-            return false;
+            if (ShipFlooding.RayWater(origin, direction, 2.8f, out var compartment, out point) && !HasSolidBetween(origin, point))
+                return compartment.ScoopWaterServer(bucketLitres, point);
+            var probe = FeetServer(out _) + Vector3.up * 0.35f + Vector3.ProjectOnPlane(direction, Vector3.up).normalized * 0.6f;
+            point = probe;
+            if (!_water.TryHeight(probe, out var height) || probe.y > height + 0.55f) return 0f;
+            point.y = height;
+            if (HasSolidBetween(origin, point)) return 0f;
+            compartment = ShipFlooding.CompartmentAt(point);
+            return compartment != null ? compartment.ScoopWaterServer(bucketLitres, point) : bucketLitres;
+        }
+
+        private Vector3 PourBucketServer(Vector3 origin, Vector3 direction, float litres)
+        {
+            // This matches the forward splash: a short ballistic stream, including
+            // the first deck/bulkhead hit. Water thrown onto the deck drains into the hull.
+            var velocity = direction * 4.5f + Vector3.up * 1.3f;
+            var previous = origin;
+            for (var step = 1; step <= 20; step++)
+            {
+                var t = step * 0.1f;
+                var next = origin + velocity * t + Vector3.down * (4.905f * t * t);
+                var delta = next - previous;
+                var hitSolid = SegmentHit(previous, next, 0.025f, null, out var hit, out var fraction);
+                if (ShipFlooding.RayWater(previous, delta.normalized, delta.magnitude * (hitSolid ? fraction : 1f),
+                    out var waterShip, out var surfacePoint))
+                { waterShip.AddWaterServer(litres, surfacePoint); return surfacePoint; }
+                if (hitSolid)
+                {
+                    var ship = hit.collider.GetComponentInParent<ShipFlooding>();
+                    if (ship != null && ship.WaterVolume != null && ship.WaterVolume.ContainsColumn(hit.point))
+                        ship.AddWaterServer(litres, hit.point);
+                    return hit.point;
+                }
+                if (_water.Crossing(previous, next, out var oceanPoint, out _))
+                {
+                    var ship = ShipFlooding.CompartmentAt(oceanPoint);
+                    if (ship == null) return oceanPoint;
+                    // The ocean is masked here: continue until the stream meets deck or internal water.
+                }
+                previous = next;
+            }
+            return previous;
         }
         private bool HasSolidBetween(Vector3 from, Vector3 to, Collider target = null)
         {

@@ -20,7 +20,7 @@ namespace WaveByWave.Generation
         private int _waveIndex, _waveGroup;
         private bool _waveActive, _victoryRequested;
         private bool _waveNumberPublished;
-        private float _nextWaveCheck, _victoryElapsed;
+        private float _nextWaveCheck;
         [SerializeField, Min(0.5f)] private float announcementDuration = 4f;
         private VoyagePhase _lastAnnouncedPhase;
         private bool _phaseObserved;
@@ -48,24 +48,16 @@ namespace WaveByWave.Generation
             UpdateAnnouncement();
             if (settings == null || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
                 return;
-            if (_battery == null || !_battery.IsSpawned) return;
+            if (_battery == null || !_battery.IsSpawned || _battery.VoyageEnded) return;
             if (!_waveNumberPublished)
             {
                 _battery.SetVoyageWaveServer(_waveIndex + 1);
                 _waveNumberPublished = true;
             }
-            if (_battery.UpgradePaused) return;
+            if (_battery.UpgradePaused || _battery.VoyageEnded) return;
 
             if (_victoryRequested)
             {
-                _victoryElapsed += Time.deltaTime;
-                if (_victoryElapsed >= settings.VictoryDisplayDuration)
-                {
-                    var coordinator = NetworkSessionCoordinator.Instance;
-                    if (coordinator == null) return;
-                    _victoryRequested = false;
-                    coordinator.ReturnToPort();
-                }
                 return;
             }
             if (!_waveActive || Time.time < _nextWaveCheck) return;
@@ -75,9 +67,8 @@ namespace WaveByWave.Generation
             if (_waveIndex + 1 >= settings.Waves.Length)
             {
                 _victoryRequested = true;
-                _victoryElapsed = 0f;
                 dayNight?.PauseClockServer();
-                _battery.SetVoyageVictoryServer();
+                _battery.SetVoyageVictoryServer(settings.VictoryDisplayDuration);
             }
             else
             {
@@ -92,7 +83,7 @@ namespace WaveByWave.Generation
             if (_battery == null || !_battery.IsSpawned)
                 _battery = FindFirstObjectByType<ShipCannonBattery>();
             if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer ||
-                _battery == null || _waveActive || _victoryRequested) return;
+                _battery == null || _battery.VoyageEnded || _waveActive || _victoryRequested) return;
             if (settings == null || settings.Waves == null || settings.Waves.Length == 0)
             {
                 dayNight?.ReleaseNightServer();
@@ -207,7 +198,7 @@ namespace WaveByWave.Generation
         {
             if (_battery == null || !_battery.IsSpawned)
                 _battery = FindFirstObjectByType<ShipCannonBattery>();
-            if (_battery == null || !_battery.IsSpawned) return;
+            if (_battery == null || !_battery.IsSpawned || _battery.VoyageEnded) return;
             var rect = new Rect((Screen.width - 300f) * 0.5f, 12f, 300f, 36f);
             var label = _battery.Phase == VoyagePhase.Day ? $"День {_battery.WaveNumber}" :
                 _battery.Phase == VoyagePhase.Victory ? "Карта пройдена!" :

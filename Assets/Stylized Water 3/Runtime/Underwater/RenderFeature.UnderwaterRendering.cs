@@ -53,9 +53,24 @@ namespace StylizedWater3
             public void UpdateMaterial(Material waterMaterial, int renderingOrder)
             {
                 shadingMaterial.CopyMatchingPropertiesFromMaterial(waterMaterial);
+                // Match the source area's local variants as well as its values.
+                // The ship's interior source deliberately disables refraction:
+                // sampling the opaque camera texture can omit its cutout hull.
+                SetKeyword(shadingMaterial, ShaderParams.Keywords.Refraction,
+                    waterMaterial.IsKeywordEnabled(ShaderParams.Keywords.Refraction));
+                SetKeyword(shadingMaterial, ShaderParams.Keywords.Caustics,
+                    waterMaterial.IsKeywordEnabled(ShaderParams.Keywords.Caustics));
+                SetKeyword(shadingMaterial, ShaderParams.Keywords.Waves,
+                    waterMaterial.IsKeywordEnabled(ShaderParams.Keywords.Waves));
                 shadingMaterial.renderQueue = waterMaterial.renderQueue + renderingOrder +1;
 			
                 waterlineMaterial.CopyMatchingPropertiesFromMaterial(shadingMaterial);
+            }
+
+            private static void SetKeyword(Material material, string keyword, bool enabled)
+            {
+                if (enabled) material.EnableKeyword(keyword);
+                else material.DisableKeyword(keyword);
             }
         }
         

@@ -167,7 +167,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: aef98067dff2430aa2aa9d9b9d09a7d4, type: 3}
-  m_Name: ''
+  m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Player.PlayerCameraEffects
   effects:
   - Enabled: 1
@@ -472,6 +472,7 @@ MonoBehaviour:
   waterJumpSpeed: 5.5
   waterJumpReentryDelay: 0.4
   sprintResumeStamina: 15
+  repairSpeed: 1
   platformProbeDistance: 0.22
   clientPlatformContactTolerance: 0.04
   platformContactGrace: 0.15
@@ -528,7 +529,6 @@ MonoBehaviour:
   successfulBlockStamina: 15
   sprintDrainPerSecond: 14
   swimDrainPerSecond: 8
-  jumpStamina: 10
   drowningDamagePerSecond: 12
   drowningDamageInterval: 1
   swordRange: 2.2
@@ -544,13 +544,14 @@ MonoBehaviour:
   hookMaximumSpeed: 22
   hookGravity: 12
   hookReelSpeed: 8
+  hookRecallSpeed: 32
   maximumRopeLength: 45
   hookPickupRadius: 0.65
   hookLiftHorizontalDistance: 0.9
   hookSurfaceHeightSpeed: 5
   hookReelAcceleration: 24
   shovelDigDistance: 3.5
-  bucketLitres: 10
+  bucketLitres: 45
   onWaterScooped:
     m_PersistentCalls:
       m_Calls: []

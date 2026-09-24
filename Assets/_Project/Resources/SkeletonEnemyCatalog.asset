@@ -1028,7 +1028,7 @@ MonoBehaviour:
       - FirstRow: 52
         Count: 17
         Duration: 1.2999992
-  CombinedSourceHash: 42bb137f74484813c59d96fd2eb661f8
+  CombinedSourceHash: aaf407034432b1679322f0efc2121cc9
   BakedParts:
   - Name: Enemy_0_Hand_Left
     Category: 0
@@ -2295,14 +2295,14 @@ MonoBehaviour:
   MaximumSurfaceGap: 5
   SurfaceTransferHeight: 10
   EdgeSearchesPerFrame: 32
+  UseBakedDeckNavigation: 0
   EnableTargetSlots: 0
   TargetSlotSpacing: 0.2
-  UseBakedDeckNavigation: 1
   EnableCrowdAvoidance: 0
   EnableCrowdSeparation: 0
   EnableCrowdCollisions: 1
-  EnableSurfaceContinuityChecks: 0
-  EnableSurfaceEdgeFollowing: 0
+  EnableSurfaceContinuityChecks: 1
+  EnableSurfaceEdgeFollowing: 1
   EnableSurfaceTransfers: 1
   EnableCombat: 1
   SpawnsPerFrame: 32

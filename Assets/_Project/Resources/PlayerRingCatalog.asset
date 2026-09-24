@@ -43,6 +43,9 @@ MonoBehaviour:
   - Stat: 8
     DisplayName: Luck
     BaseBonus: 0.1
+  - Stat: 9
+    DisplayName: Ремонт
+    BaseBonus: 0.2
   RarityMultipliers:
   - 1
   - 1.35

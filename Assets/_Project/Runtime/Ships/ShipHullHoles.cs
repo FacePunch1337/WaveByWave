@@ -63,6 +63,22 @@ namespace WaveByWave.Ships
             return found;
         }
 
+        public bool TryChooseRandomSite(Func<Vector3, bool> occupied, out HullHoleSite chosen)
+        {
+            chosen = default;
+            if (Sites == null || Sites.Length == 0) return false;
+            var start = UnityEngine.Random.Range(0, Sites.Length);
+            for (var offset = 0; offset < Sites.Length; offset++)
+            {
+                var site = Sites[(start + offset) % Sites.Length];
+                if (!IsAllowed(site.UV, RadiusUV(site), site.Position.y, site.Normal) ||
+                    occupied(site.Position)) continue;
+                chosen = site;
+                return true;
+            }
+            return false;
+        }
+
         public void Present(ShipFlooding ship)
         {
             EnsureRenderer();

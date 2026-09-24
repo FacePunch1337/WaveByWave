@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using WaveByWave.Generation;
 using WaveByWave.Player;
 using WaveByWave.Ships;
 using Object = UnityEngine.Object;
@@ -74,7 +75,7 @@ namespace WaveByWave.Editor
                 else if (_stage == 2 && EditorApplication.timeSinceStartup >= _deadline)
                 {
                     Check(_ship.TrySinkingPose(out var p, out _) && p.y < -0.0001f, "Flooded ship must move down through its kinematic mover");
-                    _result = "PASS: real NGO host; breach, water transfers, repair ring, retained plank visible to clients, re-breach removes plank, defeat and sinking.";
+                    _result = "PASS: real NGO host; cannon and boundary breaches, spaced boundary timer, water transfers, repair ring, defeat and sinking.";
                     Finish();
                 }
             }
@@ -100,6 +101,16 @@ namespace WaveByWave.Editor
 
         private static void TestGameplay()
         {
+            var boundary = new BattlefieldBoundaryBreachTimer();
+            Check(!boundary.Step(0f, false, 8f, 10f) &&
+                  !boundary.Step(1f, true, 8f, 10f) &&
+                  !boundary.Step(8.9f, true, 8f, 10f) &&
+                  boundary.Step(9f, true, 8f, 10f) &&
+                  !boundary.Step(9.25f, true, 8f, 10f) &&
+                  boundary.Step(19.25f, true, 8f, 10f) &&
+                  !boundary.Step(20f, false, 8f, 10f) &&
+                  !boundary.Step(21f, true, 8f, 10f),
+                "Boundary must create spaced breaches after grace and reset on re-entry");
             var site = _ship.Hull.Sites[_ship.Hull.Sites.Length / 2];
             var point = _ship.Hull.transform.TransformPoint(site.Position);
             _battery.ApplyDamageServer(25f, point);
@@ -154,6 +165,11 @@ namespace WaveByWave.Editor
             Check(Mathf.Abs(_ship.WaterLitres - 6f) < 0.001f, "Repair must not drain existing water");
             _battery.ApplyDamageServer(25f, point);
             Check(_ship.HoleCount == 1, "A new hit after repair must create another breach");
+            var waterBeforeBoundary = _ship.WaterLitres;
+            Check(_battery.OpenBoundaryBreachServer(1f) && _ship.HoleCount == 2 &&
+                  _ship.Inflow > _ship.LeakLitresPerSecond &&
+                  Mathf.Approximately(_ship.WaterLitres, waterBeforeBoundary),
+                "Leaving the battlefield must open a leaking, repairable hole without adding water directly");
             _ship.AddWaterServer(_ship.CapacityLitres, waterPoint);
             Check(_ship.IsSinking && _battery.Phase == VoyagePhase.Defeat && _battery.ReturnToPortIn > 0f, "Full water must start defeat and the shared port countdown");
             var count = _ship.HoleCount;

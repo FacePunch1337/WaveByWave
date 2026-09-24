@@ -33,7 +33,10 @@ namespace WaveByWave.Generation
 
         [Header("Leaving the battlefield")]
         [Min(0f)] public float BoundaryGraceSeconds = 8f;
-        [Min(0f)] public float BoundaryDamagePerSecond = 8f;
+        [Tooltip("Seconds between new hull breaches while the ship remains outside the battle area.")]
+        [Min(0.5f)] public float BoundaryBreachInterval = 10f;
+        [Tooltip("Leak rate of each boundary breach relative to an ordinary hull breach.")]
+        [Min(0.1f)] public float BoundaryBreachLeakMultiplier = 1f;
         [Range(0.1f, 1f)] public float BoundaryCheckInterval = 0.25f;
 
         [Header("Infinite night fog")]
@@ -47,5 +50,13 @@ namespace WaveByWave.Generation
         [Range(0f, 4f)] public float FogWindSpeed = 0.65f;
         [Range(4, 12)] public int FogSampleCount = 8;
         [Min(30f)] public float FogViewDistance = 480f;
+
+#if UNITY_EDITOR
+        [Header("Scene View preview (editor only)")]
+        [Tooltip("Draw the battle fog in Scene View without entering Play Mode.")]
+        public bool PreviewFogInSceneView;
+        [Min(0)] public int PreviewWaveIndex;
+        public Vector3 PreviewCenter;
+#endif
     }
 }

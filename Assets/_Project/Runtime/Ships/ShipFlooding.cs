@@ -64,6 +64,7 @@ namespace WaveByWave.Ships
         private ShipCannonBattery _battery;
         private float _leakRate, _publishIn;
         private int _nextHole;
+        private bool _boundarySiteWarningShown;
         private ShipRepairPresentation _repairPresentation;
         private Vector3 _sinkPosition;
         private Quaternion _sinkRotation;
@@ -145,6 +146,29 @@ namespace WaveByWave.Ships
                 hole.Repair = 0f; _holes[nearest] = hole;
             }
             else Debug.LogError("No valid hull breach sites. Select ShipHullHoles and rebuild hole sites after editing UV regions.", Hull);
+        }
+
+        public bool OpenBoundaryBreachServer(float leakMultiplier)
+        {
+            if (!IsServer || !IsSpawned || IsSinking || _battery.VoyageEnded || Hull == null ||
+                !float.IsFinite(leakMultiplier) || leakMultiplier <= 0f ||
+                HoleCount >= ShipHullHoles.MaximumHoles) return false;
+            if (!Hull.TryChooseRandomSite(Occupied, out var site))
+            {
+                if (!_boundarySiteWarningShown)
+                {
+                    Debug.LogWarning("No free hull sites for battlefield boundary breaches. Rebuild the allowed hull hole sites.", Hull);
+                    _boundarySiteWarningShown = true;
+                }
+                return false;
+            }
+            _holes.Add(new HullBreach
+            {
+                Id = ++_nextHole, UV = site.UV, RadiusUV = Hull.RadiusUV(site),
+                Position = site.Position, Normal = site.Normal,
+                Leak = LeakLitresPerSecond * Mathf.Clamp(leakMultiplier, 0.1f, 8f)
+            });
+            return true;
         }
 
         private bool Occupied(Vector3 position)
@@ -236,15 +260,6 @@ namespace WaveByWave.Ships
         {
             if (!IsServer || IsSinking || _battery.VoyageEnded || WaterVolume == null || !WaterVolume.ContainsColumn(point)) return;
             _reservoir.Add(litres, CapacityLitres); Publish(); CheckSinking();
-        }
-
-        public void AddBoundaryDamageServer(float fractionOfHealth)
-        {
-            if (!IsServer || IsSinking || _battery.VoyageEnded ||
-                !float.IsFinite(fractionOfHealth) || fractionOfHealth <= 0f) return;
-            _reservoir.Add(CapacityLitres * fractionOfHealth, CapacityLitres);
-            Publish();
-            CheckSinking();
         }
 
         private void Update()

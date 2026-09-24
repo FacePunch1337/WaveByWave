@@ -18,7 +18,7 @@ MonoBehaviour:
     Bots: []
     EnemyShips: 1
     SpawnRadius: 50
-    BattlefieldRadius: 140
+    BattlefieldRadius: 300
   - Name: 2
     Bots: []
     EnemyShips: 3
@@ -28,9 +28,10 @@ MonoBehaviour:
     Bots: []
     EnemyShips: 10
     SpawnRadius: 100
-    BattlefieldRadius: 220
+    BattlefieldRadius: 431.8
   BoundaryGraceSeconds: 8
-  BoundaryDamagePerSecond: 8
+  BoundaryBreachInterval: 10
+  BoundaryBreachLeakMultiplier: 1
   BoundaryCheckInterval: 0.25
   FogNearColor: {r: 0.16, g: 0.53, b: 0.57, a: 1}
   FogFarColor: {r: 0.025, g: 0.12, b: 0.18, a: 1}
@@ -42,3 +43,6 @@ MonoBehaviour:
   FogWindSpeed: 0.65
   FogSampleCount: 8
   FogViewDistance: 480
+  PreviewFogInSceneView: 1
+  PreviewWaveIndex: 2
+  PreviewCenter: {x: 0, y: -0.7046841, z: 0}

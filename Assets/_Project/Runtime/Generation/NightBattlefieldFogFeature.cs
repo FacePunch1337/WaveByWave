@@ -14,6 +14,9 @@ namespace WaveByWave.Generation
         private Material _material;
         private Texture2D _noise;
         private FogPass _pass;
+#if UNITY_EDITOR
+        private static NightWaveSettings _previewSettings;
+#endif
         private static readonly int CenterRadius = Shader.PropertyToID("_BattlefieldCenterRadius");
         private static readonly int NearColor = Shader.PropertyToID("_BattlefieldFogNearColor");
         private static readonly int FarColor = Shader.PropertyToID("_BattlefieldFogFarColor");
@@ -34,9 +37,26 @@ namespace WaveByWave.Generation
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-            if (_pass == null || renderingData.cameraData.cameraType != CameraType.Game ||
-                renderingData.cameraData.renderType != CameraRenderType.Base ||
-                !NightWaveController.TryGetBattlefield(out var zone, out var settings)) return;
+            if (_pass == null || renderingData.cameraData.renderType != CameraRenderType.Base) return;
+            Vector4 zone;
+            NightWaveSettings settings;
+            if (renderingData.cameraData.cameraType == CameraType.SceneView && !Application.isPlaying)
+            {
+#if UNITY_EDITOR
+                _previewSettings ??= Resources.Load<NightWaveSettings>("NightWaveSettings");
+                settings = _previewSettings;
+                if (settings == null || !settings.PreviewFogInSceneView ||
+                    settings.Waves == null || settings.Waves.Length == 0) return;
+                var wave = settings.Waves[Mathf.Clamp(settings.PreviewWaveIndex, 0, settings.Waves.Length - 1)];
+                if (wave == null) return;
+                var center = settings.PreviewCenter;
+                zone = new Vector4(center.x, center.y, center.z, wave.BattlefieldRadius);
+#else
+                return;
+#endif
+            }
+            else if (renderingData.cameraData.cameraType != CameraType.Game ||
+                     !NightWaveController.TryGetBattlefield(out zone, out settings)) return;
             _material.SetVector(CenterRadius, zone);
             _material.SetColor(NearColor, settings.FogNearColor);
             _material.SetColor(FarColor, settings.FogFarColor);

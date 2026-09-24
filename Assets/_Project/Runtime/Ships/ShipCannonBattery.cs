@@ -399,13 +399,10 @@ namespace WaveByWave.Ships
             if (_flooding != null) _flooding.HitServer(amount, hitPoint);
             else _health.Value = Mathf.Max(0f, _health.Value - amount);
         }
-        // Boundary damage is temporary environmental pressure: it reduces the
-        // ship's flood-based health without leaving a permanent leaking hole.
-        public void ApplyBoundaryDamageServer(float amount)
+        public bool OpenBoundaryBreachServer(float leakMultiplier)
         {
-            if (!IsServer || VoyageEnded || !IsFinite(amount) || amount <= 0f) return;
-            if (_flooding != null) _flooding.AddBoundaryDamageServer(amount / Mathf.Max(1f, maximumHealth));
-            else _health.Value = Mathf.Max(0f, _health.Value - amount);
+            return IsServer && !VoyageEnded && _flooding != null &&
+                _flooding.OpenBoundaryBreachServer(leakMultiplier);
         }
         public void ApplyUpgradeServer(ItemDefinition upgrade)
         {

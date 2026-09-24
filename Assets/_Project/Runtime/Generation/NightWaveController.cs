@@ -9,20 +9,23 @@ using WaveByWave.Ships;
 namespace WaveByWave.Generation
 {
     // One ship, sampled a few times per second. Returning inside resets grace
-    // immediately; frame hitches cannot apply a large burst of damage.
-    public sealed class BattlefieldBoundaryDamage
+    // immediately; a frame hitch cannot create a burst of hull breaches.
+    public sealed class BattlefieldBoundaryBreachTimer
     {
         private float _outsideSince = -1f;
-        private float _lastSample = -1f;
-        public void Reset() { _outsideSince = -1f; _lastSample = -1f; }
-        public float Step(float now, bool outside, float graceSeconds, float damagePerSecond)
+        private float _nextBreachAt = -1f;
+        public void Reset() { _outsideSince = -1f; _nextBreachAt = -1f; }
+        public bool Step(float now, bool outside, float graceSeconds, float breachInterval)
         {
-            if (!outside) { _outsideSince = -1f; _lastSample = now; return 0f; }
-            if (_outsideSince < 0f) _outsideSince = now;
-            var start = Mathf.Max(_outsideSince + Mathf.Max(0f, graceSeconds),
-                _lastSample < 0f ? now : _lastSample);
-            _lastSample = now;
-            return Mathf.Clamp(now - start, 0f, 0.5f) * Mathf.Max(0f, damagePerSecond);
+            if (!outside) { Reset(); return false; }
+            if (_outsideSince < 0f)
+            {
+                _outsideSince = now;
+                _nextBreachAt = now + Mathf.Max(0f, graceSeconds);
+            }
+            if (now < _nextBreachAt) return false;
+            _nextBreachAt = now + Mathf.Max(0.5f, breachInterval);
+            return true;
         }
     }
 
@@ -41,7 +44,7 @@ namespace WaveByWave.Generation
         private bool _waveNumberPublished;
         private float _nextWaveCheck;
         private float _nextBoundaryCheck;
-        private readonly BattlefieldBoundaryDamage _boundaryDamage = new();
+        private readonly BattlefieldBoundaryBreachTimer _boundaryBreaches = new();
         private float _localOutsideSince = -1f;
         [SerializeField, Min(0.5f)] private float announcementDuration = 4f;
         private VoyagePhase _lastAnnouncedPhase;
@@ -106,7 +109,7 @@ namespace WaveByWave.Generation
             if (WaveRemaining() != 0) return;
             _waveActive = false;
             _battery.ClearBattlefieldServer();
-            _boundaryDamage.Reset();
+            _boundaryBreaches.Reset();
             if (_waveIndex + 1 >= settings.Waves.Length)
             {
                 _victoryRequested = true;
@@ -136,7 +139,7 @@ namespace WaveByWave.Generation
             _battery.SetVoyageWaveServer(_waveIndex + 1);
             _battery.SetBattlefieldServer(_battery.transform.position,
                 settings.Waves[_waveIndex].BattlefieldRadius);
-            _boundaryDamage.Reset();
+            _boundaryBreaches.Reset();
             _nextBoundaryCheck = Time.time;
             SpawnWave();
             _waveActive = true;
@@ -152,9 +155,9 @@ namespace WaveByWave.Generation
             var dz = ship.z - center.z;
             var radius = _battery.BattlefieldRadius;
             var outside = dx * dx + dz * dz > radius * radius;
-            var damage = _boundaryDamage.Step(Time.time, outside,
-                settings.BoundaryGraceSeconds, settings.BoundaryDamagePerSecond);
-            if (damage > 0f) _battery.ApplyBoundaryDamageServer(damage);
+            if (_boundaryBreaches.Step(Time.time, outside,
+                settings.BoundaryGraceSeconds, settings.BoundaryBreachInterval))
+                _battery.OpenBoundaryBreachServer(settings.BoundaryBreachLeakMultiplier);
         }
 
         private void UpdateBoundaryWarning()
@@ -295,7 +298,7 @@ namespace WaveByWave.Generation
                     (Time.time - _localOutsideSince));
                 var warning = grace > 0f
                     ? $"ВЕРНИТЕСЬ В ПОЛЕ БОЯ · УРОН ЧЕРЕЗ {Mathf.CeilToInt(grace)} С"
-                    : "ВЕРНИТЕСЬ В ПОЛЕ БОЯ · КОРАБЛЬ ПОЛУЧАЕТ УРОН";
+                    : "ВЕРНИТЕСЬ В ПОЛЕ БОЯ · ПОЯВЛЯЮТСЯ ПРОБОИНЫ";
                 _boundaryStyle ??= new GUIStyle(GUI.skin.label)
                 { alignment = TextAnchor.MiddleCenter, fontSize = 19, fontStyle = FontStyle.Bold };
                 _boundaryStyle.normal.textColor = new Color(1f, .58f, .4f);

@@ -367,8 +367,7 @@ namespace WaveByWave.Player
 
             if (!IsOwner)
             {
-                if (ownerCamera != null)
-                    ownerCamera.gameObject.SetActive(false);
+                ActivateRemoteCameraHolder();
                 return;
             }
 
@@ -400,9 +399,38 @@ namespace WaveByWave.Player
             // OnNetworkSpawn may activate the owner camera before NGO exposes LocalClient.PlayerObject.
             // Disable scene previews immediately so two AudioListeners never overlap for those frames.
             ScenePreviewCamera.DisableAll();
+            SetCameraHolderLocalComponents(true);
             _camera.gameObject.SetActive(true);
             _camera.SetTarget(cameraTarget, transform);
             HideOwnerBodyFromCamera();
+        }
+
+        private void ActivateRemoteCameraHolder()
+        {
+            _camera = ownerCamera;
+            if (_camera == null)
+                return;
+
+            // The holder contains the third-person equipment/hand target and must keep updating
+            // for remote copies. Only local view components are disabled.
+            SetCameraHolderLocalComponents(false);
+            _camera.gameObject.SetActive(true);
+        }
+
+        private void SetCameraHolderLocalComponents(bool localOwner)
+        {
+            if (ownerCamera == null)
+                return;
+
+            var holder = ownerCamera.gameObject;
+            holder.tag = localOwner ? "MainCamera" : "Untagged";
+            ownerCamera.enabled = localOwner;
+            if (holder.TryGetComponent<Camera>(out var view))
+                view.enabled = localOwner;
+            if (holder.TryGetComponent<AudioListener>(out var listener))
+                listener.enabled = localOwner;
+            if (holder.TryGetComponent<PlayerCameraEffects>(out var effects))
+                effects.enabled = localOwner;
         }
 
         private void HideOwnerBodyFromCamera()

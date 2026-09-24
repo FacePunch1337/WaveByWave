@@ -64,11 +64,12 @@ namespace WaveByWave.Player
             if (_equipment.IsOwner && _player.OwnerView == null) return false;
             _bodyVisual = transform.Find("Presentation Root/Visual");
             if (_bodyVisual == null) _bodyVisual = transform.Find("Visual");
+            var view = _player.OwnerView;
             _rig = new GameObject(_equipment.IsOwner ? "First person equipment" : "Third person equipment").transform;
             if (_equipment.IsOwner)
             {
-                _rig.SetParent(_player.OwnerView, false);
-                _camera = _player.OwnerView.GetComponent<Camera>(); _fov = _camera != null ? _camera.fieldOfView : 75f;
+                _rig.SetParent(view, false);
+                _camera = view.GetComponent<Camera>(); _fov = _camera != null ? _camera.fieldOfView : 75f;
             }
             _motion = _equipment.IsOwner && _equipment.FirstPersonHandsPrefab != null
                 ? Instantiate(_equipment.FirstPersonHandsPrefab, _rig).transform : new GameObject("Motion").transform;
@@ -89,7 +90,8 @@ namespace WaveByWave.Player
             }
             else
             {
-                _rig.SetParent(transform, false);
+                // Remote hand targets use the replicated Camera Holder position as their origin.
+                _rig.SetParent(view != null ? view : transform, false);
                 // Owner's Motion comes from the hands prefab, which has an Animator (disabled at runtime).
                 // A bare GameObject has none, and AnimationClip.SampleAnimation on non-legacy clips
                 // may silently do nothing without one. Add the same disabled Animator here.
@@ -303,11 +305,12 @@ namespace WaveByWave.Player
             if (!_equipment.IsOwner)
             {
                 var source = _bodyVisual != null ? _bodyVisual : transform;
+                var view = _player.OwnerView;
                 var target = _equipment.LookDirection;
                 if (target.sqrMagnitude < 0.0001f) target = source.forward;
                 if (!_smoothedLookInitialized) { _smoothedLook = target; _smoothedLookInitialized = true; }
                 else _smoothedLook = Vector3.Slerp(_smoothedLook, target, 1f - Mathf.Exp(-15f * Time.deltaTime));
-                _rig.SetPositionAndRotation(source.position + source.up * 1.35f,
+                _rig.SetPositionAndRotation(view != null ? view.position : source.position + source.up * 1.35f,
                     Quaternion.LookRotation(_smoothedLook, source.up));
             }
             _aimBlend = Mathf.MoveTowards(_aimBlend, _equipment.IsAiming ? 1f : 0f, Time.unscaledDeltaTime * 7f);

@@ -32,10 +32,20 @@ namespace WaveByWave.Ships
         private readonly NetworkVariable<float> _voyageHour = new(10f);
         private readonly NetworkVariable<int> _voyageWave = new();
         private readonly NetworkVariable<Vector4> _battlefield = new();
+        private readonly NetworkVariable<double> _battlefieldStarted = new();
         private readonly NetworkVariable<double> _returnToPortAt = new();
         private bool _returnRequested;
         private ShipFlooding _flooding;
         private readonly HashSet<ulong> _pendingRingSelections = new();
+        private static readonly HashSet<ShipCannonBattery> ActiveBatteries = new();
+        public static bool AnyUpgradePaused
+        {
+            get
+            {
+                foreach (var ship in ActiveBatteries) if (ship.IsSpawned && ship.UpgradePaused) return true;
+                return false;
+            }
+        }
         private PlayerRingCatalog _ringCatalog;
         private NetworkShipController _ship;
         private MovingPlatform _platform;
@@ -56,6 +66,8 @@ namespace WaveByWave.Ships
         public bool BattlefieldActive => _battlefield.Value.w > 0f && !VoyageEnded;
         public Vector3 BattlefieldCenter => new(_battlefield.Value.x, _battlefield.Value.y, _battlefield.Value.z);
         public float BattlefieldRadius => _battlefield.Value.w;
+        public float BattlefieldAge => IsSpawned ? Mathf.Max(0f,
+            (float)(NetworkManager.ServerTime.Time - _battlefieldStarted.Value)) : 0f;
         public bool IsInsideBattlefield(Vector3 worldPosition)
         {
             var circle = _battlefield.Value;
@@ -91,6 +103,7 @@ namespace WaveByWave.Ships
 
         public override void OnNetworkSpawn()
         {
+            ActiveBatteries.Add(this);
             _ringCatalog = Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
             _upgradePaused.OnValueChanged += OnUpgradePauseChanged;
             OnUpgradePauseChanged(false, _upgradePaused.Value);
@@ -108,6 +121,7 @@ namespace WaveByWave.Ships
 
         public override void OnNetworkDespawn()
         {
+            ActiveBatteries.Remove(this);
             _upgradePaused.OnValueChanged -= OnUpgradePauseChanged;
             Time.timeScale = 1f;
             _pendingRingSelections.Clear();
@@ -117,6 +131,7 @@ namespace WaveByWave.Ships
 
         public override void OnDestroy()
         {
+            ActiveBatteries.Remove(this);
             if (_upgradePaused.Value) Time.timeScale = 1f;
             CannonEffects.ClearShots(this);
             base.OnDestroy();
@@ -134,21 +149,23 @@ namespace WaveByWave.Ships
             _crewLevel.Value++;
             _pendingRingSelections.Clear();
             _upgradePaused.Value = true;
+            // The voyage roster is fixed: joining is permitted only back in Port.
             foreach (var client in NetworkManager.ConnectedClientsList)
             {
                 if (client.PlayerObject == null ||
                     !client.PlayerObject.TryGetComponent<NetworkPlayerController>(out var player)) continue;
                 _pendingRingSelections.Add(client.ClientId);
-                player.BeginRingChoiceServer(_crewLevel.Value,
-                    unchecked((uint)_crewLevel.Value * 7919u + (uint)client.ClientId * 104729u));
+                if (!player.BeginRingChoiceServer(_crewLevel.Value,
+                    unchecked((uint)_crewLevel.Value * 7919u + (uint)client.ClientId * 104729u)))
+                    _pendingRingSelections.Remove(client.ClientId);
             }
             if (_pendingRingSelections.Count == 0) _upgradePaused.Value = false;
         }
 
         internal void MarkRingChoiceComplete(ulong clientId)
         {
-            if (!IsServer || !_pendingRingSelections.Remove(clientId) ||
-                _pendingRingSelections.Count != 0) return;
+            if (!IsServer || !_pendingRingSelections.Remove(clientId)) return;
+            if (_pendingRingSelections.Count != 0) return;
             _upgradePaused.Value = false;
             CheckTreasureLevel();
         }
@@ -169,7 +186,10 @@ namespace WaveByWave.Ships
             // The server writes this snapshot only once for each wave. Ship
             // movement, camera movement and later settings edits cannot move it.
             if (IsServer && !VoyageEnded && _battlefield.Value.w <= 0f)
+            {
+                _battlefieldStarted.Value = NetworkManager.ServerTime.Time;
                 _battlefield.Value = new Vector4(center.x, center.y, center.z, Mathf.Max(0f, radius));
+            }
         }
         internal void ClearBattlefieldServer()
         {
@@ -322,6 +342,7 @@ namespace WaveByWave.Ships
         [ServerRpc(RequireOwnership = false)]
         public void FireOrReloadServerRpc(int selectedSlot, uint selectionRevision, float yaw, float elevation, ServerRpcParams rpc = default)
         {
+            if (UpgradePaused || VoyageEnded) return;
             var sender = rpc.Receive.SenderClientId;
             var index = GetOperatorCannon(sender);
             if (index < 0 || !Near(sender, cannons[index].Station)) return;
@@ -365,7 +386,8 @@ namespace WaveByWave.Ships
                     selectedSlot != player.Inventory.ServerSelectedIndex) return;
                 state.AmmoId = new Unity.Collections.FixedString64Bytes(ammo.Id);
                 state.Damage = ammo.Potency;
-                state.ReloadEnd = NetworkManager.ServerTime.Time + cannons[index].ReloadDuration;
+                state.ReloadDuration = cannons[index].ReloadDuration / player.ReloadSpeedMultiplier;
+                state.ReloadEnd = NetworkManager.ServerTime.Time + state.ReloadDuration;
             }
             _states[index] = state;
         }
@@ -406,6 +428,7 @@ namespace WaveByWave.Ships
         {
             if (!IsServer || VoyageEnded || !IsFinite(amount) || amount <= 0f) return;
             amount /= 1f + _armorBonus.Value;
+            DotsDamagePopups.ReportServer(hitPoint, amount);
             if (_flooding != null) _flooding.HitServer(amount, hitPoint);
             else _health.Value = Mathf.Max(0f, _health.Value - amount);
         }

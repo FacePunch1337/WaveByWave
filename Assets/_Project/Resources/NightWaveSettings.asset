@@ -12,37 +12,40 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b19b4e6468364981acef8f30cdf13916, type: 3}
   m_Name: NightWaveSettings
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.NightWaveSettings
+  FogFadeInSeconds: 4
+  FogFadeOutSeconds: 4
+  FogImmersionDistance: 3
   VictoryDisplayDuration: 5
   Waves:
   - Name: 1
     Bots: []
     EnemyShips: 1
     SpawnRadius: 50
-    BattlefieldRadius: 300
+    BattlefieldRadius: 100
   - Name: 2
     Bots: []
     EnemyShips: 3
     SpawnRadius: 50
-    BattlefieldRadius: 170
+    BattlefieldRadius: 150
   - Name: 3
     Bots: []
     EnemyShips: 10
     SpawnRadius: 100
-    BattlefieldRadius: 431.8
+    BattlefieldRadius: 200
   BoundaryGraceSeconds: 8
   BoundaryBreachInterval: 10
   BoundaryBreachLeakMultiplier: 1
   BoundaryCheckInterval: 0.25
-  FogNearColor: {r: 0.16, g: 0.53, b: 0.57, a: 1}
-  FogFarColor: {r: 0.025, g: 0.12, b: 0.18, a: 1}
-  FogDensity: 0.065
-  FogEdgeWidth: 24
-  FogHeight: 70
-  FogNoiseStrength: 0.65
-  FogNoiseScale: 0.004
-  FogWindSpeed: 0.65
+  FogNearColor: {r: 0, g: 1, b: 0.7137255, a: 1}
+  FogFarColor: {r: 0, g: 1, b: 0.71535873, a: 1}
+  FogDensity: 0.015
+  FogEdgeWidth: 10
+  FogHeight: 10
+  FogNoiseStrength: 1
+  FogNoiseScale: 0.0025
+  FogWindSpeed: 4
   FogSampleCount: 8
-  FogViewDistance: 480
-  PreviewFogInSceneView: 1
+  FogViewDistance: 100
+  PreviewFogInSceneView: 0
   PreviewWaveIndex: 2
   PreviewCenter: {x: 0, y: -0.7046841, z: 0}

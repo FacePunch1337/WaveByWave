@@ -51,6 +51,7 @@ Shader "WaveByWave/EnemyVertexAnimation"
             half fog : TEXCOORD3;
             half flash : TEXCOORD4;
             half4 tint : TEXCOORD5;
+            UNITY_VERTEX_INPUT_INSTANCE_ID
             UNITY_VERTEX_OUTPUT_STEREO
         };
         void Animate(Attributes input, out float3 position, out float3 normal)
@@ -66,6 +67,7 @@ Shader "WaveByWave/EnemyVertexAnimation"
         {
             Varyings output = (Varyings)0;
             UNITY_SETUP_INSTANCE_ID(input);
+            UNITY_TRANSFER_INSTANCE_ID(input, output);
             UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
             float3 position, normal;
             Animate(input, position, normal);
@@ -82,7 +84,7 @@ Shader "WaveByWave/EnemyVertexAnimation"
         Pass
         {
             Name "ForwardLit"
-            Tags { "LightMode"="UniversalForward" }
+            Tags { "LightMode"="UniversalForwardOnly" }
             HLSLPROGRAM
             #pragma target 4.5
             #pragma vertex Vert
@@ -106,6 +108,42 @@ Shader "WaveByWave/EnemyVertexAnimation"
                     light.shadowAttenuation * light.distanceAttenuation);
                 color = lerp(color, half3(1,1,1), input.flash);
                 return half4(MixFog(color, input.fog), 1);
+            }
+            ENDHLSL
+        }
+        Pass
+        {
+            // Forward-only geometry must contribute animated depth/normals to
+            // URP's prepass. Fog and water sample that depth, not the color pass.
+            Name "DepthNormalsOnly"
+            Tags { "LightMode"="DepthNormalsOnly" }
+            ZWrite On
+            HLSLPROGRAM
+            #pragma target 4.5
+            #pragma vertex Vert
+            #pragma fragment DepthNormalsFrag
+            #pragma multi_compile_instancing
+            #pragma multi_compile _ DOTS_INSTANCING_ON
+            #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
+            void DepthNormalsFrag(Varyings input, out half4 outNormalWS : SV_Target0
+            #ifdef _WRITE_RENDERING_LAYERS
+                , out uint outRenderingLayers : SV_Target1
+            #endif
+            )
+            {
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+                float3 normalWS = normalize(input.normalWS);
+            #if defined(_GBUFFER_NORMALS_OCT)
+                float2 octNormal = PackNormalOctQuadEncode(normalWS);
+                outNormalWS = half4(PackFloat2To888(saturate(octNormal * 0.5 + 0.5)), 0);
+            #else
+                outNormalWS = half4(normalWS, 0);
+            #endif
+            #ifdef _WRITE_RENDERING_LAYERS
+                outRenderingLayers = EncodeMeshRenderingLayer();
+            #endif
             }
             ENDHLSL
         }

@@ -67,9 +67,11 @@ namespace WaveByWave.Player
         }
         private void Build()
         {
+            _canvas=GameUiPrefabs.Create("Menus/Admin", owner: this);
+            if(_canvas!=null) { GameUiPrefabs.Persist(_canvas); BindPrefab(); return; }
             _canvas = new GameObject("Admin item spawner", typeof(RectTransform), typeof(Canvas),
                 typeof(CanvasScaler), typeof(GraphicRaycaster));
-            DontDestroyOnLoad(_canvas);
+            if(Application.isPlaying) DontDestroyOnLoad(_canvas);
             _canvas.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             _canvas.GetComponent<Canvas>().sortingOrder = 200;
             var scaler = _canvas.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -84,8 +86,10 @@ namespace WaveByWave.Player
                 new Color(0.4f, 0.85f, 1f));
             _stressCountLabel = Label(_panel.transform, "Предметы: 0 / 3000", new Vector2(0, 310),
                 new Vector2(570, 28), Color.white);
+            _stressCountLabel.name="LootCountLabel";
             _stressCountLabel.fontSize = 17;
             _stressCountSlider = CreateSlider(_panel.transform, new Vector2(0, 278), 0f, 3000f, 0f, true);
+            _stressCountSlider.name="LootCount";
             _stressCountSlider.onValueChanged.AddListener(value =>
             {
                 _requestedStressCount = Mathf.RoundToInt(value);
@@ -95,8 +99,10 @@ namespace WaveByWave.Player
 
             _stressRadiusLabel = Label(_panel.transform, "Радиус: 15 м", new Vector2(0, 240),
                 new Vector2(570, 28), Color.white);
+            _stressRadiusLabel.name="LootRadiusLabel";
             _stressRadiusLabel.fontSize = 17;
             _stressRadiusSlider = CreateSlider(_panel.transform, new Vector2(0, 208), 10f, 20f, 15f, false);
+            _stressRadiusSlider.name="LootRadius";
             _stressRadiusSlider.onValueChanged.AddListener(value =>
             {
                 _requestedStressRadius = value;
@@ -121,20 +127,7 @@ namespace WaveByWave.Player
             contentObject.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             var scroll = scrollObject.GetComponent<ScrollRect>(); scroll.content = content; scroll.viewport = scrollRect;
             scroll.horizontal = false; scroll.scrollSensitivity = 30f;
-            if (_inventory.Catalog != null)
-                foreach (var item in _inventory.Catalog.Items)
-                {
-                    if (item == null) continue;
-                    var id = item.Id;
-                    var button = new GameObject(id, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
-                    button.transform.SetParent(content, false); button.GetComponent<LayoutElement>().preferredHeight = 42f;
-                    button.GetComponent<Image>().color = new Color(0.1f, 0.15f, 0.19f, 1f);
-                    button.GetComponent<Button>().targetGraphic = button.GetComponent<Image>();
-                    button.GetComponent<Button>().onClick.AddListener(() => _inventory.SpawnAdminItem(id));
-                    var label = Label(button.transform, item.DisplayName + "  •  " + item.Category + " / " + item.Rarity,
-                        Vector2.zero, new Vector2(530, 38), item.RarityColor);
-                    label.fontSize = 17;
-                }
+            BuildCatalog(content);
             var close = new GameObject("Close", typeof(RectTransform), typeof(Image), typeof(Button));
             close.transform.SetParent(_panel.transform, false); close.GetComponent<RectTransform>().sizeDelta = new Vector2(170, 35);
             close.GetComponent<RectTransform>().anchoredPosition = new Vector2(105, -455);
@@ -152,16 +145,20 @@ namespace WaveByWave.Player
             Label(clear.transform, "Очистить тест", Vector2.zero, new Vector2(180, 30), Color.white);
             _enemyLabel = Label(_panel.transform, "Скелеты: 0 / 3000", new Vector2(0, 160), new Vector2(570, 28),
                 new Color(1f, 0.8f, 0.35f));
+            _enemyLabel.name="EnemyCountLabel";
             _enemyLabel.fontSize = 17;
             _enemySlider = CreateSlider(_panel.transform, new Vector2(0, 130), 0, 3000, 0, true);
+            _enemySlider.name="EnemyCount";
             _enemySlider.onValueChanged.AddListener(value =>
             {
                 _enemyTarget = Mathf.RoundToInt(value); _enemyDirty = true; _enemyApplyAt = Time.unscaledTime + 0.2f;
             });
             var enemyRadiusLabel = Label(_panel.transform, "Радиус скелетов: 15 м", new Vector2(0, 90),
                 new Vector2(570, 28), Color.white);
+            enemyRadiusLabel.name="EnemyRadiusLabel";
             enemyRadiusLabel.fontSize = 17;
             var enemyRadius = CreateSlider(_panel.transform, new Vector2(0, 58), 5, 80, 15, false);
+            enemyRadius.name="EnemyRadius";
             enemyRadius.onValueChanged.AddListener(value =>
             {
                 _enemyRadius = value; enemyRadiusLabel.text = $"Радиус скелетов: {value:0.0} м";
@@ -170,14 +167,18 @@ namespace WaveByWave.Player
 
             _shipLabel = Label(_panel.transform, "Корабли: 0 • заспавнить 12", new Vector2(0, 18),
                 new Vector2(570, 28), new Color(1f, 0.45f, 0.28f));
+            _shipLabel.name="ShipCountLabel";
             _shipLabel.fontSize = 17;
             _shipCountSlider = CreateSlider(_panel.transform, new Vector2(0, -12), 1, 1000, _shipSpawnCount, true);
+            _shipCountSlider.name="ShipCount";
             _shipCountSlider.onValueChanged.AddListener(value => _shipSpawnCount = Mathf.RoundToInt(value));
             _shipRadiusLabel = Label(_panel.transform, "Радиус кораблей: 600 м", new Vector2(0, -50),
                 new Vector2(570, 28), Color.white);
+            _shipRadiusLabel.name="ShipRadiusLabel";
             _shipRadiusLabel.fontSize = 17;
             _shipRadiusSlider = CreateSlider(_panel.transform, new Vector2(0, -80), 35, 1000,
                 _shipSpawnRadius, false);
+            _shipRadiusSlider.name="ShipRadius";
             _shipRadiusSlider.onValueChanged.AddListener(value =>
             {
                 _shipSpawnRadius = value;
@@ -191,6 +192,55 @@ namespace WaveByWave.Player
             spawnShips.GetComponent<Button>().targetGraphic = spawnShips.GetComponent<Image>();
             spawnShips.GetComponent<Button>().onClick.AddListener(SpawnEnemyShips);
             Label(spawnShips.transform, "Заспавнить корабли", Vector2.zero, new Vector2(250, 32), Color.white);
+        }
+
+        private void BuildCatalog(Transform content)
+        {
+            if (_inventory.Catalog != null)
+                foreach (var item in _inventory.Catalog.Items)
+                {
+                    if (item == null) continue;
+                    var id = item.Id;
+                    var button=GameUiPrefabs.Create("Elements/ItemSpawnRow",content);
+                    if(button!=null)
+                    {
+                        button.name=id;
+                        var text=button.GetComponentInChildren<Text>(true);
+                        text.text=item.DisplayName + "  •  " + item.Rarity;
+                        text.color=item.RarityColor;
+                        button.GetComponent<Button>().onClick.AddListener(()=>_inventory.SpawnAdminItem(id));
+                        continue;
+                    }
+                    button = new GameObject(id, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+                    button.transform.SetParent(content, false); button.GetComponent<LayoutElement>().preferredHeight = 42f;
+                    button.GetComponent<Image>().color = new Color(0.1f, 0.15f, 0.19f, 1f);
+                    button.GetComponent<Button>().targetGraphic = button.GetComponent<Image>();
+                    button.GetComponent<Button>().onClick.AddListener(() => _inventory.SpawnAdminItem(id));
+                    var label = Label(button.transform, item.DisplayName + "  •  " + item.Category + " / " + item.Rarity,
+                        Vector2.zero, new Vector2(530, 38), item.RarityColor);
+                    label.fontSize = 17;
+                }
+        }
+        private void BindPrefab()
+        {
+            _panel=_canvas.transform.Find("Items").gameObject;
+            T Find<T>(string name) where T:Component => GameUiPrefabs.Find<T>(_panel,name);
+            _stressCountSlider=Find<Slider>("LootCount");_stressRadiusSlider=Find<Slider>("LootRadius");
+            _enemySlider=Find<Slider>("EnemyCount");_shipCountSlider=Find<Slider>("ShipCount");_shipRadiusSlider=Find<Slider>("ShipRadius");
+            _stressCountLabel=Find<Text>("LootCountLabel");_stressRadiusLabel=Find<Text>("LootRadiusLabel");
+            _enemyLabel=Find<Text>("EnemyCountLabel");_shipLabel=Find<Text>("ShipCountLabel");_shipRadiusLabel=Find<Text>("ShipRadiusLabel");
+            _stressCountSlider.onValueChanged.AddListener(v=>{_requestedStressCount=Mathf.RoundToInt(v);_stressCountLabel.text=$"Предметы: {_requestedStressCount} / 3000";ScheduleStressApply();});
+            _stressRadiusSlider.onValueChanged.AddListener(v=>{_requestedStressRadius=v;_stressRadiusLabel.text=$"Радиус: {v:0.0} м";ScheduleStressApply();});
+            _enemySlider.onValueChanged.AddListener(v=>{_enemyTarget=Mathf.RoundToInt(v);_enemyDirty=true;_enemyApplyAt=Time.unscaledTime+.2f;});
+            Find<Slider>("EnemyRadius").onValueChanged.AddListener(v=>{_enemyRadius=v;Find<Text>("EnemyRadiusLabel").text=$"Радиус скелетов: {v:0.0} м";});
+            _shipCountSlider.onValueChanged.AddListener(v=>_shipSpawnCount=Mathf.RoundToInt(v));
+            _shipRadiusSlider.onValueChanged.AddListener(v=>{_shipSpawnRadius=v;_shipRadiusLabel.text=$"Радиус кораблей: {v:0} м";});
+            Find<Button>("Close").onClick.AddListener(()=>SetOpen(false));
+            Find<Button>("Clear stress items").onClick.AddListener(()=>{_stressCountSlider.value=0;_enemySlider.value=0;});
+            Find<Button>("Spawn enemy ships").onClick.AddListener(SpawnEnemyShips);
+            var content=_panel.transform.Find("Catalog/Content");
+            foreach(Transform child in content) {child.gameObject.SetActive(false);Destroy(child.gameObject);}
+            BuildCatalog(content);
         }
 
         private void SpawnEnemyShips()
@@ -251,8 +301,9 @@ namespace WaveByWave.Player
         }
         private void OnDestroy()
         {
-            if (InputCaptured) SetOpen(false);
-            if (_canvas != null) Destroy(_canvas);
+            if (!Application.isPlaying) return;
+            if (InputCaptured && GameUiPrefabs.IsOwnedBy(_canvas, this)) SetOpen(false);
+            if (_canvas != null) GameUiPrefabs.Release(_canvas, this);
         }
     }
 }

@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 210ac2a8d9b8ab7408c384371a5bc949, type: 3}
+  m_Name: Item_cutlass_epic
+  m_EditorClassIdentifier: Assembly-CSharp::WaveByWave.Items.ItemDefinition
+  id: cutlass_epic
+  displayName: "\u0421\u0430\u0431\u043B\u044F"
+  description: "\u041E\u0441\u043D\u043E\u0432\u043D\u0430\u044F \u0430\u0442\u0430\u043A\u0430:
+    \u0443\u0434\u0430\u0440. \u041E\u0441\u043E\u0431\u043E\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435:
+    \u043F\u0430\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435."
+  category: 0
+  rarity: 3
+  icon: {fileID: -6683969167479599623, guid: 06f7e9d24813ba54199c4aa6634e8e22, type: 2}
+  maximumStack: 1
+  supplyKind: 0
+  potency: 40
+  treasureExperience: 25
+  coinReward: 0
+  upgradeStat: 0
+  upgradeBonus: 0.1
+  worldVisualPrefab: {fileID: 3692177591442134904, guid: ccf29f840c58505ea3aa578077052104, type: 3}
+  restingEulerAngles: {x: 0, y: 0, z: 0}
+  chestLoot: {fileID: 0}
+  equipmentKind: 2
+  overrideHeldPose: 1
+  heldPosition: {x: 0.35, y: -0.5, z: 0.6}
+  heldEulerAngles: {x: -81.3, y: -51.2, z: 52.5}
+  heldScale: 1.7
+  overrideSecondaryHeldPose: 1
+  secondaryHeldPosition: {x: 0.17, y: -0.63, z: 0.6}
+  secondaryHeldEulerAngles: {x: -81.3, y: -10.5, z: 52.5}
+  overrideHandGripPoints: 1
+  rightHandGrip:
+    enabled: 1
+    localPosition: {x: 0.03, y: 0.09, z: 0.04}
+    localEulerAngles: {x: -8.2, y: 10, z: 90}
+  leftHandGrip:
+    enabled: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}

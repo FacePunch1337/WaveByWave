@@ -81,6 +81,14 @@ namespace WaveByWave.Player
         private readonly NetworkVariable<bool> _charging = new();
         private readonly NetworkVariable<double> _chargeStartNet = new();
         private readonly NetworkVariable<double> _reloadEnd = new();
+        private readonly NetworkVariable<float> _reloadLength = new(2.5f);
+        [SerializeField, Min(0.02f)] private float burstShotInterval = 0.12f;
+        private int _burstRemaining;
+        private double _nextBurstShot;
+        private Vector3 _burstEyeOffset;
+        private float SwingDuration => swordSwingDuration / _player.AttackSpeedMultiplier;
+        private float ShotDuration => 0.2f / _player.AttackSpeedMultiplier;
+        private float ReloadDuration => reloadDuration / _player.ReloadSpeedMultiplier;
         private readonly NetworkVariable<EquipmentMotionState> _motion = new();
         private readonly NetworkVariable<EquipmentHookState> _hook = new();
         private readonly NetworkVariable<Vector3> _look = new(Vector3.forward);
@@ -100,7 +108,7 @@ namespace WaveByWave.Player
         private EquipmentWaterQuery _water;
         private CapsuleCollider _combatHitbox;
         private double _cooldown, _recoverAfter, _inputHeartbeat, _serverHeartbeat, _chargeStarted = -1d;
-        private double _hookSampleTime;
+        private double _hookSampleTime, _hookFlightStarted;
         private bool _localBlock, _localAim, _localReel, _localCharge, _sentCharge;
         private bool _secondaryActionLatched;
         private float _localChargeStarted;
@@ -150,11 +158,27 @@ namespace WaveByWave.Player
         public float HookCharge => IsOwner
             ? (_localCharge ? Mathf.Clamp01((Time.unscaledTime - _localChargeStarted) / hookChargeDuration) : 0f)
             : (_charging.Value ? Mathf.Clamp01((float)(Now - _chargeStartNet.Value) / hookChargeDuration) : 0f);
-        public float ReloadProgress => Mathf.Clamp01(1f - (float)(_reloadEnd.Value - Now) / reloadDuration);
+        public float ReloadProgress => Mathf.Clamp01(1f - (float)(_reloadEnd.Value - Now) / Mathf.Max(0.01f, _reloadLength.Value));
         public bool Reloading => IsSpawned && _reloadEnd.Value > Now;
         public EquipmentMotionState Motion => _motion.Value;
         public EquipmentMotionState DisplayMotion => IsOwner && _predictedMotion.Action != EquipmentAction.None &&
             Now < _predictedMotion.Started + _predictedMotion.Duration ? _predictedMotion : _motion.Value;
+        private float DrinkDuration => motions != null && motions.drink != null
+            ? Mathf.Max(0.1f, motions.drink.length) : 1.1f;
+        public bool TryPredictDrink()
+        {
+            if (!IsOwner || !IsSpawned || !_available.Value || Now < _localActionNext) return false;
+            var duration = DrinkDuration;
+            _predictedMotion = new EquipmentMotionState
+            { Action = EquipmentAction.Drink, Started = Now, Duration = duration };
+            _localActionNext = Now + duration;
+            return true;
+        }
+        public bool CanDrinkServer() => IsServer && Time.timeScale > 0f && CanActServer() && Now >= _cooldown;
+        public void PlayDrinkServer()
+        {
+            if (IsServer) PlayServer(EquipmentAction.Drink, DrinkDuration);
+        }
         public EquipmentHookState Hook => _hook.Value;
         public float HookGravity => hookGravity;
         public Vector3 LookDirection => _look.Value;
@@ -166,7 +190,9 @@ namespace WaveByWave.Player
                 if (_hookRenderFrame == Time.frameCount) return _renderedHook;
                 _hookRenderFrame = Time.frameCount;
                 var target = EvaluateHook(Now, true);
-                var smooth = (_hook.Value.Phase == HookPhase.Reeling && _renderPhase == HookPhase.Reeling) ||
+                var smooth = (_hook.Value.Phase == HookPhase.Flying && _hook.Value.Pulling &&
+                              _renderPhase == HookPhase.Flying) ||
+                             (_hook.Value.Phase == HookPhase.Reeling && _renderPhase == HookPhase.Reeling) ||
                     (_hook.Value.Phase == HookPhase.Returning && _renderPhase == HookPhase.Returning);
                 _renderedHook = smooth
                     ? Vector3.Lerp(_renderedHook, target, 1f - Mathf.Exp(-20f * Time.unscaledDeltaTime)) : target;
@@ -175,7 +201,7 @@ namespace WaveByWave.Player
             }
         }
         public static bool InputCaptured => ShipFlooding.VoyageOver || NetworkPlayerController.RingChoiceOpen ||
-            SessionMenuPresenter.InputCaptured || EquipmentAdminPanel.InputCaptured ||
+            PlayerProgressionUI.MenuOpen || SessionMenuPresenter.InputCaptured || EquipmentAdminPanel.InputCaptured ||
             WaveByWave.Customization.CustomizationMenu.InputCaptured ||
             WaveByWave.Generation.OceanLoadingCurtain.InputCaptured;
         public event Action<float> SuccessfulBlock;
@@ -234,7 +260,7 @@ namespace WaveByWave.Player
         private void Update()
         {
             if (!IsSpawned) return;
-            if (!IsServer) return;
+            if (!IsServer || Time.timeScale <= 0f) return;
             if (_combatHitbox != null)
             {
                 var feet = FeetServer(out var support);
@@ -252,6 +278,17 @@ namespace WaveByWave.Player
                 StopHeldServer();
                 _swordHitAt = 0d;
                 if (_hook.Value.Phase != HookPhase.Stowed) ResetHookServer();
+            }
+            if (!_available.Value || item == null || item.EquipmentKind != ItemEquipmentKind.Musket)
+                _burstRemaining = 0;
+            if (_burstRemaining > 0 && Now >= _nextBurstShot)
+            {
+                FireMusketServer(item, FeetServer(out _) + _burstEyeOffset, _look.Value, true);
+                _burstRemaining--;
+                _nextBurstShot = Now + burstShotInterval / _player.AttackSpeedMultiplier;
+                // A slow frame delays subsequent shots instead of emitting the whole burst at once.
+                _reloadEnd.Value = Now + _burstRemaining *
+                    burstShotInterval / _player.AttackSpeedMultiplier + ShotDuration + ReloadDuration;
             }
             if (_swordHitAt > 0d && Now >= _swordHitAt)
             {
@@ -327,9 +364,11 @@ namespace WaveByWave.Player
         private void RefreshSelectedServer(int slot, ItemDefinition item)
         {
             if (_serverSlot == slot && _serverItem == item) return;
-            StopHeldServer(); _swordHitAt = 0d; _blockExhausted = false;
+            StopHeldServer(); _swordHitAt = 0d; _burstRemaining = 0; _blockExhausted = false;
             if (_hook.Value.Phase != HookPhase.Stowed) ResetHookServer();
-            _motion.Value = default;
+            if (_motion.Value.Action != EquipmentAction.Drink ||
+                Now >= _motion.Value.Started + _motion.Value.Duration)
+                _motion.Value = default;
             _serverSlot = slot; _serverItem = item;
         }
 
@@ -347,7 +386,9 @@ namespace WaveByWave.Player
                         _secondaryActionLatched = false;
                     _localSlot = _inventory.SelectedIndex;
                     _localItem = item;
-                    _predictedMotion = default;
+                    if (_predictedMotion.Action != EquipmentAction.Drink ||
+                        Now >= _predictedMotion.Started + _predictedMotion.Duration)
+                        _predictedMotion = default;
                     _localBlock = _localAim = _localReel = _localCharge = false;
                     SendHeldInput(false, false, false, false);
                 }
@@ -372,7 +413,7 @@ namespace WaveByWave.Player
             var block = item.EquipmentKind == ItemEquipmentKind.Sword && secondaryHeld;
             var aim = item.EquipmentKind == ItemEquipmentKind.Musket && secondaryHeld;
             var reel = item.EquipmentKind == ItemEquipmentKind.Hook && _hook.Value.Phase != HookPhase.Stowed &&
-                _hook.Value.Phase != HookPhase.Flying && _hook.Value.Phase != HookPhase.Returning &&
+                _hook.Value.Phase != HookPhase.Returning &&
                 mouse.leftButton.isPressed;
             if (item.EquipmentKind == ItemEquipmentKind.Hook && mouse.rightButton.wasPressedThisFrame)
             {
@@ -404,14 +445,12 @@ namespace WaveByWave.Player
                 {
                     ItemEquipmentKind.Sword => EquipmentAction.SwordSwing,
                     ItemEquipmentKind.Musket => EquipmentAction.MusketShot,
-                    ItemEquipmentKind.Bucket => EquipmentAction.BucketScoop,
+                    ItemEquipmentKind.Bucket => BucketFull ? EquipmentAction.BucketSplash : EquipmentAction.BucketScoop,
                     ItemEquipmentKind.Shovel => EquipmentAction.ShovelDig,
                     _ => EquipmentAction.None
                 };
                 if (action != EquipmentAction.None) SendAction(action);
             }
-            if (item.EquipmentKind == ItemEquipmentKind.Bucket && mouse.rightButton.wasPressedThisFrame)
-                SendAction(EquipmentAction.BucketSplash);
         }
         private void SendHeldInput(bool block, bool aim, bool reel, bool charge, bool repair = false)
         {
@@ -430,8 +469,8 @@ namespace WaveByWave.Player
                 action == EquipmentAction.BucketSplash && !BucketFull) return;
             var duration = action switch
             {
-                EquipmentAction.SwordSwing => swordSwingDuration,
-                EquipmentAction.MusketShot => 0.2f,
+                EquipmentAction.SwordSwing => SwingDuration,
+                EquipmentAction.MusketShot => ShotDuration,
                 EquipmentAction.HookThrow => 0.4f,
                 EquipmentAction.BucketSplash => 0.65f,
                 _ => 0.8f
@@ -496,7 +535,7 @@ namespace WaveByWave.Player
         private void HeldInputServerRpc(int slot, uint revision, bool block, bool aim, bool reel, bool charge, bool repair,
             Vector3 requestedOrigin, Vector3 requestedDirection, NetworkObjectReference support)
         {
-            if (!_inventory.ApplySelectionServer(slot, revision) || !CanActServer() ||
+            if (Time.timeScale <= 0f || !_inventory.ApplySelectionServer(slot, revision) || !CanActServer() ||
                 !_inventory.TryGetDefinition(slot, out var item) ||
                 !ResolveAimServer(requestedOrigin, requestedDirection, support, out var origin, out var direction)) return;
             RefreshSelectedServer(slot, item);
@@ -544,7 +583,7 @@ namespace WaveByWave.Player
         private void ActionServerRpc(EquipmentAction action, int slot, uint revision,
             Vector3 requestedOrigin, Vector3 requestedDirection, NetworkObjectReference support)
         {
-            if (!_inventory.ApplySelectionServer(slot, revision) || !CanActServer() ||
+            if (Time.timeScale <= 0f || !_inventory.ApplySelectionServer(slot, revision) || !CanActServer() ||
                 !_inventory.TryGetDefinition(slot, out var item) || Now < _cooldown ||
                 !ResolveAimServer(requestedOrigin, requestedDirection, support, out var origin, out var direction)) return;
             RefreshSelectedServer(slot, item);
@@ -554,36 +593,18 @@ namespace WaveByWave.Player
                 case EquipmentAction.SwordSwing when item.EquipmentKind == ItemEquipmentKind.Sword:
                     if (_blocking.Value || _stamina.Value < swingStamina) return;
                     _stamina.Value -= swingStamina; _recoverAfter = Now + 0.7d;
-                    PlayServer(action, swordSwingDuration);
-                    _swordHitAt = Now + swordSwingDuration * 0.4f;
-                    _swordDamage = item.Potency * (1f + _player.RingValue(PlayerRingStat.MeleeDamage));
+                    PlayServer(action, SwingDuration);
+                    _swordHitAt = Now + SwingDuration * 0.4f;
+                    _swordDamage = _player.WeaponDamage(item);
                     break;
                 case EquipmentAction.MusketShot when item.EquipmentKind == ItemEquipmentKind.Musket:
                     if (Reloading) return;
-                    var ship = _player.GetSupportingShipOnServer();
-                    var inherited = ship != null && ship.TryGetComponent<MovingPlatform>(out var platform)
-                        ? platform.GetPointVelocity(origin) : Vector3.zero;
-                    var aimPoint = SegmentHit(origin, origin + direction * 150f, 0.005f, null, out var aimHit, out _, true)
-                        ? aimHit.point : origin + direction * 150f;
-                    var right = Vector3.Cross(Vector3.up, direction).normalized;
-                    if (right.sqrMagnitude < 0.01f) right = transform.right;
-                    var muzzle = origin + direction * 0.8f + right * (_aiming.Value ? 0f : 0.17f) - Vector3.up * 0.18f;
-                    // Keep the barrel on this side of an obstacle at point-blank range.
-                    if (SegmentHit(origin, muzzle, 0.02f, null, out var muzzleHit, out _))
-                        muzzle = muzzleHit.point + muzzleHit.normal * 0.05f;
-                    var bullet = new Bullet
-                    {
-                        Id = ++_nextBullet,
-                        Origin = muzzle,
-                        Velocity = (aimPoint - muzzle).normalized * bulletSpeed + inherited,
-                        Started = Now,
-                        Simulated = Now,
-                        Damage = item.Potency * (1f + _player.RingValue(PlayerRingStat.RangedDamage))
-                    };
-                    _bullets.Add(bullet);
-                    _reloadEnd.Value = Now + reloadDuration;
-                    PlayServer(action, 0.2f);
-                    ShotClientRpc(bullet.Id, bullet.Origin, bullet.Velocity, bullet.Started);
+                    _burstRemaining = _player.ProjectileCount - 1;
+                    _burstEyeOffset = origin - FeetServer(out _);
+                    _nextBurstShot = Now + burstShotInterval / _player.AttackSpeedMultiplier;
+                    _reloadLength.Value = ShotDuration + ReloadDuration + _burstRemaining * burstShotInterval / _player.AttackSpeedMultiplier;
+                    _reloadEnd.Value = Now + _reloadLength.Value;
+                    FireMusketServer(item, origin, direction, false);
                     break;
                 case EquipmentAction.HookThrow when item.EquipmentKind == ItemEquipmentKind.Hook:
                     if (_hook.Value.Phase != HookPhase.Stowed) return;
@@ -599,9 +620,11 @@ namespace WaveByWave.Player
                         Phase = HookPhase.Flying,
                         Origin = _hookPosition,
                         Velocity = launch,
-                        Started = Now
+                        Started = Now,
+                        FlightFacingVelocity = launch,
+                        FlightFacingStarted = Now
                     };
-                    _hookSampleTime = Now; _chargeStarted = -1d;
+                    _hookSampleTime = _hookFlightStarted = Now; _chargeStarted = -1d;
                     _charging.Value = false;
                     PlayServer(action, 0.4f);
                     break;
@@ -640,6 +663,33 @@ namespace WaveByWave.Player
             }
         }
 
+        private void FireMusketServer(ItemDefinition item, Vector3 origin, Vector3 direction, bool extra)
+        {
+            var ship = _player.GetSupportingShipOnServer();
+            var inherited = ship != null && ship.TryGetComponent<MovingPlatform>(out var platform)
+                ? platform.GetPointVelocity(origin) : Vector3.zero;
+            var aimPoint = SegmentHit(origin, origin + direction * 150f, 0.005f, null, out var aimHit, out _, true)
+                ? aimHit.point : origin + direction * 150f;
+            var right = Vector3.Cross(Vector3.up, direction).normalized;
+            if (right.sqrMagnitude < 0.01f) right = transform.right;
+            var muzzle = origin + direction * 0.8f + right * (_aiming.Value ? 0f : 0.17f) - Vector3.up * 0.18f;
+            // Keep the barrel on this side of an obstacle at point-blank range.
+            if (SegmentHit(origin, muzzle, 0.02f, null, out var muzzleHit, out _))
+                muzzle = muzzleHit.point + muzzleHit.normal * 0.05f;
+            var bullet = new Bullet
+            {
+                Id = ++_nextBullet,
+                Origin = muzzle,
+                Velocity = (aimPoint - muzzle).normalized * bulletSpeed + inherited,
+                Started = Now,
+                Simulated = Now,
+                Damage = _player.WeaponDamage(item)
+            };
+            _bullets.Add(bullet);
+            PlayServer(EquipmentAction.MusketShot, ShotDuration);
+            ShotClientRpc(bullet.Id, bullet.Origin, bullet.Velocity, bullet.Started, extra);
+        }
+
         private void PlayServer(EquipmentAction action, float duration)
         {
             _cooldown = Now + duration;
@@ -666,16 +716,17 @@ namespace WaveByWave.Player
             BlockClientRpc();
             return true;
         }
-        public void ReceiveEquipmentHitServer(float damage, Vector3 attackerPosition, bool canBlock = true)
+        public void ReceiveEquipmentHitServer(float damage, Vector3 attackerPosition, bool canBlock = true, Vector3? impactPoint = null)
         {
             if (!IsServer || !Finite(damage) || damage <= 0f) return;
             if (!canBlock || !TryBlockHitServer(damage, attackerPosition))
-                _health?.ApplyDamageServer(damage, attackerPosition);
+                _health?.ApplyDamageServer(damage, attackerPosition, 1f, impactPoint);
         }
         private void SwordHitServer(Vector3 origin, Vector3 direction, float damage)
         {
-            WaveByWave.Enemies.DotsEnemyRuntime.Instance?.Melee(origin, direction, swordRange, damage);
-            var count = Physics.OverlapSphereNonAlloc(origin, swordRange, _targets, hitLayers, QueryTriggerInteraction.Collide);
+            var range = swordRange * _player.MeleeAreaMultiplier;
+            WaveByWave.Enemies.DotsEnemyRuntime.Instance?.Melee(origin, direction, range, damage);
+            var count = Physics.OverlapSphereNonAlloc(origin, range, _targets, hitLayers, QueryTriggerInteraction.Collide);
             _swordTargets.Clear();
             for (var i = 0; i < count; i++)
             {
@@ -688,16 +739,16 @@ namespace WaveByWave.Player
                 {
                     // PhysX ClosestPoint does not support non-convex ship/terrain meshes.
                     // An actual surface ray avoids both the warning and bounds-only hits.
-                    var aim = target.bounds.ClosestPoint(origin + direction * swordRange * 0.7f) - origin;
+                    var aim = target.bounds.ClosestPoint(origin + direction * range * 0.7f) - origin;
                     if (aim.sqrMagnitude < 0.0001f) aim = direction;
-                    if (!target.Raycast(new Ray(origin, aim.normalized), out var hit, swordRange)) continue;
+                    if (!target.Raycast(new Ray(origin, aim.normalized), out var hit, range)) continue;
                     contact = hit.point;
                 }
-                else contact = target.ClosestPoint(origin + direction * swordRange * 0.7f);
+                else contact = target.ClosestPoint(origin + direction * range * 0.7f);
                 var toward = contact - origin;
-                if (toward.sqrMagnitude > swordRange * swordRange || Vector3.Dot(toward.normalized, direction) < 0.35f) continue;
+                if (toward.sqrMagnitude > range * range || Vector3.Dot(toward.normalized, direction) < 0.35f) continue;
                 if (!HasSolidBetween(origin, contact, target) && _swordTargets.Add(component))
-                    receiver.ReceiveEquipmentHitServer(damage, origin);
+                    receiver.ReceiveEquipmentHitServer(damage, origin, true, contact);
             }
         }
         private float ScoopBucketServer(Vector3 origin, Vector3 direction, out Vector3 point)
@@ -799,7 +850,7 @@ namespace WaveByWave.Player
                         (!solid || enemyFraction < solidFraction) && (!water || enemyFraction < waterFraction))
                     {
                         var enemyPoint = Vector3.Lerp(from, to, enemyFraction);
-                        enemies.Damage(enemyId, b.Damage, b.Origin);
+                        enemies.Damage(enemyId, b.Damage, b.Origin, enemyPoint);
                         BulletImpactClientRpc(b.Id, enemyPoint, (from - to).normalized, false, true,
                             b.Simulated + step * enemyFraction);
                         finished = true;
@@ -811,7 +862,7 @@ namespace WaveByWave.Player
                         var point = water ? waterPoint : solid ? hit.point : to;
                         if (solid && !water)
                             if (EquipmentDamageReceiverUtility.TryGet(hit.collider, out var receiver, out _))
-                                receiver.ReceiveEquipmentHitServer(b.Damage, b.Origin, false);
+                                receiver.ReceiveEquipmentHitServer(b.Damage, b.Origin, false, hit.point);
                         BulletImpactClientRpc(b.Id, point, water ? Vector3.up : solid ? hit.normal : Vector3.up,
                             water, solid || water, b.Simulated + step * (water ? waterFraction : solid ? solidFraction : 1f));
                         finished = true; break;
@@ -847,14 +898,48 @@ namespace WaveByWave.Player
             if (state.Phase == HookPhase.Flying)
             {
                 const double step = 1d / 60d;
+                var stateChanged = state.Pulling != _serverReeling;
+                state.Pulling = _serverReeling;
                 for (var n = 0; n < 8 && _hookSampleTime + step <= Now; n++)
                 {
                     var next = _hookSampleTime + step;
                     var to = state.Evaluate(next, hookGravity);
+                    var flightVelocity = Vector3.zero;
+                    if (_serverReeling)
+                    {
+                        var elapsed = (float)(_hookSampleTime - state.Started);
+                        var currentVelocity = state.Velocity + Vector3.down * (hookGravity * elapsed);
+                        var horizontalVelocity = Vector3.ProjectOnPlane(currentVelocity, Vector3.up);
+                        var horizontalToHand = Vector3.ProjectOnPlane(hand - _hookPosition, Vector3.up);
+                        if (horizontalToHand.sqrMagnitude > 0.0001f)
+                        {
+                            var direction = horizontalToHand.normalized;
+                            // Pull only along the water/ground plane; gravity keeps the hook falling.
+                            var outwardSpeed = Vector3.Dot(horizontalVelocity, direction);
+                            if (outwardSpeed < 0f) horizontalVelocity -= direction * outwardSpeed;
+                            var flightReelSpeed = hookReelSpeed *
+                                (1f + _player.RingValue(PlayerRingStat.HookRetrievalSpeed));
+                            horizontalVelocity = Vector3.MoveTowards(horizontalVelocity, direction * flightReelSpeed,
+                                hookReelAcceleration * (float)step);
+                        }
+                        flightVelocity = horizontalVelocity + Vector3.up *
+                            (currentVelocity.y - hookGravity * (float)step);
+                        to = _hookPosition + (horizontalVelocity + Vector3.up *
+                            (currentVelocity.y - 0.5f * hookGravity * (float)step)) * (float)step;
+                    }
                     var solid = SegmentHit(_hookPosition, to, 0.09f, null,
                         out var hit, out var fraction);
                     var water = _water.Crossing(_hookPosition, to, out var waterPoint, out var waterFraction);
-                    if (solid || water || Vector3.Distance(to, hand) >= maximumRopeLength || next - state.Started >= 6d)
+                    if (!solid && !water && _serverReeling &&
+                        (to - hand).sqrMagnitude <= hookPickupRadius * hookPickupRadius)
+                    {
+                        CaptureItemsServer(_hookPosition, hand);
+                        _hookPosition = hand;
+                        ResetHookServer();
+                        return;
+                    }
+                    if (solid || water || !_serverReeling && Vector3.Distance(to, hand) >= maximumRopeLength ||
+                        next - _hookFlightStarted >= 6d)
                     {
                         water = water && (!solid || waterFraction < fraction);
                         var landedPosition = water ? waterPoint : solid ? hit.point + hit.normal * 0.06f : to;
@@ -862,14 +947,22 @@ namespace WaveByWave.Player
                         _hookPosition = landedPosition;
                         var support = solid && !water ? hit.collider.GetComponentInParent<NetworkObject>() : null;
                         if (!solid && !water && !TryHookSurface(ref _hookPosition, out support))
-                        { ResetHookServer(); break; }
+                        { ResetHookServer(); return; }
                         LandHookServer(_hookPosition, support);
                         if (water) ToolEffectClientRpc(_hookPosition, true);
-                        break;
+                        return;
                     }
                     CaptureItemsServer(_hookPosition, to);
                     _hookPosition = to; _hookSampleTime = next;
+                    if (_serverReeling)
+                    {
+                        state.Origin = to;
+                        state.Velocity = flightVelocity;
+                        state.Started = next;
+                        stateChanged = true;
+                    }
                 }
+                if (stateChanged) _hook.Value = state;
                 return;
             }
             if (state.Phase == HookPhase.Returning)
@@ -1130,12 +1223,12 @@ namespace WaveByWave.Player
         }
 
         [ClientRpc]
-        private void ShotClientRpc(int id, Vector3 origin, Vector3 velocity, double started)
+        private void ShotClientRpc(int id, Vector3 origin, Vector3 velocity, double started, bool extra)
         {
             var visual = EquipmentProjectileVisual.Create(this, origin, velocity, bulletGravity, started,
                 bulletLifetime, musketProjectilePrefab);
             if (visual != null) _bulletVisuals[id] = visual;
-            if (!IsOwner)
+            if (!IsOwner || extra)
                 CannonEffects.Muzzle(_view != null ? _view.MuzzlePosition(origin) : origin, velocity.normalized, muzzleEffectPrefab);
         }
         [ClientRpc]

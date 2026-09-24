@@ -260,56 +260,56 @@ MonoBehaviour:
     Pair: 0
     AttachBone: CATRHand
     LocalPosition: {x: -0.055600226, y: 0.04819982, z: -0.054299988}
-    LocalEulerAngles: {x: -0.000004363205, y: -0.000015031742, z: 215.84325}
-    LocalScale: {x: 1.0000006, y: 1.0000002, z: 1.0000001}
+    LocalEulerAngles: {x: 35.84327, y: 270.00003, z: 180.00002}
+    LocalScale: {x: 1, y: 1.0000002, z: 1.0000005}
   - Category: 12
     Prefab: {fileID: 1359906335136444, guid: b6b2bafa035c25544846bcac4fb25979, type: 3}
     Pair: 0
     AttachBone: CATRHand
     LocalPosition: {x: -0.055600226, y: 0.04819982, z: -0.054299988}
-    LocalEulerAngles: {x: -0.000004363205, y: -0.000015031742, z: 215.84325}
-    LocalScale: {x: 1.0000006, y: 1.0000002, z: 1.0000001}
+    LocalEulerAngles: {x: 35.84327, y: 270.00003, z: 180.00002}
+    LocalScale: {x: 1, y: 1.0000002, z: 1.0000005}
   - Category: 12
     Prefab: {fileID: 1674695216221302, guid: eb1b36d2157aa414c81d928c8b419cf8, type: 3}
     Pair: 0
     AttachBone: CATRHand
     LocalPosition: {x: -0.055600226, y: 0.04819982, z: -0.054299988}
-    LocalEulerAngles: {x: -0.000004363205, y: -0.000015031742, z: 215.84325}
-    LocalScale: {x: 1.0000006, y: 1.0000002, z: 1.0000001}
+    LocalEulerAngles: {x: 35.84327, y: 270.00003, z: 180.00002}
+    LocalScale: {x: 1, y: 1.0000002, z: 1.0000005}
   - Category: 12
     Prefab: {fileID: 1289311843786996, guid: e11b023301382b5479b37a0d162ea7a2, type: 3}
     Pair: 0
     AttachBone: CATRHand
     LocalPosition: {x: -0.058000546, y: 0.03299983, z: 0.008999919}
-    LocalEulerAngles: {x: 55.107544, y: 274.13464, z: 187.76593}
-    LocalScale: {x: 1.0000002, y: 1.0000006, z: 1.0000006}
+    LocalEulerAngles: {x: 55.107536, y: 274.13464, z: 187.76593}
+    LocalScale: {x: 1.0000002, y: 1.0000005, z: 1.0000006}
   - Category: 12
     Prefab: {fileID: 1277810446415122, guid: c56c45d5f16027044aca197213f4554d, type: 3}
     Pair: 0
     AttachBone: CATRHand
     LocalPosition: {x: -0.058000546, y: 0.03299983, z: 0.008999919}
-    LocalEulerAngles: {x: 55.107544, y: 274.13464, z: 187.76593}
-    LocalScale: {x: 1.0000002, y: 1.0000006, z: 1.0000006}
+    LocalEulerAngles: {x: 55.107536, y: 274.13464, z: 187.76593}
+    LocalScale: {x: 1.0000002, y: 1.0000005, z: 1.0000006}
   - Category: 12
     Prefab: {fileID: 1960328108975314, guid: be8cf39ad20cdbb4c89c260b480e987a, type: 3}
     Pair: 0
     AttachBone: CATRHand
     LocalPosition: {x: -0.058000546, y: 0.03299983, z: 0.008999919}
-    LocalEulerAngles: {x: 55.107544, y: 274.13464, z: 187.76593}
-    LocalScale: {x: 1.0000002, y: 1.0000006, z: 1.0000006}
+    LocalEulerAngles: {x: 55.107536, y: 274.13464, z: 187.76593}
+    LocalScale: {x: 1.0000002, y: 1.0000005, z: 1.0000006}
   - Category: 13
     Prefab: {fileID: 1232370093899454, guid: f284f2460b32adc44859224e3f267a13, type: 3}
     Pair: 0
     AttachBone: CATRHand
     LocalPosition: {x: -0.03400021, y: 0.026399871, z: -0.005099986}
-    LocalEulerAngles: {x: 65.17815, y: 249.35213, z: 237.07635}
-    LocalScale: {x: 1.0000002, y: 1.0000001, z: 1.0000004}
+    LocalEulerAngles: {x: 65.17815, y: 249.35214, z: 237.07637}
+    LocalScale: {x: 1.0000002, y: 1.0000001, z: 1.0000002}
   - Category: 14
     Prefab: {fileID: 1392934110466340, guid: 6cf1b4c6dd921cf4288bdf045027e189, type: 3}
     Pair: 0
     AttachBone: CATRHand
     LocalPosition: {x: 0.16399994, y: 0.08799987, z: 0.005999996}
-    LocalEulerAngles: {x: 9.30985, y: 273.61465, z: 270.2833}
+    LocalEulerAngles: {x: 9.309845, y: 273.61465, z: 270.2833}
     LocalScale: {x: 1.0000002, y: 1.0000001, z: 1.0000004}
   - Category: 15
     Prefab: {fileID: 1574214325094798, guid: 15e4d907d5a25b24c985ad900998c36e, type: 3}
@@ -1028,7 +1028,7 @@ MonoBehaviour:
       - FirstRow: 52
         Count: 17
         Duration: 1.2999992
-  CombinedSourceHash: aaf407034432b1679322f0efc2121cc9
+  CombinedSourceHash: 71288417aa3c223606a1779b50a58464
   BakedParts:
   - Name: Enemy_0_Hand_Left
     Category: 0
@@ -2252,7 +2252,7 @@ MonoBehaviour:
     - FirstRow: 52
       Count: 17
       Duration: 1.2999992
-  BakeSourceHash: vat4:1e847705fe1a989e320ca328cd478b57
+  BakeSourceHash: vat5:9f98ad3cd2345d380b7a092188a050e0
   SpawnSmokePrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
   DeathSmokePrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
   StunEffectPrefab: {fileID: 3851572283197178760, guid: da7da3015244d454580cb100bca9f23e, type: 3}
@@ -2283,6 +2283,7 @@ MonoBehaviour:
   SurfaceVerticalSpeed: 4
   BodyRadius: 0.1
   BodyHeight: 1.7
+  ProjectileHitRadius: 0.42
   CrowdSeparationRadius: 0.35
   CrowdSeparationStrength: 0
   CrowdAvoidanceLookAhead: 1.5

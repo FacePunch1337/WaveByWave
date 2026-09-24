@@ -24,6 +24,7 @@ namespace WaveByWave.UI
         [SerializeField] private Button closeButton;
 
         private NetworkSessionCoordinator _session;
+        private GameObject _prefabView;
 
         public void Inject(IServiceResolver services)
         {
@@ -34,6 +35,17 @@ namespace WaveByWave.UI
 
         private void Awake()
         {
+            _prefabView=GameUiPrefabs.Create("Menus/Session", owner: this);
+            if(_prefabView!=null)
+            {
+                var oldCanvas=GetComponentInParent<Canvas>();if(oldCanvas!=null)oldCanvas.enabled=false;
+                panel=_prefabView.transform.Find("Panel").gameObject;
+                title=GameUiPrefabs.Find<Text>(panel,"Title");status=GameUiPrefabs.Find<Text>(panel,"Status");
+                hint=GameUiPrefabs.Find<Text>(panel,"Hint");
+                inviteButton=GameUiPrefabs.Find<Button>(panel,"Invite");startButton=GameUiPrefabs.Find<Button>(panel,"Start");
+                localHostButton=GameUiPrefabs.Find<Button>(panel,"LocalHost");localClientButton=GameUiPrefabs.Find<Button>(panel,"LocalClient");
+                returnToPortButton=GameUiPrefabs.Find<Button>(panel,"ReturnToPort");closeButton=GameUiPrefabs.Find<Button>(panel,"Close");
+            }
             inviteButton?.onClick.AddListener(() => _session?.OpenInviteOverlay());
             startButton?.onClick.AddListener(() => _session?.StartVoyage());
             localHostButton?.onClick.AddListener(() => _session?.StartLocalHost());
@@ -64,7 +76,9 @@ namespace WaveByWave.UI
 
         private void Update()
         {
-            if (!WaveByWave.Customization.CustomizationMenu.InputCaptured &&
+            if (!PlayerProgressionUI.MenuOpen && PlayerProgressionUI.ClosedOnFrame != Time.frameCount &&
+                !WaveByWave.Player.NetworkPlayerController.RingChoiceOpen &&
+                !WaveByWave.Customization.CustomizationMenu.InputCaptured &&
                 Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
                 SetOpen(panel != null && !panel.activeSelf);
 
@@ -110,11 +124,28 @@ namespace WaveByWave.UI
             Cursor.lockState = open ? CursorLockMode.None : CursorLockMode.Locked;
         }
 
+        public static GameObject BuildTemplate()
+        {
+            var root=UiDefaults.Canvas("Session menu",160);
+            var prompt=UiDefaults.Text("Menu hint",root.transform,"ESC — меню     TAB — кольца",20,new Vector2(420,38),new Vector2(230,-30));
+            prompt.rectTransform.anchorMin=prompt.rectTransform.anchorMax=new Vector2(0,1);
+            var panel=UiDefaults.Image("Panel",root.transform,new Color(.025f,.06f,.08f,.96f));
+            UiDefaults.Rect(panel.rectTransform,new Vector2(680,800),Vector2.zero);
+            UiDefaults.Text("Title",panel.transform,"ПОРТ",38,new Vector2(630,60),new Vector2(0,335));
+            UiDefaults.Text("Status",panel.transform,"",22,new Vector2(620,64),new Vector2(0,262));
+            UiDefaults.Text("Hint",panel.transform,"",18,new Vector2(620,80),new Vector2(0,-320));
+            var names=new[]{"Invite","Start","ReturnToPort","LocalHost","LocalClient","Close"};
+            var labels=new[]{"Пригласить друзей Steam","Начать плавание","Вернуться в порт","Локальный Host (тест)","Локальный Client (тест)","Продолжить"};
+            for(var i=0;i<names.Length;i++)UiDefaults.Button(names[i],panel.transform,labels[i],new Vector2(600,62),new Vector2(0,180-i*74));
+            return root;
+        }
         private void OnDestroy()
         {
+            var ownsView = GameUiPrefabs.IsOwnedBy(_prefabView, this);
+            if(_prefabView!=null)GameUiPrefabs.Release(_prefabView, this);
             if (_session != null)
                 _session.StateChanged -= Refresh;
-            InputCaptured = false;
+            if (ownsView) InputCaptured = false;
         }
     }
 }

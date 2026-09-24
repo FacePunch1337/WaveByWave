@@ -115,7 +115,7 @@ namespace WaveByWave.Combat
                 RestoreFlashMaterials();
             }
             if (_healthBar != null)
-                Destroy(_healthBar.gameObject);
+                _healthBar.Detach(this);
             _healthBar = null;
         }
 
@@ -125,12 +125,12 @@ namespace WaveByWave.Combat
                 RespawnServer();
         }
 
-        public void ReceiveEquipmentHitServer(float damage, Vector3 attackerPosition, bool canBlock = true)
+        public void ReceiveEquipmentHitServer(float damage, Vector3 attackerPosition, bool canBlock = true, Vector3? impactPoint = null)
         {
-            ApplyDamageServer(damage, attackerPosition);
+            ApplyDamageServer(damage, attackerPosition, 1f, impactPoint);
         }
 
-        public bool ApplyDamageServer(float amount, Vector3 sourcePosition, float knockbackMultiplier = 1f)
+        public bool ApplyDamageServer(float amount, Vector3 sourcePosition, float knockbackMultiplier = 1f, Vector3? impactPoint = null)
         {
             if (!IsServer || _dead.Value || !IsFinite(amount) || amount <= 0f || !IsFinite(sourcePosition))
                 return false;
@@ -140,6 +140,7 @@ namespace WaveByWave.Combat
             if (Mathf.Approximately(previous, _health.Value))
                 return false;
 
+            DotsDamagePopups.ReportServer(impactPoint ?? GetEffectCenter(), amount);
             var away = Vector3.ProjectOnPlane(transform.position - sourcePosition, Vector3.up);
             if (away.sqrMagnitude < 0.0001f)
                 away = Vector3.ProjectOnPlane(transform.forward, Vector3.up);

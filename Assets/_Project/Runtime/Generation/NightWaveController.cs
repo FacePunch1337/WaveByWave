@@ -29,10 +29,40 @@ namespace WaveByWave.Generation
         }
     }
 
+    // Presentation outlives the gameplay boundary and fades from the last visible opacity.
+    public sealed class BattlefieldFogFade
+    {
+        private bool _wasActive;
+        private float _fadeOutStarted, _fadeOutFrom;
+        public float Opacity { get; private set; }
+
+        public void Step(bool active, float age, float now, float fadeInSeconds, float fadeOutSeconds)
+        {
+            if (active)
+            {
+                _wasActive = true;
+                Opacity = fadeInSeconds <= 0f ? 1f : Mathf.SmoothStep(0f, 1f, age / fadeInSeconds);
+                return;
+            }
+            if (_wasActive)
+            {
+                _wasActive = false;
+                _fadeOutStarted = now;
+                _fadeOutFrom = Opacity;
+            }
+            Opacity = fadeOutSeconds <= 0f ? 0f : _fadeOutFrom *
+                (1f - Mathf.SmoothStep(0f, 1f, (now - _fadeOutStarted) / fadeOutSeconds));
+        }
+
+        public void Reset() { _wasActive = false; _fadeOutFrom = 0f; Opacity = 0f; }
+    }
+
     // Gameplay waves depend on night notifications; the lighting clock never depends on waves.
     public sealed class NightWaveController : MonoBehaviour
     {
         public static NightWaveController Active { get; private set; }
+        public static bool BattleInProgress => Active != null && Active._battery != null &&
+            Active._battery.IsSpawned && Active._battery.BattlefieldActive;
         [SerializeField] private NightWaveSettings settings;
         [SerializeField] private VoyageDayNightController dayNight;
         [SerializeField] private Transform[] waveSpawnPoints;
@@ -45,6 +75,8 @@ namespace WaveByWave.Generation
         private float _nextWaveCheck;
         private float _nextBoundaryCheck;
         private readonly BattlefieldBoundaryBreachTimer _boundaryBreaches = new();
+        private readonly BattlefieldFogFade _fogFade = new();
+        private Vector4 _fogZone;
         private float _localOutsideSince = -1f;
         [SerializeField, Min(0.5f)] private float announcementDuration = 4f;
         private VoyagePhase _lastAnnouncedPhase;
@@ -52,8 +84,6 @@ namespace WaveByWave.Generation
         private int _announcedWave;
         private string _announcement;
         private float _announcementUntil;
-        private GUIStyle _announcementStyle;
-        private GUIStyle _boundaryStyle;
 
         public static bool TryGetBattlefield(out Vector4 centerRadius, out NightWaveSettings fogSettings)
         {
@@ -68,6 +98,24 @@ namespace WaveByWave.Generation
             return true;
         }
 
+        public static bool TryGetFog(out Vector4 centerRadius, out NightWaveSettings fogSettings, out float opacity)
+        {
+            var controller = Active;
+            centerRadius = controller != null ? controller._fogZone : default;
+            fogSettings = controller != null ? controller.settings : null;
+            opacity = controller != null ? controller._fogFade.Opacity : 0f;
+            return fogSettings != null && centerRadius.w > 0f && opacity > 0f;
+        }
+
+        private void LateUpdate()
+        {
+            if (settings == null) return;
+            var active = TryGetBattlefield(out var zone, out _);
+            if (active) _fogZone = zone;
+            _fogFade.Step(active, active ? _battery.BattlefieldAge : 0f, Time.unscaledTime,
+                settings.FogFadeInSeconds, settings.FogFadeOutSeconds);
+        }
+
         private void OnEnable()
         {
             Active = this;
@@ -78,6 +126,8 @@ namespace WaveByWave.Generation
 
         private void OnDisable()
         {
+            _fogFade.Reset();
+            _fogZone = default;
             if (Active == this) Active = null;
             if (dayNight != null) dayNight.NightStartedServer -= OnNightStartedServer;
         }
@@ -263,52 +313,17 @@ namespace WaveByWave.Generation
             _announcementUntil = Time.unscaledTime + announcementDuration;
         }
 
-        private void OnGUI()
+        public string Announcement => Time.unscaledTime < _announcementUntil ? _announcement : "";
+        public float AnnouncementAlpha => Mathf.Clamp01(_announcementUntil-Time.unscaledTime);
+        public string BoundaryWarning
         {
-            if (_battery == null || !_battery.IsSpawned)
-                _battery = FindFirstObjectByType<ShipCannonBattery>();
-            if (_battery == null || !_battery.IsSpawned || _battery.VoyageEnded) return;
-            var rect = new Rect((Screen.width - 300f) * 0.5f, 12f, 300f, 36f);
-            var label = _battery.Phase == VoyagePhase.Day ? $"День {_battery.WaveNumber}" :
-                _battery.Phase == VoyagePhase.Victory ? "Карта пройдена!" :
-                _battery.Phase == VoyagePhase.Night ? $"Ночная волна {_battery.WaveNumber}" :
-                _battery.Phase == VoyagePhase.Sunset ? "Наступает ночь" : "Рассвет";
-            GUI.Box(rect, label);
-            var bar = new Rect(rect.x + 6f, rect.y + 26f, rect.width - 12f, 5f);
-            var previous = GUI.color;
-            GUI.color = Color.black;
-            GUI.DrawTexture(bar, Texture2D.whiteTexture);
-            bar.width *= _battery.DayProgress;
-            GUI.color = _battery.Phase == VoyagePhase.Night ? Color.cyan : Color.yellow;
-            GUI.DrawTexture(bar, Texture2D.whiteTexture);
-            GUI.color = previous;
-            if (_localOutsideSince >= 0f && settings != null)
+            get
             {
-                var grace = Mathf.Max(0f, settings.BoundaryGraceSeconds -
-                    (Time.time - _localOutsideSince));
-                var warning = grace > 0f
-                    ? $"ВЕРНИТЕСЬ В ПОЛЕ БОЯ · УРОН ЧЕРЕЗ {Mathf.CeilToInt(grace)} С"
-                    : "ВЕРНИТЕСЬ В ПОЛЕ БОЯ · ПОЯВЛЯЮТСЯ ПРОБОИНЫ";
-                _boundaryStyle ??= new GUIStyle(GUI.skin.label)
-                { alignment = TextAnchor.MiddleCenter, fontSize = 19, fontStyle = FontStyle.Bold };
-                _boundaryStyle.normal.textColor = new Color(1f, .58f, .4f);
-                GUI.Label(new Rect(Screen.width * .5f - 360f, 92f, 720f, 32f), warning, _boundaryStyle);
+                if(_localOutsideSince<0f || settings==null)return "";
+                var grace=Mathf.Max(0f,settings.BoundaryGraceSeconds-(Time.time-_localOutsideSince));
+                return grace>0f?$"ВЕРНИТЕСЬ В ПОЛЕ БОЯ · УРОН ЧЕРЕЗ {Mathf.CeilToInt(grace)} С":
+                    "ВЕРНИТЕСЬ В ПОЛЕ БОЯ · ПОЯВЛЯЮТСЯ ПРОБОИНЫ";
             }
-            if (string.IsNullOrEmpty(_announcement) || Time.unscaledTime >= _announcementUntil) return;
-            var remaining = Mathf.Min(1f, _announcementUntil - Time.unscaledTime);
-            var banner = new Rect(Screen.width * 0.5f - 310f, Screen.height * 0.18f, 620f, 80f);
-            GUI.color = new Color(0.02f, 0.06f, 0.1f, 0.8f * remaining);
-            GUI.DrawTexture(banner, Texture2D.whiteTexture);
-            _announcementStyle ??= new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 34,
-                fontStyle = FontStyle.Bold
-            };
-            _announcementStyle.normal.textColor = new Color(1f, 0.86f, 0.55f, remaining);
-            GUI.color = Color.white;
-            GUI.Label(banner, _announcement, _announcementStyle);
-            GUI.color = previous;
         }
     }
 }

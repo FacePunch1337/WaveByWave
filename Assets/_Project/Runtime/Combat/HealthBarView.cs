@@ -1,4 +1,5 @@
 using UnityEngine;
+using WaveByWave.UI;
 using UnityEngine.UI;
 using WaveByWave.Player;
 
@@ -8,6 +9,7 @@ namespace WaveByWave.Combat
     {
         private NetworkHealth _health;
         private RectTransform _fill;
+        private Image _fillImage;
         private CanvasGroup _group;
         private Text _label;
         private Image _damageVignette;
@@ -18,9 +20,11 @@ namespace WaveByWave.Combat
 
         public static HealthBarView Create(NetworkHealth health, bool screenSpace, float height)
         {
-            var root = new GameObject(screenSpace ? "Player Health HUD" : "World Health Bar",
+            var root = GameUiPrefabs.Create(screenSpace ? "HUD/PlayerHealth" : "World/HealthBar", owner: health) ??
+                new GameObject(screenSpace ? "Player Health HUD" : "World Health Bar",
                 typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(CanvasGroup), typeof(HealthBarView));
             var view = root.GetComponent<HealthBarView>();
+            if(view==null) view=root.AddComponent<HealthBarView>();
             view.Initialize(health, screenSpace, height);
             return view;
         }
@@ -30,11 +34,23 @@ namespace WaveByWave.Combat
             _health = health;
             _screenSpace = screenSpace;
             _height = height;
+            _vignetteAlpha = 0f;
             if (screenSpace)
-                DontDestroyOnLoad(gameObject);
+            { GameUiPrefabs.Persist(gameObject); }
             else
                 transform.SetParent(health.transform, false);
             _group = GetComponent<CanvasGroup>();
+            if(transform.Find("Health Frame")!=null)
+            {
+                _fill=transform.Find("Health Frame/Missing Health/Health").GetComponent<RectTransform>();
+                _fillImage = _fill.GetComponent<Image>();
+                _label=transform.Find("Health Frame/Health Text")?.GetComponent<Text>();
+                _damageVignette=transform.Find("Damage Vignette")?.GetComponent<Image>();
+                if (_damageVignette != null) _damageVignette.color = Color.clear;
+                SetDead(false);
+                SetValue(health.NormalizedHealth,health.CurrentHealth,health.MaximumHealth);
+                return;
+            }
             var canvas = GetComponent<Canvas>();
             canvas.renderMode = screenSpace ? RenderMode.ScreenSpaceOverlay : RenderMode.WorldSpace;
             canvas.sortingOrder = screenSpace ? 60 : 20;
@@ -107,10 +123,12 @@ namespace WaveByWave.Combat
 
         public void SetValue(float normalized, float current, float maximum)
         {
-            if (_fill != null)
+            if (_fillImage != null && _fillImage.type == Image.Type.Filled)
+                _fillImage.fillAmount = Mathf.Clamp01(normalized);
+            else if (_fill != null)
                 _fill.anchorMax = new Vector2(Mathf.Clamp01(normalized), 1f);
             if (_label != null)
-                _label.text = $"{Mathf.CeilToInt(current)} / {Mathf.CeilToInt(maximum)}";
+                _label.text = $"{Mathf.CeilToInt(current)}/{Mathf.CeilToInt(maximum)}";
         }
 
         public void SetDead(bool dead)
@@ -127,11 +145,18 @@ namespace WaveByWave.Combat
                 _vignetteAlpha = 0.78f;
         }
 
+        public void Detach(NetworkHealth owner)
+        {
+            if (_health != owner) return;
+            GameUiPrefabs.Release(gameObject, owner);
+            _health = null;
+        }
+
         private void LateUpdate()
         {
             if (_health == null)
             {
-                Destroy(gameObject);
+                GameUiPrefabs.Release(gameObject, _health);
                 return;
             }
 

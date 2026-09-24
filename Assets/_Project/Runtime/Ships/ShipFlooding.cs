@@ -69,7 +69,6 @@ namespace WaveByWave.Ships
         private Vector3 _sinkPosition;
         private Quaternion _sinkRotation;
         private readonly RaycastHit[] _repairObstructions = new RaycastHit[32];
-        private GUIStyle _statusStyle, _titleStyle, _detailStyle;
         private static readonly List<ShipFlooding> Active = new();
         public int HoleCount => _holes?.Count ?? 0;
         public HullBreach GetHole(int index) => _holes[index];
@@ -296,32 +295,5 @@ namespace WaveByWave.Ships
             return true;
         }
 
-        private void OnGUI()
-        {
-            if (!IsSpawned || NetworkManager == null || !NetworkManager.IsClient) return;
-            _statusStyle ??= new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.MiddleCenter };
-            _titleStyle ??= new GUIStyle(GUI.skin.label) { fontSize = 42, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            _detailStyle ??= new GUIStyle(_statusStyle) { fontSize = 22, wordWrap = true };
-            var width = Mathf.Min(410f, Screen.width - 30f);
-            var rect = new Rect((Screen.width - width) * 0.5f, 65f, width, 52f);
-            GUI.Box(rect, GUIContent.none);
-            GUI.Label(new Rect(rect.x, rect.y, rect.width, 28f),
-                $"Вода: {Fill:P0}   •   Пробоины: {HoleCount}   •   +{Inflow:0.#} л/с", _statusStyle);
-            var color = GUI.color;
-            GUI.color = Color.Lerp(new Color(0.1f, 0.65f, 0.8f), new Color(0.9f, 0.18f, 0.12f), Fill);
-            GUI.DrawTexture(new Rect(rect.x + 10f, rect.y + 33f, (rect.width - 20f) * Fill, 9f), Texture2D.whiteTexture);
-            GUI.color = color;
-            if (!_battery.VoyageEnded) return;
-            GUI.depth = -1000;
-            GUI.color = new Color(0.015f, 0.025f, 0.04f, 0.86f);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            var victory = _battery.Phase == VoyagePhase.Victory;
-            GUI.Label(new Rect(0, Screen.height * 0.32f, Screen.width, 70f), victory ? "ПОБЕДА" : "КОРАБЛЬ ЗАТОНУЛ", _titleStyle);
-            GUI.Label(new Rect(Screen.width * 0.15f, Screen.height * 0.47f, Screen.width * 0.7f, 100f),
-                (victory ? "Все волны отражены. Пора возвращаться в порт." : "Вода заполнила трюм. Плавание окончено.") +
-                $"\nВозвращение в PORT через {Mathf.CeilToInt(_battery.ReturnToPortIn)} с", _detailStyle);
-            GUI.color = color; GUI.depth = 0;
-        }
     }
 }

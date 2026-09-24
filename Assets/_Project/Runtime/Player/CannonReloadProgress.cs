@@ -20,8 +20,16 @@ namespace WaveByWave.Player
         {
             _player = player;
             if (_hud != null) return;
+            _hud=GameUiPrefabs.Create("HUD/AimAndReload", owner: this);
+            if(_hud!=null)
+            {
+                GameUiPrefabs.Persist(_hud);
+                _indicator=_hud.transform.Find("Aim Center/Cannon Reload Progress").gameObject;
+                _fill=GameUiPrefabs.Find<Image>(_indicator,"Reload Fill");
+                return;
+            }
             _hud = new GameObject("Player Aim HUD", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
-            DontDestroyOnLoad(_hud);
+            if(Application.isPlaying) DontDestroyOnLoad(_hud);
             var canvas = _hud.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 70;
@@ -132,7 +140,7 @@ namespace WaveByWave.Player
             }
             // Use authoritative reload time, independently of delayed ship presentation.
             var remaining = state.ReloadEnd - battery.NetworkManager.ServerTime.Time;
-            _fill.fillAmount = Mathf.Clamp01(1f - (float)remaining / cannon.ReloadDuration);
+            _fill.fillAmount = Mathf.Clamp01(1f - (float)remaining / Mathf.Max(0.01f, state.ReloadDuration));
         }
 
         private void OnDisable()
@@ -142,7 +150,8 @@ namespace WaveByWave.Player
 
         private void OnDestroy()
         {
-            if (_hud != null) Destroy(_hud);
+            if (!Application.isPlaying) return;
+            if (_hud != null) GameUiPrefabs.Release(_hud, this);
             if (_ringSprite != null) Destroy(_ringSprite);
             if (_ringTexture != null) Destroy(_ringTexture);
         }

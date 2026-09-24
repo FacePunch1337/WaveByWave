@@ -52,6 +52,9 @@ MonoBehaviour:
   IslandChainDistance: {x: 450, y: 550}
   IslandForwardArc: 35
   IslandRevealRadius: 400
+  IslandHideRadius: 400
+  IslandRemovalRadius: 650
+  MaximumResidentIslands: 32
   IslandStreamingInterval: 1
   IslandRecoveryRadius: 1000
   IslandSpacing: 20
@@ -95,7 +98,7 @@ MonoBehaviour:
   EnemySpawnPointMaximumSlope: 35
   EnemySpawnPointMinimumHeightAboveWater: 0.25
   DigRadius: 0.65
-  DigPenetration: 0.22
+  DigPenetration: 0.1
   DigSmoothing: 0.45
   MeshUploadsPerFrame: 1
   BurialDepth: {x: 0.6, y: 1.6}

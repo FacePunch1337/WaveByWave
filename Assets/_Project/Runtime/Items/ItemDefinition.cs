@@ -121,6 +121,15 @@ namespace WaveByWave.Items
         public int MaximumStack => Mathf.Clamp(maximumStack, 1, ushort.MaxValue);
         public SupplyKind SupplyKind => supplyKind;
         public float Potency => Mathf.Max(0f, potency);
+        public bool IsWeapon => EquipmentKind == ItemEquipmentKind.Sword || EquipmentKind == ItemEquipmentKind.Musket;
+        public float WeaponDamage => Potency * RarityDamageMultiplier(rarity);
+        public static float RarityDamageMultiplier(ItemRarity value) => value switch
+        {
+            ItemRarity.Uncommon => 1.25f, ItemRarity.Rare => 1.6f,
+            ItemRarity.Epic => 2f, ItemRarity.Legendary => 2.5f, _ => 1f
+        };
+        public string HoverDescription(WaveByWave.Player.NetworkPlayerController player) =>
+            DisplayName + (IsWeapon ? $"\nУрон: {(player != null ? player.WeaponDamage(this) : WeaponDamage):0.#}" : "");
         public int TreasureExperience => Mathf.Max(0, treasureExperience);
         public bool IsCoinReward => coinReward || id != null &&
             id.Contains("coin", System.StringComparison.OrdinalIgnoreCase);
@@ -128,7 +137,8 @@ namespace WaveByWave.Items
         public float UpgradeBonus => upgradeBonus;
         public GameObject WorldVisualPrefab => worldVisualPrefab;
         public Quaternion RestingRotation => Quaternion.Euler(restingEulerAngles);
-        public Color RarityColor => rarity switch
+        public Color RarityColor => ColorForRarity(rarity);
+        public static Color ColorForRarity(ItemRarity value) => value switch
         {
             ItemRarity.Uncommon => new Color(0.3f, 1f, 0.4f),
             ItemRarity.Rare => new Color(0.15f, 0.55f, 1f),

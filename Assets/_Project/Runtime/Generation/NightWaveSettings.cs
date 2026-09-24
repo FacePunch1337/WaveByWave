@@ -27,6 +27,12 @@ namespace WaveByWave.Generation
     [CreateAssetMenu(menuName = "Wave By Wave/Voyage/Night waves", fileName = "NightWaveSettings")]
     public sealed class NightWaveSettings : ScriptableObject
     {
+        [Min(0f), Tooltip("Время плавного появления тумана в начале волны.")]
+        public float FogFadeInSeconds = 4f;
+        [Min(0f), Tooltip("Время плавного исчезновения тумана после окончания волны. Урон за границей прекращается сразу.")]
+        public float FogFadeOutSeconds = 4f;
+        [Min(0.1f), Tooltip("За сколько метров при входе в туман исчезает видимая круговая граница.")]
+        public float FogImmersionDistance = 3f;
         [Min(0f)] public float VictoryDisplayDuration = 5f;
         [Tooltip("Crew spawned on enemy ships is not counted in these entries.")]
         public NightWaveDefinition[] Waves = Array.Empty<NightWaveDefinition>();

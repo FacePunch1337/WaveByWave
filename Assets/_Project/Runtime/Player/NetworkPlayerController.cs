@@ -74,6 +74,18 @@ namespace WaveByWave.Player
         private float repairSpeed = 1f;
         public float RepairSpeed => repairSpeed * (1f + Mathf.Max(0f, RingValue(PlayerRingStat.Repair)));
 
+        [Header("Combat statistics")]
+        [SerializeField, Min(0f)] private float baseMeleeDamage = 10f;
+        [SerializeField, Min(0f)] private float baseRangedDamage = 10f;
+        public float AttackSpeedMultiplier => 1f + Mathf.Max(0f, RingValue(PlayerRingStat.AttackSpeed));
+        public float ReloadSpeedMultiplier => 1f + Mathf.Max(0f, RingValue(PlayerRingStat.ReloadSpeed));
+        public float MeleeAreaMultiplier => 1f + Mathf.Max(0f, RingValue(PlayerRingStat.MeleeArea));
+        public int ProjectileCount => Mathf.Clamp(1 + Mathf.FloorToInt(RingValue(PlayerRingStat.ProjectileCount)), 1, 32);
+        public float WeaponDamage(ItemDefinition item) => item == null ? 0f :
+            (item.WeaponDamage + (item.EquipmentKind == ItemEquipmentKind.Sword ? baseMeleeDamage : baseRangedDamage)) *
+            (1f + Mathf.Max(0f, RingValue(item.EquipmentKind == ItemEquipmentKind.Sword
+                ? PlayerRingStat.MeleeDamage : PlayerRingStat.RangedDamage)));
+
         [Header("Moving platforms")]
         [SerializeField, Min(0.02f)] private float platformProbeDistance = 0.22f;
         [Tooltip("Maximum gap at which a client may attach to a network-interpolated deck.")]
@@ -360,6 +372,7 @@ namespace WaveByWave.Player
                 return;
             }
 
+            gameObject.AddComponent<PlayerProgressionUI>().Initialize(this);
             ActivateOwnerCamera();
             _waterQuery?.Dispose();
             _waterQuery = new EquipmentWaterQuery(_equipment != null ? _equipment.WaterWaveProfile : null);
@@ -2032,6 +2045,17 @@ namespace WaveByWave.Player
                 return;
             }
 
+            if (target is ShipTreasureChest treasureChest)
+            {
+                if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
+                    _pendingAnchor == null && _pendingCannon == null &&
+                    Inventory != null && !Inventory.IsCarryingChest &&
+                    Inventory.TryGetDefinition(Inventory.SelectedIndex, out var selectedItem) &&
+                    selectedItem.Category == ItemCategory.Treasure)
+                    treasureChest.Interact(this);
+                return;
+            }
+
             if (target == null || !Keyboard.current.eKey.wasPressedThisFrame || _pendingAnchor != null || _pendingCannon != null)
                 return;
 
@@ -2172,12 +2196,16 @@ namespace WaveByWave.Player
 
         private void UpdateItemActions()
         {
+            if (Keyboard.current != null && Keyboard.current.qKey.wasPressedThisFrame)
+                inventory.DropSelected();
+
             if (Mouse.current == null)
                 return;
 
             var equipmentAction = inventory.TryGetDefinition(inventory.SelectedIndex, out var heldItem) &&
                 heldItem.EquipmentKind != ItemEquipmentKind.Carry;
-            if (!equipmentAction && Mouse.current.leftButton.wasPressedThisFrame)
+            var treasureHeld = heldItem != null && heldItem.Category == ItemCategory.Treasure;
+            if (!equipmentAction && !treasureHeld && Mouse.current.leftButton.wasPressedThisFrame)
             {
                // animationSync.PlayAction("Primary");
                 inventory.UseSelected(false);
@@ -2188,8 +2216,6 @@ namespace WaveByWave.Player
                 inventory.UseSelected(true);
             }
 
-            if (Keyboard.current != null && Keyboard.current.gKey.wasPressedThisFrame)
-                inventory.DropSelected();
         }
 
         public void ToggleLadder(ClimbableLadder ladder)
@@ -3143,17 +3169,19 @@ namespace WaveByWave.Player
     {
         public byte Stat;
         public ushort Level;
+        public byte Rarity;
         public float Value;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
         {
             serializer.SerializeValue(ref Stat);
             serializer.SerializeValue(ref Level);
+            serializer.SerializeValue(ref Rarity);
             serializer.SerializeValue(ref Value);
         }
 
         public bool Equals(PlayerRingState other) => Stat == other.Stat && Level == other.Level &&
-            Value.Equals(other.Value);
+            Value.Equals(other.Value) && Rarity == other.Rarity;
     }
 
     public sealed partial class NetworkPlayerController
@@ -3164,23 +3192,46 @@ namespace WaveByWave.Player
         private ulong _localRingOffers;
         private int _localRingLevel;
         private bool _awaitingRingChoice;
+        private byte _offerCount, _localOfferCount;
+        private int _serverChoiceLevel;
+        private bool _localChoiceSubmitted;
+        public bool RingChoiceSubmitted => _localChoiceSubmitted;
+        public int RingChoiceLevel => _localRingLevel;
+        public int RingOfferCount => _localOfferCount;
+        public PlayerRingCatalog RingCatalog => _ringCatalog != null ? _ringCatalog :
+            (_ringCatalog = Resources.Load<PlayerRingCatalog>("PlayerRingCatalog"));
+        public PlayerRingState GetRingState(int index) => _ringStats[index];
+        public void GetRingOffer(int index, out PlayerRingStat stat, out ItemRarity rarity)
+        {
+            var offer = (byte)(_localRingOffers >> (index * 8));
+            stat = (PlayerRingStat)(offer & 15); rarity = (ItemRarity)(offer >> 4);
+        }
+        public void SubmitRingChoice(byte index)
+        {
+            if (!IsOwner || !RingChoiceOpen || _localChoiceSubmitted || index >= _localOfferCount) return;
+            _localChoiceSubmitted = true;
+            ChooseRingServerRpc(index, _localRingLevel);
+        }
+        public void FinishLocalRingChoice() => ClearLocalRingChoice();
 
         private void ClearLocalRingChoice()
         {
             if (!IsOwner) return;
             _localRingOffers = 0;
+            _localChoiceSubmitted = false;
             RingChoiceOpen = false;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
 
         public static bool RingChoiceOpen { get; private set; }
-        public int DistinctRingCount => _ringStats.Count;
+        public int DistinctRingCount => _ringStats?.Count ?? 0;
         private float RingMoveSpeed => moveSpeed * (1f + RingValue(PlayerRingStat.MoveSpeed));
         private float RingJumpHeight => jumpHeight + RingValue(PlayerRingStat.JumpHeight);
 
         public float RingValue(PlayerRingStat stat)
         {
+            if (_ringStats == null) return 0f;
             for (var i = 0; i < _ringStats.Count; i++)
                 if (_ringStats[i].Stat == (byte)stat) return _ringStats[i].Value;
             return 0f;
@@ -3188,56 +3239,46 @@ namespace WaveByWave.Player
 
         public int RingLevel(PlayerRingStat stat)
         {
+            if (_ringStats == null) return 0;
             for (var i = 0; i < _ringStats.Count; i++)
                 if (_ringStats[i].Stat == (byte)stat) return _ringStats[i].Level;
             return 0;
         }
 
-        internal void BeginRingChoiceServer(int level, uint seed)
+        internal bool BeginRingChoiceServer(int level, uint seed)
         {
-            if (!IsServer || !IsSpawned) return;
+            if (!IsServer || !IsSpawned) return false;
             _ringCatalog ??= Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
-            if (_ringCatalog == null || _ringCatalog.Rings.Length == 0) return;
+            if (_ringCatalog == null || _ringCatalog.Rings.Length == 0) return false;
             var random = new Unity.Mathematics.Random(seed | 1u);
-            var available = new System.Collections.Generic.List<PlayerRingStat>(_ringCatalog.Rings.Length);
-            foreach (var ring in _ringCatalog.Rings)
-            {
-                if (_ringStats.Count >= _ringCatalog.MaximumDistinctRings && RingLevel(ring.Stat) == 0)
-                    continue;
-                if (!available.Contains(ring.Stat)) available.Add(ring.Stat);
-            }
-            if (available.Count == 0) return;
-            _pendingRingOffers = 0;
-            for (var i = 0; i < 3; i++)
-            {
-                var choice = random.NextInt(available.Count);
-                var stat = available[choice];
-                if (available.Count > 1) available.RemoveAt(choice);
-                var rarity = _ringCatalog.RollRarity(ref random);
-                _pendingRingOffers |= (ulong)((byte)stat | ((byte)rarity << 4)) << (i * 8);
-            }
+            _pendingRingOffers = _ringCatalog.CreateOffers(DistinctRingCount, RingLevel, ref random, out _offerCount);
+            if (_offerCount == 0) return false;
+            _serverChoiceLevel = level;
             _awaitingRingChoice = true;
             var clients = new ClientRpcParams { Send = new ClientRpcSendParams
                 { TargetClientIds = new[] { OwnerClientId } } };
-            ShowRingChoiceClientRpc(_pendingRingOffers, level, clients);
+            ShowRingChoiceClientRpc(_pendingRingOffers, level, _offerCount, clients);
+            return true;
         }
 
         [ClientRpc]
-        private void ShowRingChoiceClientRpc(ulong packed, int level, ClientRpcParams rpc = default)
+        private void ShowRingChoiceClientRpc(ulong packed, int level, byte count, ClientRpcParams rpc = default)
         {
             if (!IsOwner) return;
             _ringCatalog ??= Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
             _localRingOffers = packed;
             _localRingLevel = level;
+            _localOfferCount = count;
+            _localChoiceSubmitted = false;
             RingChoiceOpen = true;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
 
         [ServerRpc]
-        private void ChooseRingServerRpc(byte index)
+        private void ChooseRingServerRpc(byte index, int level)
         {
-            if (!_awaitingRingChoice || index >= 3) return;
+            if (!_awaitingRingChoice || level != _serverChoiceLevel || index >= _offerCount) return;
             _ringCatalog ??= Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
             if (_ringCatalog == null) return;
             var offer = (byte)(_pendingRingOffers >> (index * 8));
@@ -3255,9 +3296,10 @@ namespace WaveByWave.Player
                 var current = _ringStats[found];
                 current.Level++;
                 current.Value += bonus;
+                current.Rarity = (byte)Mathf.Max(current.Rarity, (byte)rarity);
                 _ringStats[found] = current;
             }
-            else _ringStats.Add(new PlayerRingState { Stat = (byte)stat, Level = 1, Value = bonus });
+            else _ringStats.Add(new PlayerRingState { Stat = (byte)stat, Rarity = (byte)rarity, Level = 1, Value = bonus });
             if (stat == PlayerRingStat.MaximumHealth)
                 GetComponent<WaveByWave.Combat.NetworkHealth>()?.ApplyRingHealthBonusServer(bonus);
             if (stat == PlayerRingStat.Stamina)
@@ -3269,29 +3311,5 @@ namespace WaveByWave.Player
                     battery.MarkRingChoiceComplete(OwnerClientId);
         }
 
-        private void OnGUI()
-        {
-            if (!IsSpawned || !IsOwner || !RingChoiceOpen || _localRingOffers == 0 ||
-                _ringCatalog == null) return;
-            var width = Mathf.Min(720f, Screen.width - 40f);
-            var box = new Rect((Screen.width - width) * 0.5f, (Screen.height - 285f) * 0.5f,
-                width, 285f);
-            GUI.Box(box, $"Уровень {_localRingLevel} — выбери одно кольцо");
-            for (byte i = 0; i < 3; i++)
-            {
-                var offer = (byte)(_localRingOffers >> (i * 8));
-                var stat = (PlayerRingStat)(offer & 15);
-                var rarity = (ItemRarity)(offer >> 4);
-                var definition = _ringCatalog.Find(stat);
-                var label = $"{definition.DisplayName}\n{rarity} · +{_ringCatalog.Bonus(stat, rarity):0.##}\nУровень кольца {RingLevel(stat) + 1}";
-                if (!GUI.Button(new Rect(box.x + 15f + i * (width - 30f) / 3f,
-                        box.y + 65f, (width - 42f) / 3f, 165f), label)) continue;
-                _localRingOffers = 0;
-                RingChoiceOpen = false;
-                Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
-                ChooseRingServerRpc(i);
-            }
-        }
     }
 }

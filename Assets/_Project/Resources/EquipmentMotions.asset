@@ -23,4 +23,4 @@ MonoBehaviour:
   bucketScoop: {fileID: 7400000, guid: be781acb620f4c0f96de000000000012, type: 2}
   bucketSplash: {fileID: 7400000, guid: be781acb620f4c0f96de000000000013, type: 2}
   shovelDig: {fileID: 7400000, guid: be781acb620f4c0f96de000000000014, type: 2}
-
+  drink: {fileID: 7400000, guid: be781acb620f4c0f96de000000000016, type: 2}

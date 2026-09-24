@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: c11bf57624c12b149a3d6a280356759f
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 248042
+  packageName: FREE Stylized Tools
+  packageVersion: 1.0
+  assetPath: Assets/Stylized Tools/Scripts/OpenURL.cs
+  uploadId: 571803

@@ -19,20 +19,25 @@ MonoBehaviour:
     \u043A\u043E\u0440\u043F\u0443\u0441\u0430."
   category: 3
   rarity: 1
-  icon: {fileID: 0}
+  icon: {fileID: -8345254333142017479, guid: c6ec33fd82b59284caf983089b672bf4, type: 2}
   maximumStack: 1
   supplyKind: 0
   potency: 0
   treasureExperience: 0
+  coinReward: 0
   upgradeStat: 1
   upgradeBonus: 0.1
   worldVisualPrefab: {fileID: 3692177591442134904, guid: dd60f3033fe0562591a104cfe794450d, type: 3}
   restingEulerAngles: {x: 0, y: 0, z: 0}
+  chestLoot: {fileID: 0}
   equipmentKind: 1
   overrideHeldPose: 1
   heldPosition: {x: 0.25, y: -0.35, z: 0.65}
   heldEulerAngles: {x: 0, y: 0, z: 0}
   heldScale: 1
+  overrideSecondaryHeldPose: 0
+  secondaryHeldPosition: {x: 0, y: 0, z: 0}
+  secondaryHeldEulerAngles: {x: 0, y: 0, z: 0}
   overrideHandGripPoints: 1
   rightHandGrip:
     enabled: 1

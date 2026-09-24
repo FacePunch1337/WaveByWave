@@ -23,6 +23,7 @@ Shader "Hidden/WaveByWave/Night Battlefield Fog"
             float4 _BattlefieldFogFarColor;
             float4 _BattlefieldFogShape; // density, edge width, height, view distance
             float4 _BattlefieldFogNoise; // scale, wind speed, strength, sample count
+            float4 _BattlefieldFogTransition; // appearance, immersion distance
 
             half4 Frag(Varyings input) : SV_Target
             {
@@ -52,6 +53,7 @@ Shader "Hidden/WaveByWave/Night Battlefield Fog"
                 float radius = _BattlefieldCenterRadius.w;
                 float2 eyeOffset = eye.xz - center;
                 bool eyeInside = dot(eyeOffset, eyeOffset) < radius * radius;
+                float immersion = smoothstep(radius, radius + _BattlefieldFogTransition.y, length(eyeOffset));
                 // Transparent ocean does not write scene depth. Stop the ray at
                 // its water plane, so ocean inside the battle circle stays clear.
                 float waterY = _BattlefieldCenterRadius.y;
@@ -106,7 +108,9 @@ Shader "Hidden/WaveByWave/Night Battlefield Fog"
                     float travel = lerp(segmentStart, segmentEnd, 0.2 + 0.6 * jitter);
                     float3 p = eye + ray * travel;
                     float radial = length(p.xz - center);
-                    float wall = smoothstep(radius, radius + _BattlefieldFogShape.y, radial);
+                    // Once immersed, fog surrounds the observer even when looking
+                    // back into the arena. Gameplay still uses the fixed circle.
+                    float wall = lerp(smoothstep(radius, radius + _BattlefieldFogShape.y, radial), 1.0, immersion);
                     if (wall < 0.001) continue;
                     float vertical = p.y - _BattlefieldCenterRadius.y;
                     float heightFalloff = exp(-abs(vertical) /
@@ -121,13 +125,15 @@ Shader "Hidden/WaveByWave/Night Battlefield Fog"
                     float opacity = 1.0 - exp(-density * segmentLength);
                     float depthTint = saturate((radial - radius) /
                         max(1.0, _BattlefieldFogShape.y * 3.0));
+                    depthTint = lerp(depthTint, saturate(travel / max(1.0, _BattlefieldFogShape.y * 3.0)), immersion);
                     float3 tint = lerp(_BattlefieldFogNearColor.rgb,
                         _BattlefieldFogFarColor.rgb, depthTint);
                     scattered += transmittance * opacity * tint;
                     transmittance *= 1.0 - opacity;
                     if (transmittance < 0.015) break;
                 }
-                return half4(scene.rgb * transmittance + scattered, scene.a);
+                return half4(lerp(scene.rgb, scene.rgb * transmittance + scattered,
+                    _BattlefieldFogTransition.x), scene.a);
             }
             ENDHLSL
         }

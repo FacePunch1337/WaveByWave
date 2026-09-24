@@ -9,7 +9,9 @@ namespace WaveByWave.Ships
         public static void Shot(ShipCannonBattery battery, ShipCannon cannon, int id, Vector3 origin, Vector3 velocity, Vector3 gravity,
             double started, float lifetime, GameObject projectilePrefab, GameObject muzzleEffectPrefab)
         {
-            if (!battery.IsClient || projectilePrefab == null) return;
+            if (!battery.IsClient) return;
+            cannon?.PlayRecoil();
+            if (projectilePrefab == null) return;
             var motion = battery.GetComponent<WaveByWave.Player.PlatformNetworkTransform>();
             var presentationTime = !battery.IsServer && motion != null
                 ? motion.PresentationServerTime : -1d;

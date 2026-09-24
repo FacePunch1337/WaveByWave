@@ -122,5 +122,10 @@ Assets/BOXOPHOBIC/**/*.exr -filter -diff -merge -text
 Assets/BOXOPHOBIC/**/*.psd -filter -diff -merge -text
 Assets/BOXOPHOBIC/**/*.pdf -filter -diff -merge -text
 
+# This imported tools pack is small enough for regular Git and must remain
+# pushable when the repository's Git LFS quota is exhausted.
+"Assets/Stylized Tools/**/*.fbx" -filter -diff -merge -text
+"Assets/Stylized Tools/**/*.png" -filter -diff -merge -text
+
 # Small generated breach mask: keep the complete image available without LFS.
 Assets/_Project/Generated/ShipDamage/HullBreach.png -filter -diff -merge -text

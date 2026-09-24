@@ -619,13 +619,14 @@ namespace WaveByWave.Enemies
             manager.SetComponentData(entity, state);
         }
 
-        internal bool DamageFromPlayerCannon(int id, float damage, Vector3 source)
+        internal bool DamageFromPlayerCannon(int id, float damage, Vector3 source, Vector3? impactPoint = null)
         {
             if (!CanSimulate || !float.IsFinite(damage) || damage <= 0 || !AttachServer() ||
                 !_byId.TryGetValue(id, out var entity) || !_serverWorld.EntityManager.Exists(entity)) return false;
             var manager = _serverWorld.EntityManager;
             var state = manager.GetComponentData<DotsEnemyShipState>(entity);
             if (state.Health <= 0) return false;
+            WaveByWave.Combat.DotsDamagePopups.ReportServer(impactPoint ?? (Vector3)state.Position, damage);
             var remainingHealth = Mathf.Max(0, state.Health - damage);
             state.HitRevision++;
             if (remainingHealth <= 0)

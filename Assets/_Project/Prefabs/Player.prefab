@@ -229,7 +229,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1550780468
+  GlobalObjectIdHash: 703817674
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -424,7 +424,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WaveByWave.Player.PlayerInventory
   ShowTopMostFoldoutHeaderGroup: 1
-  capacity: 8
+  capacity: 10
   catalog: {fileID: 11400000, guid: 2b563eb9625a0ab42b49b9db3e7db374, type: 2}
   rarityEffectPrefab: {fileID: 1815062955493659562, guid: 046ecc3506c35a444a2e8eeda156d260, type: 3}
   startingItemIds:
@@ -473,6 +473,8 @@ MonoBehaviour:
   waterJumpReentryDelay: 0.4
   sprintResumeStamina: 15
   repairSpeed: 1
+  baseMeleeDamage: 10
+  baseRangedDamage: 10
   platformProbeDistance: 0.22
   clientPlatformContactTolerance: 0.04
   platformContactGrace: 0.15
@@ -564,6 +566,7 @@ MonoBehaviour:
   hitLayers:
     serializedVersion: 2
     m_Bits: 4294967295
+  burstShotInterval: 0.12
 --- !u!114 &9300074002
 MonoBehaviour:
   m_ObjectHideFlags: 0

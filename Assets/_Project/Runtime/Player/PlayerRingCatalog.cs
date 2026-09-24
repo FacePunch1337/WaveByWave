@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using WaveByWave.Items;
 
@@ -15,7 +16,11 @@ namespace WaveByWave.Player
         JumpHeight,
         HookRetrievalSpeed,
         Luck,
-        Repair
+        Repair,
+        AttackSpeed,
+        ReloadSpeed,
+        MeleeArea,
+        ProjectileCount
     }
 
     [Serializable]
@@ -23,6 +28,8 @@ namespace WaveByWave.Player
     {
         public PlayerRingStat Stat;
         public string DisplayName;
+        public Sprite Icon;
+        [TextArea] public string Description;
         [Min(0.001f)] public float BaseBonus;
     }
 
@@ -52,9 +59,36 @@ namespace WaveByWave.Player
 
         public float Bonus(PlayerRingStat stat, ItemRarity rarity)
         {
+            if (RarityMultipliers == null || RarityMultipliers.Length == 0) return Find(stat).BaseBonus;
             var index = Mathf.Clamp((int)rarity, 0, RarityMultipliers.Length - 1);
-            return Find(stat).BaseBonus * Mathf.Max(0f, RarityMultipliers[index]);
+            var value = Find(stat).BaseBonus * Mathf.Max(0f, RarityMultipliers[index]);
+            return stat == PlayerRingStat.ProjectileCount ? Mathf.Max(1f, Mathf.Round(value)) : value;
         }
+
+        public ulong CreateOffers(int distinctCount, Func<PlayerRingStat, int> level,
+            ref Unity.Mathematics.Random random, out byte count)
+        {
+            var available = new List<PlayerRingStat>(Rings.Length);
+            foreach (var ring in Rings)
+                if (ring.BaseBonus > 0f && (int)ring.Stat < 16 && !available.Contains(ring.Stat) &&
+                    (distinctCount < Mathf.Max(1, MaximumDistinctRings) || level(ring.Stat) > 0)) available.Add(ring.Stat);
+            count = (byte)Mathf.Min(3, available.Count);
+            ulong packed = 0;
+            for (var i=0;i<count;i++)
+            {
+                var choice=random.NextInt(available.Count);var stat=available[choice];available.RemoveAt(choice);
+                packed |= (ulong)((byte)stat | ((byte)RollRarity(ref random)<<4)) << (i*8);
+            }
+            return packed;
+        }
+
+        public static string FormatBonus(PlayerRingStat stat, float value) => stat switch
+        {
+            PlayerRingStat.MaximumHealth or PlayerRingStat.Stamina or PlayerRingStat.ProjectileCount => $"+{value:0}",
+            PlayerRingStat.Regeneration => $"+{value:0.##}/с",
+            PlayerRingStat.JumpHeight => $"+{value:0.##} м",
+            _ => $"+{value * 100f:0.#}%"
+        };
 
         public ItemRarity RollRarity(ref Unity.Mathematics.Random random)
         {

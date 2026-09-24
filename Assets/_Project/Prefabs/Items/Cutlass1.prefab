@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 5981193585525162269}
   - component: {fileID: 3761216894357105070}
   m_Layer: 0
-  m_Name: Cutlass_Rare
+  m_Name: Cutlass1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

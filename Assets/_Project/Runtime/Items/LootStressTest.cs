@@ -8,6 +8,7 @@ using Unity.Netcode;
 using Unity.Rendering;
 using Unity.Transforms;
 using UnityEngine;
+using WaveByWave.UI;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
@@ -891,6 +892,7 @@ namespace WaveByWave.Items
         private static Text _promptName;
         private static int _focusedId = int.MaxValue;
         private static int _focusedFrame = -1;
+        private static WorldItem _focusedWorldItem;
 
         internal static void SetAssets(ItemCatalog catalog, GameObject effectPrefab, WaveProfile waterProfile)
         {
@@ -1173,6 +1175,7 @@ namespace WaveByWave.Items
         internal static void SetFocused(IPlayerInteractable target)
         {
             _focusedId = target is StressInteractable stress ? stress.Id : int.MaxValue;
+            _focusedWorldItem = target as WorldItem;
             _focusedFrame = Time.frameCount;
         }
 
@@ -1245,11 +1248,18 @@ namespace WaveByWave.Items
         private static void EnsurePrompt()
         {
             if (_prompt != null) return;
+            _prompt=GameUiPrefabs.Create("World/ItemTooltip");
+            if(_prompt!=null)
+            {
+                GameUiPrefabs.Persist(_prompt);
+                _promptName=GameUiPrefabs.Find<Text>(_prompt,"Label");
+                return;
+            }
             _prompt = new GameObject("Focused Item Prompt", typeof(RectTransform), typeof(Canvas),
                 typeof(CanvasScaler), typeof(Image));
-            UnityEngine.Object.DontDestroyOnLoad(_prompt);
+            if(Application.isPlaying) UnityEngine.Object.DontDestroyOnLoad(_prompt);
             var rect = (RectTransform)_prompt.transform;
-            rect.sizeDelta = new Vector2(310f, 54f);
+            rect.sizeDelta = new Vector2(350f, 76f);
             rect.localScale = Vector3.one * 0.0032f;
             var canvas = _prompt.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.WorldSpace;
@@ -1306,18 +1316,22 @@ namespace WaveByWave.Items
         {
             EnsurePrompt();
             ClientItem item = null;
-            var visible = _focusedFrame == Time.frameCount && Items.TryGetValue(_focusedId, out item) &&
-                          item.HookOwner == ulong.MaxValue && Camera.main != null &&
-                          !PlayerEquipment.InputCaptured;
+            var loose = Items.TryGetValue(_focusedId, out item) && item.HookOwner == ulong.MaxValue;
+            var world = _focusedWorldItem != null && _focusedWorldItem.IsSpawned;
+            var definition = loose ? item.Definition : world ? _focusedWorldItem.Definition : null;
+            var visible = _focusedFrame == Time.frameCount && definition != null && Camera.main != null && !PlayerEquipment.InputCaptured;
             _prompt.SetActive(visible);
             if (!visible) return;
             var camera = Camera.main;
-            _prompt.transform.SetPositionAndRotation(item.Position + Vector3.up *
-                Mathf.Max(0.45f, item.Variant.Radius + 0.22f), camera.transform.rotation);
-            _promptName.text = item.Definition.DisplayName +
-                (item.Definition.IsChest ? "\n<size=12>E — взять · удерживай E — открыть</size>" : "");
-            _promptName.color = item.Definition.RarityColor;
-            UpdateChestProgress(_focusedId);
+            var position = loose ? item.Position + Vector3.up * Mathf.Max(0.45f, item.Variant.Radius + 0.22f)
+                : _focusedWorldItem.transform.position + Vector3.up * .55f;
+            _prompt.transform.SetPositionAndRotation(position, camera.transform.rotation);
+            var localPlayer = NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient?.PlayerObject != null
+                ? NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<NetworkPlayerController>() : null;
+            _promptName.text = definition.HoverDescription(localPlayer) +
+                (definition.IsChest ? "\n<size=12>E — взять · удерживай E — открыть</size>" : "");
+            _promptName.color = definition.RarityColor;
+            UpdateChestProgress(loose ? _focusedId : int.MaxValue);
         }
 
         internal static void DriverDestroyed(LootStressPresentationDriver driver)

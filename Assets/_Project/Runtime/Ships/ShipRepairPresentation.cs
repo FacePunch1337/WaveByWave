@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using WaveByWave.UI;
 using UnityEngine.UI;
 using WaveByWave.Items;
 using WaveByWave.Player;
@@ -49,6 +50,13 @@ namespace WaveByWave.Ships
         private void EnsureRing()
         {
             if (_hud != null) return;
+            _hud=GameUiPrefabs.Create("HUD/RepairProgress", owner: this);
+            if(_hud!=null)
+            {
+                _ringRect=GameUiPrefabs.Find<RectTransform>(_hud,"Repair ring");
+                _ringFill=GameUiPrefabs.Find<Image>(_hud,"Repair ring/Repair fill");
+                return;
+            }
             const int size = 128;
             _texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
             { name = "HUD Repair Ring", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
@@ -104,7 +112,8 @@ namespace WaveByWave.Ships
 
         private void OnDestroy()
         {
-            if (_hud != null) Destroy(_hud);
+            if (!Application.isPlaying) return;
+            if (_hud != null) GameUiPrefabs.Release(_hud, this);
             if (_sprite != null) Destroy(_sprite);
             if (_texture != null) Destroy(_texture);
         }

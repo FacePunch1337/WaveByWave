@@ -51,6 +51,7 @@ namespace WaveByWave.Networking
         private bool _starting;
         private bool _ownsSteamClient;
         private bool _disposed;
+        private bool _voyageInProgress;
         private readonly List<TaskCompletionSource<bool>> _frameWaiters = new();
 
         private void Awake()
@@ -66,7 +67,12 @@ namespace WaveByWave.Networking
             steamTransport ??= GetComponent<FacepunchTransport>();
             localTransport ??= GetComponent<UnityTransport>();
             if (networkManager != null)
+            {
+                networkManager.NetworkConfig.ConnectionApproval = true;
+                networkManager.ConnectionApprovalCallback += ApproveConnection;
                 networkManager.OnClientConnectedCallback += OnClientConnected;
+                networkManager.OnClientDisconnectCallback += OnClientDisconnected;
+            }
 
             if (!SteamClient.IsValid && steamAppId != 0)
             {
@@ -190,7 +196,7 @@ namespace WaveByWave.Networking
                 SteamNetcodeSession.StartHostAndLocalClient();
 
                 CurrentLobby.SetGameServer(SteamClient.SteamId);
-                CurrentLobby.SetJoinable(true);
+                SetVoyageInProgress(SceneManager.GetActiveScene().name != GameScenes.Port);
                 SetStatus($"Steam-лобби создано • {CurrentLobby.MemberCount}/4");
             }
             catch (Exception exception)
@@ -210,6 +216,11 @@ namespace WaveByWave.Networking
 
         public void OpenInviteOverlay()
         {
+            if (_voyageInProgress || SceneManager.GetActiveScene().name != GameScenes.Port)
+            {
+                SetStatus("Приглашать игроков можно только в порту, до начала плавания.");
+                return;
+            }
             if (!SteamAvailable || CurrentLobby.Id == 0)
             {
                 SetStatus("Steam-лобби недоступно — запущен локальный режим.");
@@ -227,6 +238,17 @@ namespace WaveByWave.Networking
                 return;
             }
 
+            if (_voyageInProgress || SceneManager.GetActiveScene().name != GameScenes.Port)
+                return;
+            foreach (var client in networkManager.ConnectedClientsList)
+                if (client.PlayerObject == null)
+                {
+                    SetStatus("Дождитесь загрузки всех игроков перед отправлением.");
+                    return;
+                }
+
+            // Close admission before scene loading starts, including direct transport joins.
+            SetVoyageInProgress(true);
             ClearDynamicWorldItems();
             PreparePlayersForSceneTransition();
             OceanWorldDirector.BeginOceanLoading();
@@ -235,6 +257,7 @@ namespace WaveByWave.Networking
             {
                 CancelLocalSceneTransition();
                 OceanWorldDirector.CancelOceanLoading();
+                SetVoyageInProgress(false);
             }
             SetStatus(result == SceneEventProgressStatus.Started
                 ? "Отправляемся в море…"
@@ -323,6 +346,7 @@ namespace WaveByWave.Networking
             {
                 BindNetworkSceneCallbacks();
                 SteamNetcodeSession.StartLocalHostAndClient();
+                SetVoyageInProgress(SceneManager.GetActiveScene().name != GameScenes.Port);
             }
             else
             {
@@ -400,6 +424,35 @@ namespace WaveByWave.Networking
                 clientId != networkManager.LocalClientId) return;
             SetStatus(ReferenceEquals(networkManager.NetworkConfig.NetworkTransport, localTransport)
                 ? $"Подключено к {localAddress}:{GetLocalConnectionPort()}" : "Подключено к Steam-хосту");
+        }
+
+        private void ApproveConnection(NetworkManager.ConnectionApprovalRequest request,
+            NetworkManager.ConnectionApprovalResponse response)
+        {
+            response.Approved = CanApproveConnection(_voyageInProgress,
+                SceneManager.GetActiveScene().name, request.ClientNetworkId);
+            response.CreatePlayerObject = response.Approved;
+            response.Pending = false;
+            response.Reason = response.Approved ? string.Empty :
+                "Плавание уже началось. Подключиться можно после возвращения команды в порт.";
+        }
+
+        internal static bool CanApproveConnection(bool voyageInProgress, string activeScene, ulong clientId) =>
+            clientId == NetworkManager.ServerClientId || (!voyageInProgress && activeScene == GameScenes.Port);
+
+        private void SetVoyageInProgress(bool value)
+        {
+            _voyageInProgress = value;
+            if (IsLobbyOwner) CurrentLobby.SetJoinable(!value);
+        }
+
+        private void OnClientDisconnected(ulong clientId)
+        {
+            if (_disposed || networkManager == null || networkManager.IsServer ||
+                clientId != networkManager.LocalClientId) return;
+            SteamNetcodeSession.Shutdown();
+            var reason = networkManager.DisconnectReason;
+            if (!string.IsNullOrWhiteSpace(reason)) SetStatus($"Подключение отклонено: {reason}");
         }
 
         private async void OnGameLobbyJoinRequested(Lobby lobby, SteamId friendId)
@@ -497,6 +550,7 @@ namespace WaveByWave.Networking
 
             await ShutdownNetworkAsync();
             if (_disposed) return;
+            _voyageInProgress = false;
             // NFE owns a separate server AND client driver. Let both process disconnect cleanup
             // before Configure replaces their stores and switches Steam/UDP endpoints.
             var entitiesDeadline = Time.realtimeSinceStartup + 5f;
@@ -550,6 +604,7 @@ namespace WaveByWave.Networking
                 return;
 
             networkManager.SceneManager.OnLoad += OnNetworkSceneLoadStarted;
+            networkManager.SceneManager.OnLoadEventCompleted += OnNetworkSceneLoadCompleted;
             _networkSceneCallbacksBound = true;
         }
 
@@ -559,6 +614,7 @@ namespace WaveByWave.Networking
                 return;
 
             networkManager.SceneManager.OnLoad -= OnNetworkSceneLoadStarted;
+            networkManager.SceneManager.OnLoadEventCompleted -= OnNetworkSceneLoadCompleted;
             _networkSceneCallbacksBound = false;
         }
 
@@ -572,13 +628,24 @@ namespace WaveByWave.Networking
                 return;
 
             if (sceneName == GameScenes.Ocean)
+            {
+                if (networkManager.IsServer) SetVoyageInProgress(true);
                 OceanWorldDirector.BeginOceanLoading();
+            }
             else if (sceneName == GameScenes.Port)
                 OceanWorldDirector.CancelOceanLoading();
 
             var localPlayer = networkManager.SpawnManager.GetLocalPlayerObject();
             if (localPlayer != null && localPlayer.TryGetComponent(out NetworkPlayerController player))
                 player.PrepareForSceneTransitionLocally();
+        }
+
+        private void OnNetworkSceneLoadCompleted(string sceneName, LoadSceneMode loadSceneMode,
+            List<ulong> completed, List<ulong> timedOut)
+        {
+            // Reopen only after the crew has finished loading Port, never during the return transition.
+            if (networkManager != null && networkManager.IsServer && sceneName == GameScenes.Port)
+                SetVoyageInProgress(false);
         }
 
         private void PreparePlayersForSceneTransition()
@@ -674,7 +741,11 @@ namespace WaveByWave.Networking
         public void Dispose()
         {
             if (networkManager != null)
+            {
+                networkManager.ConnectionApprovalCallback -= ApproveConnection;
                 networkManager.OnClientConnectedCallback -= OnClientConnected;
+                networkManager.OnClientDisconnectCallback -= OnClientDisconnected;
+            }
             UnbindNetworkSceneCallbacks();
             UnbindSteamCallbacks();
         }

@@ -40,7 +40,7 @@ namespace WaveByWave.Editor
             _started = true;
             EditorApplication.update -= Ensure;
             var catalog = AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(CatalogPath);
-            if (catalog != null && catalog.IsBaked && catalog.BakeSourceHash?.StartsWith("vat4:") == true) return;
+            if (catalog != null && catalog.IsBaked && catalog.BakeSourceHash?.StartsWith("vat5:") == true) return;
             try { CreateContent(); }
             catch (Exception exception) { Debug.LogException(exception); }
         }
@@ -102,14 +102,20 @@ namespace WaveByWave.Editor
                 Add(catalog, EnemyBakedPartCategory.RifleWeapon, "Weapons/Rifle_01.prefab", "CATRHand",
                     Vector3.zero, new Vector3(0, 0, -90));
             }
+            // vat5 compensates for the root transform of rigid weapon prefabs. Without this,
+            // sabres receive their prefab's -90 degree rotation on top of the authored hand grip.
+            if (catalog.BakeSourceHash?.StartsWith("vat5:") != true)
+                foreach (var source in catalog.PartSources)
+                    if (source.Category is EnemyBakedPartCategory.MeleeWeapon or
+                        EnemyBakedPartCategory.PistolWeapon or EnemyBakedPartCategory.RifleWeapon)
+                        UseAuthoredGrip(source);
             // Migrate the initial generated catalog only; never rewrite tuned attachments on a rebake.
-            if (catalog.BakeSourceHash?.StartsWith("vat4:") != true)
+            if (catalog.BakeSourceHash?.StartsWith("vat4:") != true &&
+                catalog.BakeSourceHash?.StartsWith("vat5:") != true)
             {
                 var orientation = new Quaternion(-0.5f, 0.5f, 0.5f, 0.5f).eulerAngles;
                 foreach (var source in catalog.PartSources)
                 {
-                    if (source.Category is EnemyBakedPartCategory.MeleeWeapon or EnemyBakedPartCategory.PistolWeapon or EnemyBakedPartCategory.RifleWeapon)
-                        UseAuthoredGrip(source);
                     if (source.Category is EnemyBakedPartCategory.Hat or EnemyBakedPartCategory.Bandana or
                         EnemyBakedPartCategory.EyePatch or EnemyBakedPartCategory.Earring)
                     {
@@ -129,7 +135,7 @@ namespace WaveByWave.Editor
 
         public static string SourceHash(DotsEnemyCatalog catalog)
         {
-            var text = new StringBuilder("vat4:").Append(catalog.BakeFramesPerSecond);
+            var text = new StringBuilder("vat5:").Append(catalog.BakeFramesPerSecond);
             void Asset(Object obj) => text.Append('|').Append(obj != null ?
                 AssetDatabase.GetAssetDependencyHash(AssetDatabase.GetAssetPath(obj)).ToString() : "null");
             Asset(catalog.BakingRigPrefab);
@@ -141,7 +147,7 @@ namespace WaveByWave.Editor
                     .Append(JsonUtility.ToJson(source.LocalPosition)).Append(JsonUtility.ToJson(source.LocalEulerAngles))
                     .Append(JsonUtility.ToJson(source.LocalScale));
             }
-            return "vat4:" + Hash128.Compute(text.ToString());
+            return "vat5:" + Hash128.Compute(text.ToString());
         }
         private static void UseAuthoredGrip(EnemyPartSource source)
         {
@@ -156,7 +162,13 @@ namespace WaveByWave.Editor
             var hand = weapon.parent;
             while (hand != null && hand.name != "CATRHand" && hand.name != "CATLHand") hand = hand.parent;
             if (hand == null) throw new InvalidOperationException("Source weapon is not attached to a hand: " + source.Prefab.name);
-            var matrix = hand.worldToLocalMatrix * weapon.localToWorldMatrix;
+            var authoredWeapon = hand.worldToLocalMatrix * weapon.localToWorldMatrix;
+            // The standalone prefab is instantiated below a configurable attachment transform.
+            // Remove its own root transform here so the resulting weapon-to-hand transform is
+            // exactly the one authored in the source character prefab.
+            var prefabRoot = Matrix4x4.TRS(source.Prefab.transform.localPosition,
+                source.Prefab.transform.localRotation, source.Prefab.transform.localScale);
+            var matrix = authoredWeapon * prefabRoot.inverse;
             source.AttachBone = hand.name;
             source.LocalPosition = matrix.GetColumn(3);
             source.LocalEulerAngles = matrix.rotation.eulerAngles;

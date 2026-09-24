@@ -43,7 +43,7 @@ namespace WaveByWave.Generation
             public readonly Dictionary<int, Packet> Markers = new();
             public readonly Dictionary<int, GameObject> MarkerViews = new();
             public readonly HashSet<int> HiddenMarkers = new();
-            public bool Populate, Populated, Test, ScenePlaced;
+            public bool Populate, Populated, Test, ScenePlaced, WasPresented;
         }
         public static OceanWorldDirector Instance { get; private set; }
         [SerializeField] private OceanGenerationSettings settings;
@@ -102,9 +102,10 @@ namespace WaveByWave.Generation
             { Debug.LogError("Ocean generation settings/prefabs are missing.", this); enabled = false; return; }
             _water = new EquipmentWaterQuery(settings.WaterProfile);
             _random = new Unity.Mathematics.Random(unchecked((uint)settings.WorldSeed) | 1u);
-            if (settings.LoadingCurtainPrefab != null)
-                _loadingCurtain = Instantiate(settings.LoadingCurtainPrefab, transform)
-                    .GetComponent<OceanLoadingCurtain>();
+            var loadingView = WaveByWave.UI.GameUiPrefabs.Create("Loading/OceanLoadingCurtain", owner: this);
+            if (loadingView == null && settings.LoadingCurtainPrefab != null)
+                loadingView = Instantiate(settings.LoadingCurtainPrefab, transform);
+            if (loadingView != null) _loadingCurtain = loadingView.GetComponent<OceanLoadingCurtain>();
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (SceneManager.GetActiveScene().name == GameScenes.Port)
                 _loadingCurtain?.HideImmediate();
@@ -156,7 +157,7 @@ namespace WaveByWave.Generation
             if (IsAuthority)
             {
                 foreach (var record in _islands.Values)
-                    if (record.Populate && record.Island != null && record.Island.Ready)
+                    if (!NightWaveController.BattleInProgress && record.Populate && record.Island != null && record.Island.Ready)
                     {
                         if (!PopulateChests(record)) continue;
                         record.Populate = false; record.Populated = true;
@@ -335,6 +336,7 @@ namespace WaveByWave.Generation
         }
         private void SpawnFloatingLoot()
         {
+            if (NightWaveController.BattleInProgress) return;
             var target = Mathf.Clamp(settings.FloatingLootPerShip, 1, 3000) * _ships.Length;
             for (var n = 0; n < Mathf.Clamp(settings.LootPerInterval, 1, 16) && _floating.Count < target; n++)
             for (var attempt = 0; attempt < 8; attempt++)
@@ -440,7 +442,7 @@ namespace WaveByWave.Generation
 
         private void MaintainIslands()
         {
-            if (!settings.GenerateIslands || _ships.Length == 0) return;
+            if (!settings.GenerateIslands || _ships.Length == 0 || NightWaveController.BattleInProgress) return;
             _streamedIslandIds.Clear();
             var generatedThisTick = false;
             foreach (var ship in _ships)
@@ -469,7 +471,10 @@ namespace WaveByWave.Generation
             {
                 var record = pair.Value;
                 if (record.Test || record.ScenePlaced || record.Island == null ||
-                    _streamedIslandIds.Contains(pair.Key) || HasPlayerNear(record.Island)) continue;
+                    _streamedIslandIds.Contains(pair.Key) || HasPlayerNear(record.Island) ||
+                    NearAnyPlayerOrShip(record.Island.transform.position,
+                        Mathf.Max(settings.IslandRemovalRadius, settings.IslandHideRadius + 50f,
+                            settings.IslandRevealRadius + 100f))) continue;
                 _removeIds.Add(pair.Key);
             }
             foreach (var id in _removeIds) RemoveIsland(id);
@@ -528,6 +533,8 @@ namespace WaveByWave.Generation
             Vector2 distanceRange, Vector3 course, out int id)
         {
             id = 0;
+            if (NightWaveController.BattleInProgress ||
+                _islands.Count >= Mathf.Max(settings.InitialIslandCount, settings.MaximumResidentIslands)) return false;
             OrderedRange(distanceRange, out var minimum, out var maximum);
             var arc = Mathf.Clamp(settings.IslandForwardArc, 0f, 80f);
             for (var attempt = 0; attempt < 32; attempt++)
@@ -629,7 +636,10 @@ namespace WaveByWave.Generation
                 // island has completed its initial build it must remain presented so its
                 // existing render mesh and collider stay continuous during that rebuild.
                 var visible = record.ScenePlaced || _loadingComplete && record.Island.InitialBuildComplete &&
-                    NearAnyPlayerOrShip(record.Island.transform.position, settings.IslandRevealRadius);
+                    NearAnyPlayerOrShip(record.Island.transform.position, record.WasPresented
+                        ? Mathf.Max(settings.IslandHideRadius, settings.IslandRevealRadius + 30f)
+                        : settings.IslandRevealRadius);
+                record.WasPresented = visible;
                 record.Island.SetPresentationVisible(visible);
                 if (visible && _manager != null && _manager.IsServer &&
                     (!record.ScenePlaced || record.Island.TryGetComponent<SceneIsland>(out var sceneIsland) && sceneIsland.SpawnEnemyPoints))
@@ -847,6 +857,7 @@ namespace WaveByWave.Generation
         {
             if (Instance != this) return;
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            if (_loadingCurtain != null) WaveByWave.UI.GameUiPrefabs.Release(_loadingCurtain.gameObject, this);
             Unbind(); ClearWorld(false); _water?.Dispose();
             LootStressTest.ServerItemRemoved -= OnItemRemoved; Instance = null;
         }

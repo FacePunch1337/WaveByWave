@@ -19,6 +19,13 @@ namespace WaveByWave.Player
             if (_bar != null)
                 return;
 
+            _bar=GameUiPrefabs.Create("World/AnchorProgress",transform);
+            if(_bar!=null)
+            {
+                _fill=GameUiPrefabs.Find<RectTransform>(_bar,"Fill");
+                _bar.GetComponent<Canvas>().worldCamera=player.OwnerView!=null?player.OwnerView.GetComponent<Camera>():null;
+                return;
+            }
             _bar = new GameObject("Anchor Release Progress", typeof(RectTransform), typeof(Canvas), typeof(Image));
             _bar.transform.SetParent(transform, false);
             _bar.transform.localScale = Vector3.one * 0.003f;

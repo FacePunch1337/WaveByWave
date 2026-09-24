@@ -7,7 +7,7 @@ using UnityEngine.Rendering.Universal;
 namespace WaveByWave.Generation
 {
     // One fullscreen pass, no fog mesh, particles, per-frame allocations or DOTS job.
-    // It is not enqueued outside an active night wave, so daytime has zero pass cost.
+    // It is enqueued only during a night wave and its fade-out, then has zero pass cost.
     public sealed class NightBattlefieldFogFeature : ScriptableRendererFeature
     {
         [SerializeField] private Shader fogShader;
@@ -40,6 +40,7 @@ namespace WaveByWave.Generation
             if (_pass == null || renderingData.cameraData.renderType != CameraRenderType.Base) return;
             Vector4 zone;
             NightWaveSettings settings;
+            var opacity = 1f;
             if (renderingData.cameraData.cameraType == CameraType.SceneView && !Application.isPlaying)
             {
 #if UNITY_EDITOR
@@ -56,8 +57,11 @@ namespace WaveByWave.Generation
 #endif
             }
             else if (renderingData.cameraData.cameraType != CameraType.Game ||
-                     !NightWaveController.TryGetBattlefield(out zone, out settings)) return;
+                     !NightWaveController.TryGetFog(out zone, out settings, out opacity)) return;
             _material.SetVector(CenterRadius, zone);
+            _material.SetVector("_BattlefieldFogTransition", new Vector4(
+                opacity,
+                Mathf.Max(0.1f, settings.FogImmersionDistance), 0f, 0f));
             _material.SetColor(NearColor, settings.FogNearColor);
             _material.SetColor(FarColor, settings.FogFarColor);
             _material.SetVector(Shape, new Vector4(settings.FogDensity, settings.FogEdgeWidth,

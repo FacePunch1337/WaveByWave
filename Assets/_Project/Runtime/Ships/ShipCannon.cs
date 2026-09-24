@@ -21,6 +21,17 @@ namespace WaveByWave.Ships
         private ShipCannonBattery _battery;
         private bool _localAim;
         private Vector2 _aim;
+        [Header("Recoil")]
+        [SerializeField, Min(0f)] private float recoilDistance = 0.3f;
+        [SerializeField, Min(0.01f)] private float recoilKickTime = 0.06f;
+        [SerializeField, Min(0.01f)] private float recoilReturnTime = 0.55f;
+        private Vector3 _restElevationPosition;
+        private float _recoilStarted = -100f;
+        private void Awake()
+        {
+            if (elevationPivot != null) _restElevationPosition = elevationPivot.localPosition;
+        }
+        public void PlayRecoil() => _recoilStarted = Time.time;
 
         public ShipCannonBattery Battery => _battery != null ? _battery : (_battery = GetComponentInParent<ShipCannonBattery>());
         public Transform Station => station != null ? station : transform;
@@ -48,6 +59,11 @@ namespace WaveByWave.Ships
                 _aim = Vector2.Lerp(_aim, new Vector2(state.Yaw, state.Elevation), 1f - Mathf.Exp(-25f * Time.deltaTime));
             yawPivot.localRotation = Quaternion.Euler(0f, _aim.x, 0f);
             elevationPivot.localRotation = Quaternion.Euler(-_aim.y, 0f, 0f);
+            var elapsed = Time.time - _recoilStarted;
+            var recoil = elapsed < recoilKickTime ? Mathf.SmoothStep(0f, 1f, elapsed / recoilKickTime) :
+                1f - Mathf.SmoothStep(0f, 1f, (elapsed - recoilKickTime) / recoilReturnTime);
+            elevationPivot.localPosition = _restElevationPosition -
+                elevationPivot.localRotation * Vector3.forward * (recoilDistance * recoil);
         }
 
         public void GetMuzzlePose(Vector2 aim, out Vector3 position, out Vector3 direction)
@@ -56,7 +72,7 @@ namespace WaveByWave.Ships
             var yaw = Quaternion.Euler(0f, aim.x, 0f);
             var pitch = Quaternion.Euler(-aim.y, 0f, 0f);
             position = transform.TransformPoint(yawPivot.localPosition + yaw *
-                (elevationPivot.localPosition + pitch * muzzle.localPosition));
+                (_restElevationPosition + pitch * muzzle.localPosition));
             direction = transform.rotation * yaw * pitch * Vector3.forward;
             // The host's ship Transform may be its interpolated render pose.
             // Launch from the authoritative Rigidbody pose without changing it.

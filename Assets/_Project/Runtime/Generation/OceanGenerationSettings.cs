@@ -51,6 +51,12 @@ namespace WaveByWave.Generation
         public float IslandForwardArc = 35f;
         [Min(10f), Tooltip("Полностью готовый остров становится видимым только внутри этой дистанции.")]
         public float IslandRevealRadius = 135f;
+        [Min(20f), Tooltip("Уже показанный остров скрывается только дальше этой дистанции.")]
+        public float IslandHideRadius = 400f;
+        [Min(20f), Tooltip("Удаление острова из мира. Поворот корабля не удаляет близкие острова.")]
+        public float IslandRemovalRadius = 650f;
+        [Range(4, 128), Tooltip("Бюджет процедурных островов. При заполнении новые ожидают удаления дальних.")]
+        public int MaximumResidentIslands = 32;
         [Min(0.1f)] public float IslandStreamingInterval = 0.5f;
         [FormerlySerializedAs("IslandDespawnRadius")]
         [Min(20f), Tooltip("Максимальная дистанция, на которой уже существующий остров можно повторно включить в цепочку корабля после резкой смены курса или телепортации.")]

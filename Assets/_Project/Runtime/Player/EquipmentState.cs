@@ -7,7 +7,7 @@ namespace WaveByWave.Player
     public interface IEquipmentDamageReceiver
     {
         // Call on the server; attackers must supply their position for directional blocking.
-        void ReceiveEquipmentHitServer(float damage, Vector3 attackerPosition, bool canBlock = true);
+        void ReceiveEquipmentHitServer(float damage, Vector3 attackerPosition, bool canBlock = true, Vector3? impactPoint = null);
     }
 
     public static class EquipmentDamageReceiverUtility
@@ -59,7 +59,11 @@ namespace WaveByWave.Player
         public HookPhase Phase;
         public Vector3 Origin, Velocity;
         public double Started;
+        // The visible tip follows the original throw arc, even if pulling changes its travel velocity.
+        public Vector3 FlightFacingVelocity;
+        public double FlightFacingStarted;
         public bool HasSupport;
+        public bool Pulling;
         public NetworkObjectReference Support;
         public Vector3 Evaluate(double now, float gravity)
         {
@@ -71,9 +75,14 @@ namespace WaveByWave.Player
         public void NetworkSerialize<T>(BufferSerializer<T> s) where T : IReaderWriter
         {
             s.SerializeValue(ref Phase); s.SerializeValue(ref Origin); s.SerializeValue(ref Velocity);
-            s.SerializeValue(ref Started); s.SerializeValue(ref HasSupport); s.SerializeValue(ref Support);
+            s.SerializeValue(ref Started); s.SerializeValue(ref FlightFacingVelocity);
+            s.SerializeValue(ref FlightFacingStarted); s.SerializeValue(ref HasSupport); s.SerializeValue(ref Pulling);
+            s.SerializeValue(ref Support);
         }
         public bool Equals(EquipmentHookState o) => Phase == o.Phase && Origin.Equals(o.Origin) &&
-            Velocity.Equals(o.Velocity) && Started.Equals(o.Started) && HasSupport == o.HasSupport && Support.Equals(o.Support);
+            Velocity.Equals(o.Velocity) && Started.Equals(o.Started) &&
+            FlightFacingVelocity.Equals(o.FlightFacingVelocity) && FlightFacingStarted.Equals(o.FlightFacingStarted) &&
+            HasSupport == o.HasSupport &&
+            Pulling == o.Pulling && Support.Equals(o.Support);
     }
 }

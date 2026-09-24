@@ -82,14 +82,14 @@ namespace WaveByWave.Combat
                         out var kind, out var targetId, out var collider) && ball.Age < ball.Lifetime)
                     continue;
                 if (kind == 1 && ball.EnemyTeam == 0)
-                    DotsEnemyShipRuntime.Instance?.DamageFromPlayerCannon(targetId, ball.Damage, ball.Previous);
+                    DotsEnemyShipRuntime.Instance?.DamageFromPlayerCannon(targetId, ball.Damage, ball.Previous, point);
                 else if (kind == 2)
-                    DotsEnemyRuntime.Instance?.Damage(targetId, ball.Damage, ball.Previous);
+                    DotsEnemyRuntime.Instance?.Damage(targetId, ball.Damage, ball.Previous, point);
                 else if (kind == 3 && collider != null)
                 {
                     collider.GetComponentInParent<ShipCannonBattery>()?.ApplyDamageServer(ball.Damage, point);
                     if (EquipmentDamageReceiverUtility.TryGet(collider, out var receiver, out _))
-                        receiver.ReceiveEquipmentHitServer(ball.Damage, ball.Previous, false);
+                        receiver.ReceiveEquipmentHitServer(ball.Damage, ball.Previous, false, point);
                 }
                 ReportImpact(in ball, point, normal, water, kind != 0);
                 manager.DestroyEntity(entity);

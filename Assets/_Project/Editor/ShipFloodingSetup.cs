@@ -20,6 +20,13 @@ namespace WaveByWave.Editor
         {
             if (!File.Exists(Request) || EditorApplication.isCompiling || EditorApplication.isUpdating ||
                 EditorApplication.isPlayingOrWillChangePlaymode) return;
+            // A refresh request must never reconfigure authored ship assets.
+            if (File.ReadAllText(Request).Trim() == "refresh-only")
+            {
+                File.Delete(Request);
+                AssetDatabase.Refresh();
+                return;
+            }
             if (SourcesNewerThanAssembly()) { AssetDatabase.Refresh(); return; }
             File.Delete(Request);
             try { Configure(); ShipFloodingChecks.Run(); File.WriteAllText("Temp/ShipFloodingSetup.result", "PASS: configured ship, UV sites, materials, bucket spray and flooding checks."); }

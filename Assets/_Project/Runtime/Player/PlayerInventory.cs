@@ -13,7 +13,12 @@ namespace WaveByWave.Player
     [RequireComponent(typeof(NetworkObject))]
     public sealed class PlayerInventory : NetworkBehaviour
     {
-        [SerializeField, Min(5)] private int capacity = 8;
+        [SerializeField, Min(5)] private int capacity = 10;
+        private static readonly Key[] SlotKeys =
+        {
+            Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5,
+            Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9, Key.Digit0
+        };
         [SerializeField] private ItemCatalog catalog;
         [SerializeField, Tooltip("Prefab локального эффекта редкости для свободных DOTS-предметов.")]
         private GameObject rarityEffectPrefab;
@@ -95,27 +100,30 @@ namespace WaveByWave.Player
                     DropCarriedChestOnDeathServer();
             }
             if (IsOwner && PlayerEquipment.InputCaptured) CancelLocalChestHold();
-            if (!IsSpawned || !IsOwner || IsCarryingChest || Keyboard.current == null || PlayerEquipment.InputCaptured)
+            if (!IsSpawned || !IsOwner || IsCarryingChest || PlayerEquipment.InputCaptured)
                 return;
 
-            var keys = new[]
+            var keyboard = Keyboard.current;
+            for (var i = 0; keyboard != null && i < Mathf.Min(SlotKeys.Length, capacity); i++)
             {
-                Keyboard.current.digit1Key, Keyboard.current.digit2Key,
-                Keyboard.current.digit3Key, Keyboard.current.digit4Key,
-                Keyboard.current.digit5Key, Keyboard.current.digit6Key,
-                Keyboard.current.digit7Key, Keyboard.current.digit8Key
-            };
-
-            for (var i = 0; i < Mathf.Min(keys.Length, capacity); i++)
-            {
-                if (!keys[i].wasPressedThisFrame)
+                if (!keyboard[SlotKeys[i]].wasPressedThisFrame)
                     continue;
 
-                _selectedIndex = i;
-                SelectSlotServerRpc(i, ++_selectionRevision);
-                Changed?.Invoke();
-                break;
+                SelectLocalSlot(i);
+                return;
             }
+
+            var scroll = Mouse.current != null ? Mouse.current.scroll.ReadValue().y : 0f;
+            if (Mathf.Abs(scroll) > .01f && capacity > 0)
+                SelectLocalSlot((_selectedIndex + (scroll > 0 ? -1 : 1) + capacity) % capacity);
+        }
+
+        private void SelectLocalSlot(int index)
+        {
+            if (_selectedIndex == index) return;
+            _selectedIndex = index;
+            SelectSlotServerRpc(index, ++_selectionRevision);
+            Changed?.Invoke();
         }
 
         public InventorySlotState GetSlot(int index)
@@ -132,7 +140,14 @@ namespace WaveByWave.Player
 
         public void UseSelected(bool special)
         {
-            if (!IsCarryingChest) UseSelectedServerRpc(_selectedIndex, special);
+            if (IsCarryingChest) return;
+            if (TryGetDefinition(_selectedIndex, out var selected) && selected.SupplyKind == SupplyKind.Food)
+            {
+                if (Health >= MaximumHealth) return;
+                var equipment = GetComponent<PlayerEquipment>();
+                if (equipment != null && !equipment.TryPredictDrink()) return;
+            }
+            UseSelectedServerRpc(_selectedIndex, special);
         }
 
         public bool TryGetHeldDefinition(out ItemDefinition definition)
@@ -205,9 +220,14 @@ namespace WaveByWave.Player
                 return;
             if (definition.Category == ItemCategory.Supply && definition.SupplyKind == SupplyKind.Food)
             {
+                var equipment = player.GetComponent<PlayerEquipment>();
                 if (_health != null && _health.CurrentHealth < _health.MaximumHealth &&
+                    (equipment == null || equipment.CanDrinkServer()) &&
                     TryConsumeServer(selectedIndex, 1, out _))
+                {
                     _health.HealServer(definition.Potency);
+                    equipment?.PlayDrinkServer();
+                }
                 return;
             }
             var controller = player.GetComponent<NetworkPlayerController>();

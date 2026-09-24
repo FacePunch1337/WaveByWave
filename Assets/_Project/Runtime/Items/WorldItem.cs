@@ -511,7 +511,7 @@ namespace WaveByWave.Items
             transform.SetPositionAndRotation(worldPosition, worldRotation);
         }
 
-        public string GetInteractionPrompt(NetworkPlayerController player) => $"Подобрать {Definition?.DisplayName ?? ItemId.ToString()} ×{Amount}";
+        public string GetInteractionPrompt(NetworkPlayerController player) => $"Подобрать {Definition?.HoverDescription(player) ?? ItemId.ToString()} ×{Amount}";
 
         public void Interact(NetworkPlayerController player)
         {

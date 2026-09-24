@@ -911,7 +911,7 @@ namespace WaveByWave.Enemies
             state.Position = frame.MultiplyPoint3x4(state.LocalPosition);
             state.Rotation = frame.rotation * (Quaternion)state.LocalRotation;
         }
-        public bool Damage(int id, float damage, Vector3 attacker)
+        public bool Damage(int id, float damage, Vector3 attacker, Vector3? impactPoint = null)
         {
             if (!CanSimulate || !float.IsFinite(damage) || damage <= 0 || !AttachServer() ||
                 !_byId.TryGetValue(id, out var entity) || !_serverWorld.EntityManager.Exists(entity)) return false;
@@ -920,6 +920,7 @@ namespace WaveByWave.Enemies
             if (state.Health <= 0) return false;
             Carry(ref state);
             var brain = manager.GetComponentData<DotsEnemyBrain>(entity);
+            WaveByWave.Combat.DotsDamagePopups.ReportServer(impactPoint ?? (Vector3)state.Position + Vector3.up * Catalog.BodyHeight * .5f, damage);
             state.Health = Mathf.Max(0, state.Health - damage);
             state.HitRevision++;
             brain.Knockback = math.normalizesafe(state.Position - (float3)attacker) * Catalog.DamageKnockback;
@@ -970,7 +971,8 @@ namespace WaveByWave.Enemies
             id = 0; fraction = 1;
             if (!CanSimulate || !AttachServer()) return false;
             PrepareProjectileGrid();
-            var clearance = Catalog.BodyRadius + radius;
+            var targetRadius = Mathf.Min(Catalog.ProjectileHitRadius, Catalog.BodyHeight * 0.5f);
+            var clearance = targetRadius + radius;
             var min = (int2)math.floor((new float2(math.min(from.x, to.x), math.min(from.z, to.z)) - clearance) /
                 ProjectileCellSize);
             var max = (int2)math.floor((new float2(math.max(from.x, to.x), math.max(from.z, to.z)) + clearance) /
@@ -984,10 +986,10 @@ namespace WaveByWave.Enemies
                     if (!_byId.TryGetValue(target.Id, out var entity) ||
                         !_serverWorld.EntityManager.Exists(entity) ||
                         _serverWorld.EntityManager.GetComponentData<DotsEnemyState>(entity).Health <= 0) continue;
-                    var bottom = target.Position + Vector3.up * Catalog.BodyRadius;
-                    var top = target.Position + Vector3.up * (Catalog.BodyHeight - Catalog.BodyRadius);
+                    var bottom = target.Position + Vector3.up * targetRadius;
+                    var top = target.Position + Vector3.up * (Catalog.BodyHeight - targetRadius);
                     if (EnemyHitGeometry.SegmentCapsule(from, to, bottom, top,
-                            Catalog.BodyRadius + radius, out var hit) && hit < fraction)
+                            clearance, out var hit) && hit < fraction)
                     { fraction = hit; id = target.Id; }
                 }
             }

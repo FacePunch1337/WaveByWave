@@ -34,6 +34,24 @@ namespace WaveByWave.Customization
 
         private void Build()
         {
+            _canvas=GameUiPrefabs.Create("Menus/Wardrobe", owner: this);
+            if(_canvas!=null)
+            {
+                var categories=new[] { PirateCustomizationCategory.Pirate,PirateCustomizationCategory.Hair,
+                    PirateCustomizationCategory.Bandana,PirateCustomizationCategory.Hat,PirateCustomizationCategory.Coat,
+                    PirateCustomizationCategory.Gloves,PirateCustomizationCategory.EyePatch,PirateCustomizationCategory.Earrings,PirateCustomizationCategory.Boots };
+                var names=new[] {"Персонаж","Волосы","Бандана","Шляпа","Одежда","Руки","Повязка","Серьги","Ноги"};
+                for(var i=0;i<categories.Length;i++)
+                {
+                    var category=categories[i];var row=_canvas.transform.Find("Wardrobe/"+names[i]);
+                    _values[category]=row.GetChild(2).GetComponent<Text>();
+                    row.Find("‹").GetComponent<Button>().onClick.AddListener(()=>_appearance?.Cycle(category,-1));
+                    row.Find("›").GetComponent<Button>().onClick.AddListener(()=>_appearance?.Cycle(category,1));
+                }
+                GameUiPrefabs.Find<Button>(_canvas,"Wardrobe/СОХРАНИТЬ И ВЫЙТИ").onClick.AddListener(()=>
+                    { _appearance?.SaveLocal();_player?.ExitCustomization(); });
+                return;
+            }
             _canvas = new GameObject("Pirate Customization UI", typeof(RectTransform), typeof(Canvas),
                 typeof(CanvasScaler), typeof(GraphicRaycaster));
             _canvas.transform.SetParent(transform, false);
@@ -170,12 +188,13 @@ namespace WaveByWave.Customization
 
         private void OnDestroy()
         {
+            if (!Application.isPlaying) return;
             if (_appearance != null)
                 _appearance.Changed -= Refresh;
-            if (InputCaptured)
+            if (InputCaptured && GameUiPrefabs.IsOwnedBy(_canvas, this))
                 SetOpen(false);
             if (_canvas != null)
-                Destroy(_canvas);
+                GameUiPrefabs.Release(_canvas, this);
         }
     }
 }

@@ -168,6 +168,8 @@ namespace WaveByWave.Enemies
         public float SurfaceVerticalSpeed = 4f;
         [Min(0.1f)] public float BodyRadius = 0.38f;
         [Min(0.2f)] public float BodyHeight = 1.7f;
+        [Min(0.1f), Tooltip("Радиус попадания пуль по скелетам. Не меняет радиус движения и обход препятствий.")]
+        public float ProjectileHitRadius = 0.42f;
         [Min(0f), Tooltip("Preferred minimum center-to-center distance between enemies. Uses a DOTS spatial grid, not physics colliders.")]
         public float CrowdSeparationRadius = 0.82f;
         [Range(0f, 2f), Tooltip("How strongly nearby enemies move apart while still pursuing their target.")]

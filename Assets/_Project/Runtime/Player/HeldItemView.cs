@@ -20,6 +20,7 @@ namespace WaveByWave.Player
         private GameObject _hookVisual, _bucketWater;
         private LineRenderer _rope;
         private ItemDefinition _definition;
+        private ItemDefinition _lastDrinkItem;
         private GripPose _rightGrip, _leftGrip;
         private bool _hasAuthoredGrips;
         private Camera _camera;
@@ -235,6 +236,12 @@ namespace WaveByWave.Player
             // Rebind before solving the arms so both locomotion and authored grip IK keep working.
             RefreshHumanoidRig();
             _inventory.TryGetHeldDefinition(out var definition);
+            if (definition != null && definition.SupplyKind == SupplyKind.Food)
+                _lastDrinkItem = definition;
+            var motion = _equipment.DisplayMotion;
+            if (motion.Action == EquipmentAction.Drink && _lastDrinkItem != null &&
+                _equipment.NetworkManager.ServerTime.Time < motion.Started + motion.Duration)
+                definition = _lastDrinkItem;
             if (_definition != definition) SetItem(definition);
             var visible = definition != null && _equipment.Available && !_player.IsAtControlStation &&
                 !_player.IsCustomizing &&
@@ -322,7 +329,8 @@ namespace WaveByWave.Player
                 else if (_equipment.Reloading && definition.EquipmentKind == ItemEquipmentKind.Musket)
                 { action = EquipmentAction.MusketReload; elapsed = _equipment.ReloadProgress; }
                 else if (_equipment.ChargingHook) { action = EquipmentAction.HookCharge; elapsed = _equipment.HookCharge; }
-                else if (_equipment.Hook.Phase is HookPhase.Reeling or HookPhase.Returning)
+                else if (_equipment.Hook.Phase is HookPhase.Reeling or HookPhase.Returning ||
+                         _equipment.Hook.Phase == HookPhase.Flying && _equipment.Hook.Pulling)
                 { action = EquipmentAction.HookReel; elapsed = Time.time % 0.5f; }
                 else if (_equipment.IsAiming && definition.EquipmentKind == ItemEquipmentKind.Musket) action = EquipmentAction.MusketAim;
             }
@@ -409,8 +417,11 @@ namespace WaveByWave.Player
             _hookVisual.SetActive(true); var end = _equipment.RenderedHookPosition;
             _hookVisual.transform.position = end;
             var state = _equipment.Hook;
-            var facingDirection = state.Phase == HookPhase.Flying ? state.Velocity + Vector3.down *
-                (_equipment.HookGravity * Mathf.Max(0f, (float)(_equipment.NetworkManager.ServerTime.Time - state.Started)))
+            var originalFlight = state.FlightFacingVelocity.sqrMagnitude > 0.001f;
+            var facingVelocity = originalFlight ? state.FlightFacingVelocity : state.Velocity;
+            var facingStarted = originalFlight ? state.FlightFacingStarted : state.Started;
+            var facingDirection = state.Phase == HookPhase.Flying ? facingVelocity + Vector3.down *
+                (_equipment.HookGravity * Mathf.Max(0f, (float)(_equipment.NetworkManager.ServerTime.Time - facingStarted)))
                 : end - hand;
             _hookVisual.transform.rotation = facingDirection.sqrMagnitude > 0.001f
                 ? Quaternion.LookRotation(facingDirection) * Quaternion.Euler(90f, 0f, 0f)

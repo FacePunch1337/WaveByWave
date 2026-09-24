@@ -19,15 +19,17 @@ MonoBehaviour:
     \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435: \u043F\u0440\u0438\u0446\u0435\u043B\u0438\u0432\u0430\u043D\u0438\u0435."
   category: 0
   rarity: 0
-  icon: {fileID: 0}
+  icon: {fileID: 5610975771100012093, guid: 2e0c88cd98f176040aa8ec47dbf2ab37, type: 2}
   maximumStack: 1
   supplyKind: 0
   potency: 40
   treasureExperience: 25
+  coinReward: 0
   upgradeStat: 0
   upgradeBonus: 0.1
   worldVisualPrefab: {fileID: 3692177591442134904, guid: 5a9b19e1b3885246b5108481efbf1664, type: 3}
   restingEulerAngles: {x: 0, y: 0, z: 0}
+  chestLoot: {fileID: 0}
   equipmentKind: 3
   overrideHeldPose: 1
   heldPosition: {x: 0.26, y: -0.28, z: 0.19}

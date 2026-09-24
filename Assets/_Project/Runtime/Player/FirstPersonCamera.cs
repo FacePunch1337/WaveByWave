@@ -13,6 +13,19 @@ namespace WaveByWave.Player
         [SerializeField] private Transform referenceFrame;
         [Tooltip("Additional camera offset in the local space of the Camera Holder / eye target.")]
         [SerializeField] private Vector3 positionOffset;
+
+        [Header("Pitch position offset")]
+        [SerializeField, Tooltip("Move the Camera Holder between the three offsets as the player looks up and down.")]
+        private bool usePitchPositionOffset;
+        [SerializeField, Tooltip("Additional local offset while looking straight ahead.")]
+        private Vector3 centerPositionOffset;
+        [SerializeField, Tooltip("Additional local offset at the upper pitch limit.")]
+        private Vector3 lookUpPositionOffset;
+        [SerializeField, Tooltip("Additional local offset at the lower pitch limit.")]
+        private Vector3 lookDownPositionOffset;
+        [SerializeField, Min(0.01f), Tooltip("How quickly the Camera Holder reaches the requested offset.")]
+        private float pitchPositionSharpness = 12f;
+
         [SerializeField, Min(0.01f)] private float sensitivity = 0.08f;
         [SerializeField] private Vector2 pitchLimits = new(-82f, 82f);
 
@@ -29,6 +42,9 @@ namespace WaveByWave.Player
         private float _aimSpeed;
         private Camera _view;
         private Camera _externalView;
+        private Vector3 _currentPitchPositionOffset;
+        private bool _pitchPositionInitialized;
+        private int _pitchPositionUpdatedFrame = -1;
         public Vector2 AimAngles => new(_yaw, -_pitch);
 
         private void Awake()
@@ -153,6 +169,9 @@ namespace WaveByWave.Player
             _aimSpeed = speed;
         }
         public void ClearAimLimits() => _aimLimited = false;
+
+        public void SetPitchPositionOffsetEnabled(bool enabled) => usePitchPositionOffset = enabled;
+
         private void ClampAim()
         {
             if (!_aimLimited) return;
@@ -196,22 +215,64 @@ namespace WaveByWave.Player
                     Mathf.Clamp01((Time.unscaledTime - _lookTransitionStarted) / _lookTransitionDuration))
                 : 0f;
             // Fade the grab offset rather than overwriting mouse input each frame.
+            var effectivePitch = Mathf.Clamp(_pitch + _lookTransitionPitchOffset * transitionWeight,
+                pitchLimits.x, pitchLimits.y);
             var lookRotation = frameRotation * Quaternion.Euler(
-                Mathf.Clamp(_pitch + _lookTransitionPitchOffset * transitionWeight, pitchLimits.x, pitchLimits.y),
+                effectivePitch,
                 _yaw + _lookTransitionYawOffset * transitionWeight, 0f);
+            UpdatePitchPositionOffset(effectivePitch);
+            var localPositionOffset = positionOffset + _currentPitchPositionOffset;
             if (transform == eyeTarget || transform.parent == eyeTarget)
             {
                 // The owner camera lives in the player prefab. Keeping its position local avoids
                 // a second world-space follow pass and removes speed-dependent render jitter.
                 transform.localPosition = transform == eyeTarget
-                    ? _authoredLocalPosition + positionOffset
-                    : positionOffset;
+                    ? _authoredLocalPosition + localPositionOffset
+                    : localPositionOffset;
                 transform.rotation = lookRotation;
             }
             else
             {
-                transform.SetPositionAndRotation(eyeTarget.TransformPoint(positionOffset), lookRotation);
+                transform.SetPositionAndRotation(eyeTarget.TransformPoint(localPositionOffset), lookRotation);
             }
+        }
+
+        private void UpdatePitchPositionOffset(float effectivePitch)
+        {
+            var target = ResolvePitchPositionOffset(effectivePitch);
+            if (!_pitchPositionInitialized)
+            {
+                _currentPitchPositionOffset = target;
+                _pitchPositionInitialized = true;
+                _pitchPositionUpdatedFrame = Time.frameCount;
+                return;
+            }
+
+            // SnapToEyes can also be requested by the character controller. Advance smoothing
+            // once per rendered frame so those extra pose refreshes do not change its speed.
+            if (_pitchPositionUpdatedFrame == Time.frameCount)
+                return;
+
+            _pitchPositionUpdatedFrame = Time.frameCount;
+            var blend = 1f - Mathf.Exp(-pitchPositionSharpness * Time.unscaledDeltaTime);
+            _currentPitchPositionOffset = Vector3.Lerp(_currentPitchPositionOffset, target, blend);
+        }
+
+        private Vector3 ResolvePitchPositionOffset(float effectivePitch)
+        {
+            if (!usePitchPositionOffset)
+                return Vector3.zero;
+
+            if (effectivePitch < 0f)
+            {
+                var upRange = Mathf.Max(0.01f, -pitchLimits.x);
+                return Vector3.Lerp(centerPositionOffset, lookUpPositionOffset,
+                    Mathf.Clamp01(-effectivePitch / upRange));
+            }
+
+            var downRange = Mathf.Max(0.01f, pitchLimits.y);
+            return Vector3.Lerp(centerPositionOffset, lookDownPositionOffset,
+                Mathf.Clamp01(effectivePitch / downRange));
         }
     }
 }

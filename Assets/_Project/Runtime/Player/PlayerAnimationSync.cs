@@ -4,6 +4,9 @@ using UnityEngine;
 
 namespace WaveByWave.Player
 {
+    // The procedural look pass runs after Mecanim but before HeldItemView (9700), so the
+    // hand solver can compensate for the changed shoulders and keep both hands on the item.
+    [DefaultExecutionOrder(9600)]
     [RequireComponent(typeof(NetworkObject))]
     public sealed class PlayerAnimationSync : NetworkBehaviour
     {
@@ -19,6 +22,22 @@ namespace WaveByWave.Player
         private static readonly int ActionHash = Animator.StringToHash("Action");
 
         [SerializeField] private Animator animator;
+
+        [Header("Spine and head IK")]
+        [SerializeField] private bool enableLookIk = true;
+        [SerializeField, Tooltip("Maximum downward/upward bend driven by the camera.")]
+        private Vector2 lookPitchLimits = new(-42f, 58f);
+        [SerializeField, Min(0f), Tooltip("Maximum horizontal look offset while the body is fixed, for example at a station.")]
+        private float lookYawLimit = 65f;
+        [SerializeField, Min(0f), Tooltip("How far the lower back trails a fast mouse turn. The head compensates to keep looking forward.")]
+        private float turnLagSeconds = 0.065f;
+        [SerializeField, Min(0f)] private float maximumTurnTwist = 18f;
+        [SerializeField, Min(0.01f)] private float lookSharpness = 13f;
+        [SerializeField, Range(0f, 1f)] private float spineLookShare = 0.24f;
+        [SerializeField, Range(0f, 1f)] private float chestLookShare = 0.2f;
+        [SerializeField, Range(0f, 1f)] private float upperChestLookShare = 0.14f;
+        [SerializeField, Range(0f, 1f)] private float neckLookShare = 0.16f;
+        [SerializeField, Range(0f, 1f)] private float headLookShare = 0.26f;
 
         private readonly NetworkVariable<float> _speed = new(
             default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
@@ -42,12 +61,36 @@ namespace WaveByWave.Player
             default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
         private readonly NetworkVariable<FixedString32Bytes> _action = new(
             default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        private readonly NetworkVariable<Vector3> _lookPose = new(
+            default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        private NetworkPlayerController _player;
+        private FirstPersonCamera _ownerCamera;
+        private Transform _poseReference;
+        private Animator _boundAnimator;
+        private Transform _spine;
+        private Transform _chest;
+        private Transform _upperChest;
+        private Transform _neck;
+        private Transform _head;
+        private Vector3 _smoothedLookPose;
+        private float _previousAimYaw;
+        private bool _aimYawInitialized;
+        private float _nextLookPublish;
 
         public Animator CurrentAnimator => animator;
+
+        private void Awake()
+        {
+            _player = GetComponent<NetworkPlayerController>();
+            RefreshHumanoidBones();
+        }
 
         public void SetAnimator(Animator value)
         {
             animator = value;
+            _boundAnimator = null;
+            RefreshHumanoidBones();
             ApplyLocomotion();
         }
 
@@ -60,6 +103,7 @@ namespace WaveByWave.Player
         public override void OnNetworkDespawn()
         {
             _actionSequence.OnValueChanged -= OnActionSequenceChanged;
+            _aimYawInitialized = false;
         }
 
         public void SetLocomotion(float speed, bool grounded, float verticalSpeed)
@@ -113,6 +157,128 @@ namespace WaveByWave.Player
         {
             if (!IsOwner)
                 ApplyLocomotion();
+        }
+
+        private void LateUpdate()
+        {
+            if (!IsSpawned || !enableLookIk)
+                return;
+
+            RefreshHumanoidBones();
+            if (_boundAnimator == null || _head == null)
+                return;
+
+            var targetPose = IsOwner ? BuildOwnerLookPose() : _lookPose.Value;
+            var blend = 1f - Mathf.Exp(-lookSharpness * Time.unscaledDeltaTime);
+            _smoothedLookPose = new Vector3(
+                Mathf.LerpAngle(_smoothedLookPose.x, targetPose.x, blend),
+                Mathf.LerpAngle(_smoothedLookPose.y, targetPose.y, blend),
+                Mathf.LerpAngle(_smoothedLookPose.z, targetPose.z, blend));
+
+            ApplyLookPose(_smoothedLookPose);
+            if (IsOwner)
+                PublishLookPose(targetPose);
+        }
+
+        private Vector3 BuildOwnerLookPose()
+        {
+            var view = _player != null ? _player.OwnerView : null;
+            if (view == null || _poseReference == null)
+            {
+                _aimYawInitialized = false;
+                return Vector3.zero;
+            }
+
+            _ownerCamera ??= view.GetComponent<FirstPersonCamera>();
+            var localLook = _poseReference.InverseTransformDirection(view.forward).normalized;
+            var pitch = Mathf.Asin(Mathf.Clamp(localLook.y, -1f, 1f)) * Mathf.Rad2Deg;
+            var yaw = Mathf.Atan2(localLook.x, localLook.z) * Mathf.Rad2Deg;
+            pitch = Mathf.Clamp(pitch, lookPitchLimits.x, lookPitchLimits.y);
+            yaw = Mathf.Clamp(yaw, -lookYawLimit, lookYawLimit);
+
+            var aimYaw = _ownerCamera != null ? _ownerCamera.AimAngles.x : view.eulerAngles.y;
+            var turnTwist = 0f;
+            if (_aimYawInitialized && Time.unscaledDeltaTime > 0.0001f)
+            {
+                var angularSpeed = Mathf.DeltaAngle(_previousAimYaw, aimYaw) / Time.unscaledDeltaTime;
+                turnTwist = Mathf.Clamp(angularSpeed * turnLagSeconds,
+                    -maximumTurnTwist, maximumTurnTwist);
+            }
+            _previousAimYaw = aimYaw;
+            _aimYawInitialized = true;
+            return new Vector3(pitch, yaw, turnTwist);
+        }
+
+        private void PublishLookPose(Vector3 pose)
+        {
+            if (Time.unscaledTime < _nextLookPublish)
+                return;
+
+            // Fifteen samples per second are enough because every client smooths the pose.
+            _nextLookPublish = Time.unscaledTime + 1f / 15f;
+            if ((_lookPose.Value - pose).sqrMagnitude > 0.04f)
+                _lookPose.Value = pose;
+        }
+
+        private void RefreshHumanoidBones()
+        {
+            if (animator == _boundAnimator)
+                return;
+
+            _boundAnimator = animator;
+            _spine = _chest = _upperChest = _neck = _head = null;
+            _smoothedLookPose = Vector3.zero;
+            _aimYawInitialized = false;
+            _poseReference = transform.Find("Presentation Root/Visual") ?? transform.Find("Visual") ?? transform;
+            if (_boundAnimator == null || !_boundAnimator.isHuman)
+                return;
+
+            _spine = _boundAnimator.GetBoneTransform(HumanBodyBones.Spine);
+            _chest = _boundAnimator.GetBoneTransform(HumanBodyBones.Chest);
+            _upperChest = _boundAnimator.GetBoneTransform(HumanBodyBones.UpperChest);
+            _neck = _boundAnimator.GetBoneTransform(HumanBodyBones.Neck);
+            _head = _boundAnimator.GetBoneTransform(HumanBodyBones.Head);
+        }
+
+        private void ApplyLookPose(Vector3 pose)
+        {
+            var totalLookWeight = AvailableWeight(_spine, spineLookShare) +
+                                  AvailableWeight(_chest, chestLookShare) +
+                                  AvailableWeight(_upperChest, upperChestLookShare) +
+                                  AvailableWeight(_neck, neckLookShare) +
+                                  AvailableWeight(_head, headLookShare);
+            if (totalLookWeight <= 0.0001f)
+                return;
+
+            var lowerTurnWeight = AvailableWeight(_spine, 0.45f) +
+                                  AvailableWeight(_chest, 0.35f) +
+                                  AvailableWeight(_upperChest, 0.2f);
+            var upperTurnWeight = AvailableWeight(_neck, 0.35f) + AvailableWeight(_head, 0.65f);
+
+            ApplyBone(_spine, spineLookShare / totalLookWeight,
+                lowerTurnWeight > 0f ? -0.45f / lowerTurnWeight : 0f, pose);
+            ApplyBone(_chest, chestLookShare / totalLookWeight,
+                lowerTurnWeight > 0f ? -0.35f / lowerTurnWeight : 0f, pose);
+            ApplyBone(_upperChest, upperChestLookShare / totalLookWeight,
+                lowerTurnWeight > 0f ? -0.2f / lowerTurnWeight : 0f, pose);
+            ApplyBone(_neck, neckLookShare / totalLookWeight,
+                upperTurnWeight > 0f ? 0.35f / upperTurnWeight : 0f, pose);
+            ApplyBone(_head, headLookShare / totalLookWeight,
+                upperTurnWeight > 0f ? 0.65f / upperTurnWeight : 0f, pose);
+        }
+
+        private static float AvailableWeight(Transform bone, float weight) => bone != null ? weight : 0f;
+
+        private void ApplyBone(Transform bone, float lookWeight, float turnWeight, Vector3 pose)
+        {
+            if (bone == null || _poseReference == null)
+                return;
+
+            var pitch = pose.x * lookWeight;
+            var yaw = pose.y * lookWeight + pose.z * turnWeight;
+            var delta = Quaternion.AngleAxis(yaw, _poseReference.up) *
+                        Quaternion.AngleAxis(-pitch, _poseReference.right);
+            bone.rotation = delta * bone.rotation;
         }
 
         private void ApplyLocomotion()

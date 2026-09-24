@@ -306,12 +306,28 @@ namespace WaveByWave.Player
             {
                 var source = _bodyVisual != null ? _bodyVisual : transform;
                 var view = _player.OwnerView;
-                var target = _equipment.LookDirection;
-                if (target.sqrMagnitude < 0.0001f) target = source.forward;
-                if (!_smoothedLookInitialized) { _smoothedLook = target; _smoothedLookInitialized = true; }
-                else _smoothedLook = Vector3.Slerp(_smoothedLook, target, 1f - Mathf.Exp(-15f * Time.deltaTime));
+                Quaternion rigRotation;
+                if (definition.IsChest && _animationSync != null &&
+                    _animationSync.TryGetPresentationLookRotation(out var chestLookRotation))
+                {
+                    // Chests live outside inventory slots, therefore PlayerEquipment deliberately
+                    // stops its held-input heartbeat while one is carried. Use the replicated body
+                    // look pose so a remote chest follows the same camera direction as its owner.
+                    rigRotation = chestLookRotation;
+                    _smoothedLook = rigRotation * Vector3.forward;
+                    _smoothedLookInitialized = true;
+                }
+                else
+                {
+                    var target = _equipment.LookDirection;
+                    if (target.sqrMagnitude < 0.0001f) target = source.forward;
+                    if (!_smoothedLookInitialized) { _smoothedLook = target; _smoothedLookInitialized = true; }
+                    else _smoothedLook = Vector3.Slerp(_smoothedLook, target,
+                        1f - Mathf.Exp(-15f * Time.deltaTime));
+                    rigRotation = Quaternion.LookRotation(_smoothedLook, source.up);
+                }
                 _rig.SetPositionAndRotation(view != null ? view.position : source.position + source.up * 1.35f,
-                    Quaternion.LookRotation(_smoothedLook, source.up));
+                    rigRotation);
             }
             _aimBlend = Mathf.MoveTowards(_aimBlend, _equipment.IsAiming ? 1f : 0f, Time.unscaledDeltaTime * 7f);
             _blockBlend = Mathf.MoveTowards(_blockBlend, _equipment.IsBlocking ? 1f : 0f, Time.unscaledDeltaTime * 7f);

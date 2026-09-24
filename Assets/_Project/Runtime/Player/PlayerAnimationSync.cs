@@ -86,6 +86,24 @@ namespace WaveByWave.Player
 
         public Animator CurrentAnimator => animator;
 
+        public bool TryGetPresentationLookRotation(out Quaternion rotation)
+        {
+            rotation = default;
+            if (_poseReference == null)
+                return false;
+
+            // The carried chest does not use PlayerEquipment's held-input stream, so remote
+            // copies must read the same independently replicated look pose that drives the body.
+            var localForward = Quaternion.Euler(-_smoothedLookPose.x, _smoothedLookPose.y, 0f) *
+                               Vector3.forward;
+            var worldForward = _poseReference.TransformDirection(localForward);
+            if (worldForward.sqrMagnitude < 0.0001f)
+                return false;
+
+            rotation = Quaternion.LookRotation(worldForward.normalized, _poseReference.up);
+            return true;
+        }
+
         private void Awake()
         {
             _player = GetComponent<NetworkPlayerController>();

@@ -194,21 +194,27 @@ namespace WaveByWave.Player
                 return;
 
             RefreshHumanoidBones();
-            var targetPose = IsOwner ? BuildOwnerLookPose() : _lookPose.Value;
+            var suppressIk = _player != null && _player.IsCustomizing;
+            var targetPose = suppressIk ? Vector3.zero : IsOwner ? BuildOwnerLookPose() : _lookPose.Value;
             if (IsOwner)
                 PublishPresentationPose(targetPose);
 
-            var sharpness = IsOwner ? lookSharpness : remoteLookSharpness;
-            var blend = 1f - Mathf.Exp(-sharpness * Time.unscaledDeltaTime);
-            _smoothedLookPose = new Vector3(
-                Mathf.LerpAngle(_smoothedLookPose.x, targetPose.x, blend),
-                Mathf.LerpAngle(_smoothedLookPose.y, targetPose.y, blend),
-                Mathf.LerpAngle(_smoothedLookPose.z, targetPose.z, blend));
+            if (suppressIk)
+                _smoothedLookPose = Vector3.zero;
+            else
+            {
+                var sharpness = IsOwner ? lookSharpness : remoteLookSharpness;
+                var blend = 1f - Mathf.Exp(-sharpness * Time.unscaledDeltaTime);
+                _smoothedLookPose = new Vector3(
+                    Mathf.LerpAngle(_smoothedLookPose.x, targetPose.x, blend),
+                    Mathf.LerpAngle(_smoothedLookPose.y, targetPose.y, blend),
+                    Mathf.LerpAngle(_smoothedLookPose.z, targetPose.z, blend));
+            }
 
             if (!IsOwner)
                 ApplyRemoteCameraPose();
 
-            if (!enableLookIk || _boundAnimator == null || _head == null)
+            if (suppressIk || !enableLookIk || _boundAnimator == null || _head == null)
                 return;
 
             ApplyLookPose(_smoothedLookPose);

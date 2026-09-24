@@ -101,6 +101,18 @@ namespace WaveByWave.Editor
 
         private static void TestGameplay()
         {
+            var setBattlefield = typeof(ShipCannonBattery).GetMethod("SetBattlefieldServer", Private);
+            var clearBattlefield = typeof(ShipCannonBattery).GetMethod("ClearBattlefieldServer", Private);
+            Check(setBattlefield != null && clearBattlefield != null,
+                "Battlefield snapshot API must exist");
+            setBattlefield.Invoke(_battery, new object[] { new Vector3(5f, 0f, 7f), 20f });
+            setBattlefield.Invoke(_battery, new object[] { new Vector3(100f, 0f, 100f), 200f });
+            Check(_battery.BattlefieldCenter == new Vector3(5f, 0f, 7f) &&
+                  Mathf.Approximately(_battery.BattlefieldRadius, 20f) &&
+                  _battery.IsInsideBattlefield(new Vector3(5f, 0f, 7f)) &&
+                  !_battery.IsInsideBattlefield(new Vector3(30f, 0f, 7f)),
+                "Battlefield must remain fixed at its first wave-start snapshot");
+            clearBattlefield.Invoke(_battery, null);
             var boundary = new BattlefieldBoundaryBreachTimer();
             Check(!boundary.Step(0f, false, 8f, 10f) &&
                   !boundary.Step(1f, true, 8f, 10f) &&

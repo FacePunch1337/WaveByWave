@@ -35,6 +35,16 @@ namespace WaveByWave.Editor
             }
             EditorGUILayout.HelpBox("Preview renders in Scene View without Play Mode. It does not start a wave or damage the ship.",
                 MessageType.Info);
+            if (Application.isPlaying && NightWaveController.TryGetBattlefield(out var liveCircle, out _))
+            {
+                var ship = FindFirstObjectByType<ShipCannonBattery>();
+                var distance = ship == null ? 0f : Vector2.Distance(
+                    new Vector2(ship.transform.position.x, ship.transform.position.z),
+                    new Vector2(liveCircle.x, liveCircle.z));
+                EditorGUILayout.HelpBox($"Live wave: fixed center ({liveCircle.x:0.0}, {liveCircle.z:0.0}), " +
+                    $"radius {liveCircle.w:0.0} m, ship distance {distance:0.0} m. " +
+                    (distance <= liveCircle.w ? "Inside" : "Outside"), MessageType.Info);
+            }
             if (!HasFogFeature("Assets/Settings/PC_Renderer.asset") ||
                 !HasFogFeature("Assets/Settings/Mobile_Renderer.asset"))
                 EditorGUILayout.HelpBox("Night battlefield fog render feature is missing from a URP renderer.",
@@ -137,16 +147,29 @@ namespace WaveByWave.Editor
 
         private static void DrawBattlefield(SceneView sceneView)
         {
-            var settings = Settings;
-            if (Application.isPlaying || settings == null || !settings.PreviewFogInSceneView ||
-                settings.Waves == null || settings.Waves.Length == 0) return;
-            var wave = settings.Waves[Mathf.Clamp(settings.PreviewWaveIndex, 0, settings.Waves.Length - 1)];
-            if (wave == null) return;
+            Vector3 center;
+            float radius;
+            if (Application.isPlaying)
+            {
+                if (!NightWaveController.TryGetBattlefield(out var liveCircle, out _)) return;
+                center = new Vector3(liveCircle.x, liveCircle.y, liveCircle.z);
+                radius = liveCircle.w;
+            }
+            else
+            {
+                var settings = Settings;
+                if (settings == null || !settings.PreviewFogInSceneView ||
+                    settings.Waves == null || settings.Waves.Length == 0) return;
+                var wave = settings.Waves[Mathf.Clamp(settings.PreviewWaveIndex, 0, settings.Waves.Length - 1)];
+                if (wave == null) return;
+                center = settings.PreviewCenter;
+                radius = wave.BattlefieldRadius;
+            }
             var previous = Handles.color;
             Handles.color = new Color(0.25f, 0.95f, 0.92f, 0.85f);
-            Handles.DrawWireDisc(settings.PreviewCenter, Vector3.up, wave.BattlefieldRadius, 2f);
-            Handles.Label(settings.PreviewCenter + Vector3.up * 2f,
-                $"Battlefield center · radius {wave.BattlefieldRadius:0} m");
+            Handles.DrawWireDisc(center, Vector3.up, radius, 2f);
+            Handles.Label(center + Vector3.up * 2f,
+                $"Fixed battlefield center · radius {radius:0} m");
             Handles.color = previous;
         }
     }

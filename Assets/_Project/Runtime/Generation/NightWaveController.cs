@@ -149,12 +149,7 @@ namespace WaveByWave.Generation
         {
             if (!_battery.BattlefieldActive || Time.time < _nextBoundaryCheck) return;
             _nextBoundaryCheck = Time.time + settings.BoundaryCheckInterval;
-            var center = _battery.BattlefieldCenter;
-            var ship = _battery.transform.position;
-            var dx = ship.x - center.x;
-            var dz = ship.z - center.z;
-            var radius = _battery.BattlefieldRadius;
-            var outside = dx * dx + dz * dz > radius * radius;
+            var outside = !_battery.IsInsideBattlefield(_battery.transform.position);
             if (_boundaryBreaches.Step(Time.time, outside,
                 settings.BoundaryGraceSeconds, settings.BoundaryBreachInterval))
                 _battery.OpenBoundaryBreachServer(settings.BoundaryBreachLeakMultiplier);
@@ -164,12 +159,7 @@ namespace WaveByWave.Generation
         {
             if (_battery == null || !_battery.IsSpawned || !_battery.BattlefieldActive)
             { _localOutsideSince = -1f; return; }
-            var ship = _battery.transform.position;
-            var center = _battery.BattlefieldCenter;
-            var dx = ship.x - center.x;
-            var dz = ship.z - center.z;
-            var radius = _battery.BattlefieldRadius;
-            if (dx * dx + dz * dz <= radius * radius)
+            if (_battery.IsInsideBattlefield(_battery.transform.position))
             { _localOutsideSince = -1f; return; }
             if (_localOutsideSince < 0f) _localOutsideSince = Time.time;
         }

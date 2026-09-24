@@ -43,12 +43,14 @@ namespace WaveByWave.Generation
         public Color FogNearColor = new(0.16f, 0.53f, 0.57f, 1f);
         public Color FogFarColor = new(0.025f, 0.12f, 0.18f, 1f);
         [Range(0.005f, 0.3f)] public float FogDensity = 0.065f;
+        [Tooltip("Soft transition beyond the battlefield edge; no fog is placed inside the radius.")]
         [Min(2f)] public float FogEdgeWidth = 24f;
         [Min(5f)] public float FogHeight = 70f;
         [Range(0f, 1f)] public float FogNoiseStrength = 0.65f;
         [Range(0.001f, 0.03f)] public float FogNoiseScale = 0.004f;
         [Range(0f, 4f)] public float FogWindSpeed = 0.65f;
         [Range(4, 12)] public int FogSampleCount = 8;
+        [Tooltip("Fog depth measured outward from the fixed battlefield boundary, independent of the camera position.")]
         [Min(30f)] public float FogViewDistance = 480f;
 
 #if UNITY_EDITOR

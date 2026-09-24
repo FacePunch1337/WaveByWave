@@ -56,6 +56,14 @@ namespace WaveByWave.Ships
         public bool BattlefieldActive => _battlefield.Value.w > 0f && !VoyageEnded;
         public Vector3 BattlefieldCenter => new(_battlefield.Value.x, _battlefield.Value.y, _battlefield.Value.z);
         public float BattlefieldRadius => _battlefield.Value.w;
+        public bool IsInsideBattlefield(Vector3 worldPosition)
+        {
+            var circle = _battlefield.Value;
+            if (circle.w <= 0f) return false;
+            var dx = worldPosition.x - circle.x;
+            var dz = worldPosition.z - circle.z;
+            return dx * dx + dz * dz <= circle.w * circle.w;
+        }
         public float LevelProgress
         {
             get
@@ -158,7 +166,9 @@ namespace WaveByWave.Ships
         }
         internal void SetBattlefieldServer(Vector3 center, float radius)
         {
-            if (IsServer && !VoyageEnded)
+            // The server writes this snapshot only once for each wave. Ship
+            // movement, camera movement and later settings edits cannot move it.
+            if (IsServer && !VoyageEnded && _battlefield.Value.w <= 0f)
                 _battlefield.Value = new Vector4(center.x, center.y, center.z, Mathf.Max(0f, radius));
         }
         internal void ClearBattlefieldServer()

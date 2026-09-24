@@ -40,44 +40,73 @@ Shader "Hidden/WaveByWave/Night Battlefield Fog"
                 float3 eye = GetCameraPositionWS();
                 float3 farPoint = ComputeWorldSpacePosition(uv, farDepth, UNITY_MATRIX_I_VP);
                 float3 ray = normalize(farPoint - eye);
-                float distanceLimit = _BattlefieldFogShape.w;
+                float distanceLimit = 1e20;
+                bool hasVisibleSurface = !sky;
                 if (!sky)
                 {
                     float3 surface = ComputeWorldSpacePosition(uv, rawDepth, UNITY_MATRIX_I_VP);
-                    distanceLimit = min(distanceLimit, distance(eye, surface));
+                    distanceLimit = distance(eye, surface);
                 }
-                if (distanceLimit < 0.01) return scene;
 
                 float2 center = _BattlefieldCenterRadius.xz;
                 float radius = _BattlefieldCenterRadius.w;
-                float inner = max(0.0, radius - 2.0);
                 float2 eyeOffset = eye.xz - center;
-                float startDistance = 0.0;
-                if (dot(eyeOffset, eyeOffset) < inner * inner)
+                bool eyeInside = dot(eyeOffset, eyeOffset) < radius * radius;
+                // Transparent ocean does not write scene depth. Stop the ray at
+                // its water plane, so ocean inside the battle circle stays clear.
+                float waterY = _BattlefieldCenterRadius.y;
+                if (eye.y > waterY + 0.2 && ray.y < -0.001)
                 {
-                    // Start marching at the circle exit, even for a large arena.
-                    // Interior pixels need no noise samples and the distant wall
-                    // remains visible from the ship at the start of every wave.
+                    float toWater = (waterY - eye.y) / ray.y;
+                    if (toWater > 0.0 && toWater < distanceLimit)
+                    {
+                        distanceLimit = toWater;
+                        hasVisibleSurface = true;
+                    }
+                }
+                if (distanceLimit < 0.01) return scene;
+                if (eyeInside && hasVisibleSurface)
+                {
+                    float2 visibleOffset = eye.xz + ray.xz * distanceLimit - center;
+                    if (dot(visibleOffset, visibleOffset) <= radius * radius) return scene;
+                }
+
+                float startDistance = 0.0;
+                if (eyeInside)
+                {
+                    // The circle is fixed in world space. No sample inside it
+                    // contributes fog; the first sample starts at its exact edge.
                     float2 horizontalRay = ray.xz;
                     float a = dot(horizontalRay, horizontalRay);
                     if (a < 0.000001) return scene;
                     float b = dot(eyeOffset, horizontalRay);
-                    float c = dot(eyeOffset, eyeOffset) - inner * inner;
+                    float c = dot(eyeOffset, eyeOffset) - radius * radius;
                     startDistance = (-b + sqrt(max(0.0, b * b - a * c))) / a;
                     if (startDistance >= distanceLimit) return scene;
                 }
+                // View distance is fog depth beyond the boundary, not distance
+                // from the moving camera. Even a large arena keeps its fog wall.
+                distanceLimit = min(distanceLimit, startDistance + _BattlefieldFogShape.w);
+                float fogLength = distanceLimit - startDistance;
+                if (fogLength < 0.01) return scene;
 
                 int samples = (int)clamp(_BattlefieldFogNoise.w, 4.0, 12.0);
-                float stride = (distanceLimit - startDistance) / samples;
                 float jitter = frac(sin(dot(input.positionCS.xy, float2(12.9898, 78.233))) * 43758.5453);
                 float transmittance = 1.0;
                 float3 scattered = 0;
                 [loop] for (int i = 0; i < samples; i++)
                 {
-                    float travel = startDistance + (i + 0.15 + 0.7 * jitter) * stride;
+                    // Quadratic spacing preserves detail at the circular edge
+                    // without increasing the fixed sample count.
+                    float t0 = i / (float)samples;
+                    float t1 = (i + 1) / (float)samples;
+                    float segmentStart = startDistance + fogLength * t0 * t0;
+                    float segmentEnd = startDistance + fogLength * t1 * t1;
+                    float segmentLength = segmentEnd - segmentStart;
+                    float travel = lerp(segmentStart, segmentEnd, 0.2 + 0.6 * jitter);
                     float3 p = eye + ray * travel;
                     float radial = length(p.xz - center);
-                    float wall = smoothstep(inner, radius + _BattlefieldFogShape.y, radial);
+                    float wall = smoothstep(radius, radius + _BattlefieldFogShape.y, radial);
                     if (wall < 0.001) continue;
                     float vertical = p.y - _BattlefieldCenterRadius.y;
                     float heightFalloff = exp(-abs(vertical) /
@@ -89,7 +118,7 @@ Shader "Hidden/WaveByWave/Night Battlefield Fog"
                     float cloud = noise.x * 0.7 + noise.y * 0.3;
                     float density = _BattlefieldFogShape.x * wall * heightFalloff *
                         lerp(1.0, 0.35 + 1.3 * cloud, _BattlefieldFogNoise.z);
-                    float opacity = 1.0 - exp(-density * stride);
+                    float opacity = 1.0 - exp(-density * segmentLength);
                     float depthTint = saturate((radial - radius) /
                         max(1.0, _BattlefieldFogShape.y * 3.0));
                     float3 tint = lerp(_BattlefieldFogNearColor.rgb,

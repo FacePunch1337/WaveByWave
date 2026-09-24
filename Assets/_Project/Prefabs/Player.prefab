@@ -422,6 +422,8 @@ MonoBehaviour:
   turnLagSeconds: 0.1
   maximumTurnTwist: 30
   lookSharpness: 13
+  remoteLookSharpness: 9
+  remoteCameraPositionSharpness: 12
   spineLookShare: 0.25
   chestLookShare: 1
   upperChestLookShare: 0.5

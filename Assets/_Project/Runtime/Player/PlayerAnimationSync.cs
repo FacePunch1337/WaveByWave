@@ -33,6 +33,11 @@ namespace WaveByWave.Player
         private float turnLagSeconds = 0.065f;
         [SerializeField, Min(0f)] private float maximumTurnTwist = 18f;
         [SerializeField, Min(0.01f)] private float lookSharpness = 13f;
+        [Header("Remote presentation smoothing")]
+        [SerializeField, Min(0.01f), Tooltip("Smoothing used by remote head, spine and Camera Holder rotation.")]
+        private float remoteLookSharpness = 9f;
+        [SerializeField, Min(0.01f), Tooltip("Smoothing used by the remote Camera Holder position offset.")]
+        private float remoteCameraPositionSharpness = 12f;
         [SerializeField, Range(0f, 1f)] private float spineLookShare = 0.24f;
         [SerializeField, Range(0f, 1f)] private float chestLookShare = 0.2f;
         [SerializeField, Range(0f, 1f)] private float upperChestLookShare = 0.14f;
@@ -192,17 +197,19 @@ namespace WaveByWave.Player
             var targetPose = IsOwner ? BuildOwnerLookPose() : _lookPose.Value;
             if (IsOwner)
                 PublishPresentationPose(targetPose);
-            else
-                ApplyRemoteCameraPosition();
 
-            if (!enableLookIk || _boundAnimator == null || _head == null)
-                return;
-
-            var blend = 1f - Mathf.Exp(-lookSharpness * Time.unscaledDeltaTime);
+            var sharpness = IsOwner ? lookSharpness : remoteLookSharpness;
+            var blend = 1f - Mathf.Exp(-sharpness * Time.unscaledDeltaTime);
             _smoothedLookPose = new Vector3(
                 Mathf.LerpAngle(_smoothedLookPose.x, targetPose.x, blend),
                 Mathf.LerpAngle(_smoothedLookPose.y, targetPose.y, blend),
                 Mathf.LerpAngle(_smoothedLookPose.z, targetPose.z, blend));
+
+            if (!IsOwner)
+                ApplyRemoteCameraPose();
+
+            if (!enableLookIk || _boundAnimator == null || _head == null)
+                return;
 
             ApplyLookPose(_smoothedLookPose);
         }
@@ -276,7 +283,7 @@ namespace WaveByWave.Player
             !float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
             !float.IsNaN(value.z) && !float.IsInfinity(value.z);
 
-        private void ApplyRemoteCameraPosition()
+        private void ApplyRemoteCameraPose()
         {
             var view = _player != null ? _player.OwnerView : null;
             if (view == null)
@@ -286,10 +293,13 @@ namespace WaveByWave.Player
             if (_ownerCamera == null)
                 return;
 
-            var blend = 1f - Mathf.Exp(-20f * Time.unscaledDeltaTime);
+            var blend = 1f - Mathf.Exp(-remoteCameraPositionSharpness * Time.unscaledDeltaTime);
             _smoothedRemoteCameraOffset = Vector3.Lerp(_smoothedRemoteCameraOffset,
                 _cameraPositionOffset.Value, blend);
-            _ownerCamera.ApplyReplicatedPositionOffset(_smoothedRemoteCameraOffset);
+            if (TryGetPresentationLookRotation(out var lookRotation))
+                _ownerCamera.ApplyReplicatedPose(_smoothedRemoteCameraOffset, lookRotation);
+            else
+                _ownerCamera.ApplyReplicatedPositionOffset(_smoothedRemoteCameraOffset);
         }
 
         private void RefreshHumanoidBones()

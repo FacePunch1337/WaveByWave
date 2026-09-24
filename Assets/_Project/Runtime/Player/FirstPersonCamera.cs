@@ -184,6 +184,12 @@ namespace WaveByWave.Player
                 : localOffset;
         }
 
+        public void ApplyReplicatedPose(Vector3 localOffset, Quaternion worldRotation)
+        {
+            ApplyReplicatedPositionOffset(localOffset);
+            transform.rotation = worldRotation;
+        }
+
         private void CacheAuthoredPosition()
         {
             if (_authoredPositionInitialized)

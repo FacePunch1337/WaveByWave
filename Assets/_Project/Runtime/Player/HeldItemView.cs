@@ -307,13 +307,11 @@ namespace WaveByWave.Player
                 var source = _bodyVisual != null ? _bodyVisual : transform;
                 var view = _player.OwnerView;
                 Quaternion rigRotation;
-                if (definition.IsChest && _animationSync != null &&
-                    _animationSync.TryGetPresentationLookRotation(out var chestLookRotation))
+                if (view != null)
                 {
-                    // Chests live outside inventory slots, therefore PlayerEquipment deliberately
-                    // stops its held-input heartbeat while one is carried. Use the replicated body
-                    // look pose so a remote chest follows the same camera direction as its owner.
-                    rigRotation = chestLookRotation;
+                    // The replicated Camera Holder is the common visual aim source for every item.
+                    // This keeps head/spine IK, both arms and the held object on the same smooth pose.
+                    rigRotation = view.rotation;
                     _smoothedLook = rigRotation * Vector3.forward;
                     _smoothedLookInitialized = true;
                 }
@@ -323,7 +321,7 @@ namespace WaveByWave.Player
                     if (target.sqrMagnitude < 0.0001f) target = source.forward;
                     if (!_smoothedLookInitialized) { _smoothedLook = target; _smoothedLookInitialized = true; }
                     else _smoothedLook = Vector3.Slerp(_smoothedLook, target,
-                        1f - Mathf.Exp(-15f * Time.deltaTime));
+                        1f - Mathf.Exp(-10f * Time.unscaledDeltaTime));
                     rigRotation = Quaternion.LookRotation(_smoothedLook, source.up);
                 }
                 _rig.SetPositionAndRotation(view != null ? view.position : source.position + source.up * 1.35f,

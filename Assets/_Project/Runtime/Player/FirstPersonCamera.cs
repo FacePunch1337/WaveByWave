@@ -42,14 +42,16 @@ namespace WaveByWave.Player
         private float _aimSpeed;
         private Camera _view;
         private Camera _externalView;
+        private bool _authoredPositionInitialized;
         private Vector3 _currentPitchPositionOffset;
         private bool _pitchPositionInitialized;
         private int _pitchPositionUpdatedFrame = -1;
         public Vector2 AimAngles => new(_yaw, -_pitch);
+        public Vector3 NetworkPositionOffset => positionOffset + _currentPitchPositionOffset;
 
         private void Awake()
         {
-            _authoredLocalPosition = transform.localPosition;
+            CacheAuthoredPosition();
 
             if (referenceFrame == transform || referenceFrame == eyeTarget)
                 referenceFrame = null;
@@ -171,6 +173,24 @@ namespace WaveByWave.Player
         public void ClearAimLimits() => _aimLimited = false;
 
         public void SetPitchPositionOffsetEnabled(bool enabled) => usePitchPositionOffset = enabled;
+
+        public void ApplyReplicatedPositionOffset(Vector3 localOffset)
+        {
+            // Remote Camera Holders stay inactive, so their Awake is not guaranteed to run.
+            // Cache the prefab-authored position lazily before applying the replicated offset.
+            CacheAuthoredPosition();
+            transform.localPosition = transform == eyeTarget
+                ? _authoredLocalPosition + localOffset
+                : localOffset;
+        }
+
+        private void CacheAuthoredPosition()
+        {
+            if (_authoredPositionInitialized)
+                return;
+            _authoredLocalPosition = transform.localPosition;
+            _authoredPositionInitialized = true;
+        }
 
         private void ClampAim()
         {

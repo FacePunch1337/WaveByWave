@@ -152,9 +152,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Player.FirstPersonCamera
   eyeTarget: {fileID: 5452713979007667154}
-  characterBody: {fileID: 5700666384040051339}
+  characterBody: {fileID: 8103309754370004181}
   referenceFrame: {fileID: 0}
   positionOffset: {x: 0, y: 0, z: 0}
+  usePitchPositionOffset: 1
+  centerPositionOffset: {x: 0, y: 0, z: 0}
+  lookUpPositionOffset: {x: 0, y: -0.3, z: -0.5}
+  lookDownPositionOffset: {x: 0, y: -0.3, z: 0.7}
+  pitchPositionSharpness: 12
   sensitivity: 0.08
   pitchLimits: {x: -82, y: 82}
 --- !u!114 &549253381987398898
@@ -229,7 +234,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 703817674
+  GlobalObjectIdHash: 1550780468
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -411,6 +416,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaveByWave.Player.PlayerAnimationSync
   ShowTopMostFoldoutHeaderGroup: 1
   animator: {fileID: 8158121653440568659}
+  enableLookIk: 1
+  lookPitchLimits: {x: -60, y: 90}
+  lookYawLimit: 65
+  turnLagSeconds: 0.1
+  maximumTurnTwist: 30
+  lookSharpness: 13
+  spineLookShare: 0.25
+  chestLookShare: 1
+  upperChestLookShare: 0.5
+  neckLookShare: 0
+  headLookShare: 0
 --- !u!114 &6238248586613136058
 MonoBehaviour:
   m_ObjectHideFlags: 0

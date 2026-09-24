@@ -63,6 +63,8 @@ namespace WaveByWave.Player
             default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
         private readonly NetworkVariable<Vector3> _lookPose = new(
             default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        private readonly NetworkVariable<Vector3> _cameraPositionOffset = new(
+            default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
         private NetworkPlayerController _player;
         private FirstPersonCamera _ownerCamera;
@@ -74,6 +76,7 @@ namespace WaveByWave.Player
         private Transform _neck;
         private Transform _head;
         private Vector3 _smoothedLookPose;
+        private Vector3 _smoothedRemoteCameraOffset;
         private float _previousAimYaw;
         private bool _aimYawInitialized;
         private float _nextLookPublish;
@@ -161,14 +164,19 @@ namespace WaveByWave.Player
 
         private void LateUpdate()
         {
-            if (!IsSpawned || !enableLookIk)
+            if (!IsSpawned)
                 return;
 
             RefreshHumanoidBones();
-            if (_boundAnimator == null || _head == null)
+            var targetPose = IsOwner ? BuildOwnerLookPose() : _lookPose.Value;
+            if (IsOwner)
+                PublishPresentationPose(targetPose);
+            else
+                ApplyRemoteCameraPosition();
+
+            if (!enableLookIk || _boundAnimator == null || _head == null)
                 return;
 
-            var targetPose = IsOwner ? BuildOwnerLookPose() : _lookPose.Value;
             var blend = 1f - Mathf.Exp(-lookSharpness * Time.unscaledDeltaTime);
             _smoothedLookPose = new Vector3(
                 Mathf.LerpAngle(_smoothedLookPose.x, targetPose.x, blend),
@@ -176,8 +184,6 @@ namespace WaveByWave.Player
                 Mathf.LerpAngle(_smoothedLookPose.z, targetPose.z, blend));
 
             ApplyLookPose(_smoothedLookPose);
-            if (IsOwner)
-                PublishLookPose(targetPose);
         }
 
         private Vector3 BuildOwnerLookPose()
@@ -209,7 +215,7 @@ namespace WaveByWave.Player
             return new Vector3(pitch, yaw, turnTwist);
         }
 
-        private void PublishLookPose(Vector3 pose)
+        private void PublishPresentationPose(Vector3 pose)
         {
             if (Time.unscaledTime < _nextLookPublish)
                 return;
@@ -218,6 +224,25 @@ namespace WaveByWave.Player
             _nextLookPublish = Time.unscaledTime + 1f / 15f;
             if ((_lookPose.Value - pose).sqrMagnitude > 0.04f)
                 _lookPose.Value = pose;
+            if (_ownerCamera != null &&
+                (_cameraPositionOffset.Value - _ownerCamera.NetworkPositionOffset).sqrMagnitude > 0.000001f)
+                _cameraPositionOffset.Value = _ownerCamera.NetworkPositionOffset;
+        }
+
+        private void ApplyRemoteCameraPosition()
+        {
+            var view = _player != null ? _player.OwnerView : null;
+            if (view == null)
+                return;
+
+            _ownerCamera ??= view.GetComponent<FirstPersonCamera>();
+            if (_ownerCamera == null)
+                return;
+
+            var blend = 1f - Mathf.Exp(-20f * Time.unscaledDeltaTime);
+            _smoothedRemoteCameraOffset = Vector3.Lerp(_smoothedRemoteCameraOffset,
+                _cameraPositionOffset.Value, blend);
+            _ownerCamera.ApplyReplicatedPositionOffset(_smoothedRemoteCameraOffset);
         }
 
         private void RefreshHumanoidBones()

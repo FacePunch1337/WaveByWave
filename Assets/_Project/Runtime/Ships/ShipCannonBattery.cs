@@ -31,6 +31,7 @@ namespace WaveByWave.Ships
         private readonly NetworkVariable<float> _voyageDayProgress = new();
         private readonly NetworkVariable<float> _voyageHour = new(10f);
         private readonly NetworkVariable<int> _voyageWave = new();
+        private readonly NetworkVariable<Vector4> _battlefield = new();
         private readonly NetworkVariable<double> _returnToPortAt = new();
         private bool _returnRequested;
         private ShipFlooding _flooding;
@@ -52,6 +53,9 @@ namespace WaveByWave.Ships
         public float DayProgress => _voyageDayProgress.Value;
         public float TimeOfDay => _voyageHour.Value;
         public int WaveNumber => _voyageWave.Value;
+        public bool BattlefieldActive => _battlefield.Value.w > 0f && !VoyageEnded;
+        public Vector3 BattlefieldCenter => new(_battlefield.Value.x, _battlefield.Value.y, _battlefield.Value.z);
+        public float BattlefieldRadius => _battlefield.Value.w;
         public float LevelProgress
         {
             get
@@ -90,6 +94,7 @@ namespace WaveByWave.Ships
             foreach (var cannon in cannons)
                 _states.Add(new CannonState { Operator = NetworkShipController.NoHelmsman });
             _health.Value = maximumHealth;
+            _battlefield.Value = Vector4.zero;
             NetworkManager.OnClientDisconnectCallback += OnDisconnected;
         }
 
@@ -151,12 +156,22 @@ namespace WaveByWave.Ships
         {
             if (IsServer) _voyageWave.Value = waveNumber;
         }
+        internal void SetBattlefieldServer(Vector3 center, float radius)
+        {
+            if (IsServer && !VoyageEnded)
+                _battlefield.Value = new Vector4(center.x, center.y, center.z, Mathf.Max(0f, radius));
+        }
+        internal void ClearBattlefieldServer()
+        {
+            if (IsServer) _battlefield.Value = Vector4.zero;
+        }
         internal void SetVoyageVictoryServer(float displayDuration = 5f) => FinishVoyageServer(true, displayDuration);
 
         public void FinishVoyageServer(bool won, float displayDuration)
         {
             if (!IsServer || !IsSpawned || VoyageEnded) return;
             _voyagePhase.Value = (byte)(won ? VoyagePhase.Victory : VoyagePhase.Defeat);
+            _battlefield.Value = Vector4.zero;
             _returnToPortAt.Value = NetworkManager.ServerTime.Time + Mathf.Max(1f, displayDuration);
             _upgradePaused.Value = false;
             _pendingRingSelections.Clear();
@@ -382,6 +397,14 @@ namespace WaveByWave.Ships
             if (!IsServer || VoyageEnded || !IsFinite(amount) || amount <= 0f) return;
             amount /= 1f + _armorBonus.Value;
             if (_flooding != null) _flooding.HitServer(amount, hitPoint);
+            else _health.Value = Mathf.Max(0f, _health.Value - amount);
+        }
+        // Boundary damage is temporary environmental pressure: it reduces the
+        // ship's flood-based health without leaving a permanent leaking hole.
+        public void ApplyBoundaryDamageServer(float amount)
+        {
+            if (!IsServer || VoyageEnded || !IsFinite(amount) || amount <= 0f) return;
+            if (_flooding != null) _flooding.AddBoundaryDamageServer(amount / Mathf.Max(1f, maximumHealth));
             else _health.Value = Mathf.Max(0f, _health.Value - amount);
         }
         public void ApplyUpgradeServer(ItemDefinition upgrade)

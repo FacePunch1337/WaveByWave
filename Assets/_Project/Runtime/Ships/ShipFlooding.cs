@@ -238,6 +238,15 @@ namespace WaveByWave.Ships
             _reservoir.Add(litres, CapacityLitres); Publish(); CheckSinking();
         }
 
+        public void AddBoundaryDamageServer(float fractionOfHealth)
+        {
+            if (!IsServer || IsSinking || _battery.VoyageEnded ||
+                !float.IsFinite(fractionOfHealth) || fractionOfHealth <= 0f) return;
+            _reservoir.Add(CapacityLitres * fractionOfHealth, CapacityLitres);
+            Publish();
+            CheckSinking();
+        }
+
         private void Update()
         {
             if (!IsSpawned) return;

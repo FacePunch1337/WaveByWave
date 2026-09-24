@@ -60,7 +60,8 @@ MonoBehaviour:
   - {fileID: 4760630383776563802}
   - {fileID: -4075994648371641886}
   - {fileID: 6021594781367715012}
-  m_RendererFeatureMap: ad6b866f10d7b46c5a02ef731c281142e2416a7d76286fc7c4c4c4c48c009153
+  - {fileID: 8420123400987654321}
+  m_RendererFeatureMap: ad6b866f10d7b46c5a02ef731c281142e2416a7d76286fc7c4c4c4c48c009153b1b8d2189f49da74
   m_UseNativeRenderPass: 1
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -160,3 +161,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Items.LootSilhouetteRenderFeature
   m_Active: 1
   silhouetteMaterial: {fileID: 2100000, guid: 97762fc2cf144df9a95694d2814c2b62, type: 2}
+--- !u!114 &8420123400987654321
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a51f003ccd336d49aa89f767cdfd991, type: 3}
+  m_Name: Night battlefield fog
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.NightBattlefieldFogFeature
+  m_Active: 1
+  fogShader: {fileID: 4800000, guid: bf4dbd1b7143e744f8d4ff47e54f3ef5, type: 3}

@@ -8,9 +8,28 @@ using WaveByWave.Ships;
 
 namespace WaveByWave.Generation
 {
+    // One ship, sampled a few times per second. Returning inside resets grace
+    // immediately; frame hitches cannot apply a large burst of damage.
+    public sealed class BattlefieldBoundaryDamage
+    {
+        private float _outsideSince = -1f;
+        private float _lastSample = -1f;
+        public void Reset() { _outsideSince = -1f; _lastSample = -1f; }
+        public float Step(float now, bool outside, float graceSeconds, float damagePerSecond)
+        {
+            if (!outside) { _outsideSince = -1f; _lastSample = now; return 0f; }
+            if (_outsideSince < 0f) _outsideSince = now;
+            var start = Mathf.Max(_outsideSince + Mathf.Max(0f, graceSeconds),
+                _lastSample < 0f ? now : _lastSample);
+            _lastSample = now;
+            return Mathf.Clamp(now - start, 0f, 0.5f) * Mathf.Max(0f, damagePerSecond);
+        }
+    }
+
     // Gameplay waves depend on night notifications; the lighting clock never depends on waves.
     public sealed class NightWaveController : MonoBehaviour
     {
+        public static NightWaveController Active { get; private set; }
         [SerializeField] private NightWaveSettings settings;
         [SerializeField] private VoyageDayNightController dayNight;
         [SerializeField] private Transform[] waveSpawnPoints;
@@ -21,6 +40,9 @@ namespace WaveByWave.Generation
         private bool _waveActive, _victoryRequested;
         private bool _waveNumberPublished;
         private float _nextWaveCheck;
+        private float _nextBoundaryCheck;
+        private readonly BattlefieldBoundaryDamage _boundaryDamage = new();
+        private float _localOutsideSince = -1f;
         [SerializeField, Min(0.5f)] private float announcementDuration = 4f;
         private VoyagePhase _lastAnnouncedPhase;
         private bool _phaseObserved;
@@ -28,9 +50,24 @@ namespace WaveByWave.Generation
         private string _announcement;
         private float _announcementUntil;
         private GUIStyle _announcementStyle;
+        private GUIStyle _boundaryStyle;
+
+        public static bool TryGetBattlefield(out Vector4 centerRadius, out NightWaveSettings fogSettings)
+        {
+            centerRadius = default;
+            fogSettings = null;
+            var controller = Active;
+            if (controller == null || controller._battery == null || !controller._battery.IsSpawned ||
+                !controller._battery.BattlefieldActive || controller.settings == null) return false;
+            var center = controller._battery.BattlefieldCenter;
+            centerRadius = new Vector4(center.x, center.y, center.z, controller._battery.BattlefieldRadius);
+            fogSettings = controller.settings;
+            return true;
+        }
 
         private void OnEnable()
         {
+            Active = this;
             settings ??= Resources.Load<NightWaveSettings>("NightWaveSettings");
             dayNight ??= GetComponent<VoyageDayNightController>();
             if (dayNight != null) dayNight.NightStartedServer += OnNightStartedServer;
@@ -38,6 +75,7 @@ namespace WaveByWave.Generation
 
         private void OnDisable()
         {
+            if (Active == this) Active = null;
             if (dayNight != null) dayNight.NightStartedServer -= OnNightStartedServer;
         }
 
@@ -46,6 +84,7 @@ namespace WaveByWave.Generation
             if (_battery == null || !_battery.IsSpawned)
                 _battery = FindFirstObjectByType<ShipCannonBattery>();
             UpdateAnnouncement();
+            UpdateBoundaryWarning();
             if (settings == null || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
                 return;
             if (_battery == null || !_battery.IsSpawned || _battery.VoyageEnded) return;
@@ -60,10 +99,14 @@ namespace WaveByWave.Generation
             {
                 return;
             }
-            if (!_waveActive || Time.time < _nextWaveCheck) return;
+            if (!_waveActive) return;
+            UpdateBoundaryServer();
+            if (Time.time < _nextWaveCheck) return;
             _nextWaveCheck = Time.time + 0.5f;
             if (WaveRemaining() != 0) return;
             _waveActive = false;
+            _battery.ClearBattlefieldServer();
+            _boundaryDamage.Reset();
             if (_waveIndex + 1 >= settings.Waves.Length)
             {
                 _victoryRequested = true;
@@ -91,8 +134,41 @@ namespace WaveByWave.Generation
             }
             if (_waveIndex >= settings.Waves.Length) return;
             _battery.SetVoyageWaveServer(_waveIndex + 1);
+            _battery.SetBattlefieldServer(_battery.transform.position,
+                settings.Waves[_waveIndex].BattlefieldRadius);
+            _boundaryDamage.Reset();
+            _nextBoundaryCheck = Time.time;
             SpawnWave();
             _waveActive = true;
+        }
+
+        private void UpdateBoundaryServer()
+        {
+            if (!_battery.BattlefieldActive || Time.time < _nextBoundaryCheck) return;
+            _nextBoundaryCheck = Time.time + settings.BoundaryCheckInterval;
+            var center = _battery.BattlefieldCenter;
+            var ship = _battery.transform.position;
+            var dx = ship.x - center.x;
+            var dz = ship.z - center.z;
+            var radius = _battery.BattlefieldRadius;
+            var outside = dx * dx + dz * dz > radius * radius;
+            var damage = _boundaryDamage.Step(Time.time, outside,
+                settings.BoundaryGraceSeconds, settings.BoundaryDamagePerSecond);
+            if (damage > 0f) _battery.ApplyBoundaryDamageServer(damage);
+        }
+
+        private void UpdateBoundaryWarning()
+        {
+            if (_battery == null || !_battery.IsSpawned || !_battery.BattlefieldActive)
+            { _localOutsideSince = -1f; return; }
+            var ship = _battery.transform.position;
+            var center = _battery.BattlefieldCenter;
+            var dx = ship.x - center.x;
+            var dz = ship.z - center.z;
+            var radius = _battery.BattlefieldRadius;
+            if (dx * dx + dz * dz <= radius * radius)
+            { _localOutsideSince = -1f; return; }
+            if (_localOutsideSince < 0f) _localOutsideSince = Time.time;
         }
 
         private Vector3 SpawnCenter(int index)
@@ -213,6 +289,18 @@ namespace WaveByWave.Generation
             GUI.color = _battery.Phase == VoyagePhase.Night ? Color.cyan : Color.yellow;
             GUI.DrawTexture(bar, Texture2D.whiteTexture);
             GUI.color = previous;
+            if (_localOutsideSince >= 0f && settings != null)
+            {
+                var grace = Mathf.Max(0f, settings.BoundaryGraceSeconds -
+                    (Time.time - _localOutsideSince));
+                var warning = grace > 0f
+                    ? $"ВЕРНИТЕСЬ В ПОЛЕ БОЯ · УРОН ЧЕРЕЗ {Mathf.CeilToInt(grace)} С"
+                    : "ВЕРНИТЕСЬ В ПОЛЕ БОЯ · КОРАБЛЬ ПОЛУЧАЕТ УРОН";
+                _boundaryStyle ??= new GUIStyle(GUI.skin.label)
+                { alignment = TextAnchor.MiddleCenter, fontSize = 19, fontStyle = FontStyle.Bold };
+                _boundaryStyle.normal.textColor = new Color(1f, .58f, .4f);
+                GUI.Label(new Rect(Screen.width * .5f - 360f, 92f, 720f, 32f), warning, _boundaryStyle);
+            }
             if (string.IsNullOrEmpty(_announcement) || Time.unscaledTime >= _announcementUntil) return;
             var remaining = Mathf.Min(1f, _announcementUntil - Time.unscaledTime);
             var banner = new Rect(Screen.width * 0.5f - 310f, Screen.height * 0.18f, 620f, 80f);

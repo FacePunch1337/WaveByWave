@@ -11,22 +11,29 @@ namespace WaveByWave.Generation
     public enum IslandSize : byte { Small, Medium, Large }
 
     [Serializable]
+    public sealed class IslandEnemyDayEntry
+    {
+        public EnemyKind EnemyType;
+    }
+
+    [Serializable]
     public sealed class IslandEnemyDayRule
     {
         [Min(1), Tooltip("Applies from this voyage day until the next rule. Day numbers match the voyage HUD.")]
         public int FromDay = 1;
-        public bool Skeleton = true;
-        public bool Troll;
-        public bool Shark;
-        public bool Amphibian;
-        [Tooltip("On: choose one enabled species per spawn point. Off: spawn a group of every enabled species. No enabled species means no enemies.")]
+        [Tooltip("On: choose one entry from Enemies per spawn point. Off: spawn a group of every listed enemy. An empty list means no enemies.")]
         public bool Random = true;
+        [Tooltip("Enemy species allowed on this day. Counts, radii and combat settings come from the matching Enemy Spawn Point Prefab.")]
+        public List<IslandEnemyDayEntry> Enemies = new();
+    }
 
-        public bool Allows(EnemyKind kind) => kind switch
-        {
-            EnemyKind.Skeleton => Skeleton, EnemyKind.Troll => Troll,
-            EnemyKind.Shark => Shark, EnemyKind.Amphibian => Amphibian, _ => false
-        };
+    [Serializable]
+    public sealed class LootRarityUnlock
+    {
+        [Min(1), Tooltip("All listed rarities become available on this voyage day and stay available on every later day.")]
+        public int FromDay = 1;
+        [Tooltip("Add every rarity unlocked on this day. Earlier unlocks remain available without repeating them here.")]
+        public List<LootRarityTier> Rarities = new();
     }
 
     [Serializable]
@@ -39,6 +46,8 @@ namespace WaveByWave.Generation
         [Min(0f)] public float MinimumHeightAboveWater = 0.25f;
         [Min(0.1f)] public float Spacing = 1.2f;
         public bool AlignToSurface;
+        [Tooltip("Place the bottom of the visible mesh on the island instead of the prefab root. Accounts for nested model offsets and scale; useful after replacing a tree mesh. Off preserves deliberately buried rocks.")]
+        public bool GroundMeshBase;
     }
 
     [CreateAssetMenu(menuName = "Wave by Wave/World/Ocean Generation Settings")]
@@ -56,7 +65,10 @@ namespace WaveByWave.Generation
         [Min(0.1f)] public float LootFadeDuration = 1.2f;
         [Range(0.05f, 1f), Tooltip("Интервал проверки видимости готовых островов после загрузки. Эта проверка не обязана выполняться каждый кадр.")]
         public float PresentationRefreshInterval = 0.2f;
-        public List<WeightedLootEntry> FloatingLoot = new();
+        [FormerlySerializedAs("FloatingLoot"), Tooltip("All floating items and their relative selection weights. Locked rarities are excluded until their unlock day.")]
+        public List<WeightedItemEntry> FloatingObjects = new();
+        [Tooltip("Each day entry permanently unlocks every tier in its Rarities list. Unlisted rarities never spawn; an empty schedule disables floating loot.")]
+        public List<LootRarityUnlock> FloatingRarityUnlocks = DefaultRarityUnlocks();
         [Header("Цепочка и предзагрузка островов")]
         [FormerlySerializedAs("IslandRadius")]
         [Tooltip("Минимальная и максимальная дистанция от корабля до первого острова впереди. Первые острова полностью строятся под загрузочной шторкой.")]
@@ -104,7 +116,7 @@ namespace WaveByWave.Generation
         public List<IslandDecoration> Decorations = new();
 
         [Header("Island enemies")]
-        [Tooltip("Empty keeps the existing prefab pool. Rules are evaluated when players activate a spawn point, so preloaded islands use the current day. Spawned enemies are not rerolled when the day changes.")]
+        [Tooltip("Empty keeps the existing prefab pool. Otherwise only the day's listed enemies can spawn; before the first rule, none spawn. Rules are evaluated when players activate a spawn point. Existing enemies are not rerolled.")]
         public List<IslandEnemyDayRule> EnemySpawnDays = new();
         public bool GenerateEnemySpawnPoints = true;
         [Tooltip("Пул префабов с EnemySpawnPoint, например SkeletonSpawn_OnPlayerRadius. Выбирается случайный вариант; активация всегда по входу игрока в радиус.")]
@@ -128,7 +140,10 @@ namespace WaveByWave.Generation
         public Vector2Int ChestCountSmall = new(1, 2);
         public Vector2Int ChestCountMedium = new(2, 3);
         public Vector2Int ChestCountLarge = new(3, 5);
+        [Tooltip("All island chest items, their relative selection weights and copies per selection. Chest Count settings limit the total number of chests on an island.")]
         public List<WeightedLootEntry> BuriedChests = new();
+        [Tooltip("Cumulative rarity unlocks for the Buried Chests pool. Unlisted rarities never spawn. Existing chests are not rerolled when a new rarity unlocks.")]
+        public List<LootRarityUnlock> BuriedChestRarityUnlocks = DefaultRarityUnlocks();
         public GameObject BuriedMarkerPrefab;
 
         [Header("Общие ресурсы")]
@@ -152,5 +167,25 @@ namespace WaveByWave.Generation
                     (result == null || rule.FromDay > result.FromDay)) result = rule;
             return result;
         }
+
+        public static int UnlockedRarities(IReadOnlyList<LootRarityUnlock> rules, int day)
+        {
+            var mask = 0;
+            if (rules == null) return mask;
+            foreach (var rule in rules)
+            {
+                if (rule == null || rule.FromDay > Mathf.Max(1, day) || rule.Rarities == null) continue;
+                mask |= LootRarityTier.ToMask(rule.Rarities);
+            }
+            return mask;
+        }
+
+        private static List<LootRarityUnlock> DefaultRarityUnlocks() => new()
+        {
+            new() { FromDay = 1, Rarities = new() { new() { Rarity = ItemRarity.Common }, new() { Rarity = ItemRarity.Uncommon } } },
+            new() { FromDay = 2, Rarities = new() { new() { Rarity = ItemRarity.Rare } } },
+            new() { FromDay = 3, Rarities = new() { new() { Rarity = ItemRarity.Epic } } },
+            new() { FromDay = 4, Rarities = new() { new() { Rarity = ItemRarity.Legendary } } }
+        };
     }
 }

@@ -127,6 +127,11 @@ namespace WaveByWave.Editor
                 "Boundary must create spaced breaches after grace and reset on re-entry");
             var site = _ship.Hull.Sites[_ship.Hull.Sites.Length / 2];
             var point = _ship.Hull.transform.TransformPoint(site.Position);
+            _ship.DamageBreachChancePercent = 0f;
+            _hullHealth.ApplyDamageServer(25f, point);
+            Check(_ship.HoleCount == 0 && _ship.Inflow == 0f && _ship.WaterLitres == 0f,
+                "Zero breach chance must prevent ordinary hits from opening holes or adding water");
+            _ship.DamageBreachChancePercent = 100f;
             _hullHealth.ApplyDamageServer(25f, point);
             Check(_ship.HoleCount == 1 && _ship.Inflow > 0f, "Cannon hit must open a leaking breach on the server");
             var waterPoint = _ship.WaterVolume.transform.TransformPoint(_ship.WaterVolume.LocalBounds.center);
@@ -180,10 +185,16 @@ namespace WaveByWave.Editor
             _hullHealth.ApplyDamageServer(25f, point);
             Check(_ship.HoleCount == 1, "A new hit after repair must create another breach");
             var waterBeforeBoundary = _ship.WaterLitres;
+            _ship.DamageBreachChancePercent = 0f;
             Check(_hullHealth.OpenBoundaryBreachServer(1f) && _ship.HoleCount == 2 &&
                   _ship.Inflow > _ship.LeakLitresPerSecond &&
                   Mathf.Approximately(_ship.WaterLitres, waterBeforeBoundary),
-                "Leaving the battlefield must open a leaking, repairable hole without adding water directly");
+                "Boundary damage must open a leaking hole even at zero damage breach chance, without adding water directly");
+            var inflowBeforeHit = _ship.Inflow;
+            _hullHealth.ApplyDamageServer(25f, point);
+            Check(_ship.HoleCount == 2 && Mathf.Approximately(_ship.Inflow, inflowBeforeHit),
+                "Zero breach chance must also prevent ordinary hits from worsening existing leaks");
+            _ship.DamageBreachChancePercent = 100f;
             _ship.AddWaterServer(_ship.CapacityLitres, waterPoint);
             Check(_ship.IsSinking && _battery.Phase == VoyagePhase.Defeat && _battery.ReturnToPortIn > 0f, "Full water must start defeat and the shared port countdown");
             var count = _ship.HoleCount;

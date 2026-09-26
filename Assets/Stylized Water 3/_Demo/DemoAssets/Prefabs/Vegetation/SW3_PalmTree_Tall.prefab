@@ -72,10 +72,10 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.23529035
-  m_Height: 2.701181
+  m_Radius: 0.45
+  m_Height: 3.49
   m_Direction: 1
-  m_Center: {x: 0.099999994, y: 1.2476552, z: 0.048129022}
+  m_Center: {x: 0.27, y: 1.2476552, z: -0.69}
 --- !u!1 &5503911976594034432
 GameObject:
   m_ObjectHideFlags: 0
@@ -137,6 +137,8 @@ MeshRenderer:
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
   m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -159,6 +161,7 @@ MeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0

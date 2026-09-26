@@ -25,6 +25,8 @@ MonoBehaviour:
   HitCapsuleStart: {x: 0, y: 0.4, z: -0.8}
   HitCapsuleEnd: {x: 0, y: 0.4, z: 0.8}
   SpawnWhenPlayerEntersOcean: 0
+  OceanEncounterMaximumSharks: 5
+  OceanEncounterRespawnDelay: 3
   OceanEncounterMinimumDistance: 8
   OceanEncounterMaximumDistance: 16
   ShowHealthBars: 0
@@ -258,8 +260,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   WaterProfile: {fileID: 11400000, guid: 1ca4610f5bf9e2f4bb39535503a79eeb, type: 2}
-  MaximumSurfaceGap: 1
-  SurfaceTransferHeight: 1
+  MaximumSurfaceGap: 5
+  SurfaceTransferHeight: 10
   EdgeSearchesPerFrame: 32
   UseBakedDeckNavigation: 0
   EnableTargetSlots: 0
@@ -268,7 +270,8 @@ MonoBehaviour:
   EnableCrowdSeparation: 0
   EnableCrowdCollisions: 1
   EnableSurfaceContinuityChecks: 1
-  EnableSurfaceEdgeFollowing: 1
+  EnableSurfaceEdgeFollowing: 0
+  EnableSurfaceEdgeDetours: 0
   EnableSurfaceTransfers: 1
   EnableCombat: 1
   SpawnsPerFrame: 32

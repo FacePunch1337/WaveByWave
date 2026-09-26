@@ -293,33 +293,49 @@ namespace WaveByWave.Generation
             LootStressTest.RegisterCatalog(settings.Catalog, settings.RarityEffectPrefab, settings.WaterProfile);
             if (Unity.NetCode.ClientServerBootstrap.ServerWorld is not { IsCreated: true }) return false;
             var island = record.Island;
+            var loot = settings.BuriedChests;
+            if (loot == null || loot.Count == 0) return true;
+            var rarityMask = OceanGenerationSettings.UnlockedRarities(settings.BuriedChestRarityUnlocks,
+                NightWaveController.Active?.CurrentDay ?? 1);
+            if (rarityMask == 0) return true;
             var random = new Unity.Mathematics.Random((island.Seed ^ 0x6E624EB7u) | 1u);
             var range = island.Size == IslandSize.Small ? settings.ChestCountSmall :
                 island.Size == IslandSize.Medium ? settings.ChestCountMedium : settings.ChestCountLarge;
             var count = random.NextInt(Mathf.Clamp(range.x, 0, 16), Mathf.Clamp(range.y, Mathf.Clamp(range.x, 0, 16), 16) + 1);
+            WeightedLootEntry batch = null;
+            var batchRemaining = 0;
             for (var n = 0; n < count; n++)
-            for (var attempt = 0; attempt < 24; attempt++)
             {
-                var p = random.NextFloat2(-island.Diameter * 0.32f, island.Diameter * 0.32f);
-                if (!island.TrySurface(p.x, p.y, out var surface, out var normal) ||
-                    surface.y < island.transform.position.y + 0.15f || normal.y < 0.7f) continue;
-                var definition = ChestLootTable.Choose(settings.BuriedChests, ref random);
-                if (definition == null || !definition.IsChest) break;
-                var minimumDepth = Mathf.Max(0.4f, settings.BurialDepth.x);
-                var depth = random.NextFloat(minimumDepth, Mathf.Max(minimumDepth + 0.01f, settings.BurialDepth.y));
-                depth = Mathf.Min(depth, island.BedrockDepth * 0.7f);
-                var position = surface - Vector3.up * depth;
-                if (island.DensityAt(position - Vector3.up * 0.3f).y > -0.05f) continue;
-                var tooClose = false;
-                foreach (var existing in record.Markers.Values)
-                    if ((existing.Position - surface).sqrMagnitude < 1.2f) { tooClose = true; break; }
-                if (tooClose) continue;
-                var id = LootStressTest.SpawnPlacedServer(definition, position,
-                    Quaternion.Euler(0f, random.NextFloat(0f, 360f), 0f) * definition.RestingRotation, false, island.Id);
-                if (id == 0) break;
-                var packet = new Packet { Kind = Kind.Marker, Id = island.Id, ChestId = id,
-                    Position = surface + Vector3.up * 0.04f, Scene = CurrentScene() };
-                Apply(packet); Broadcast(packet); break;
+                if (batchRemaining <= 0)
+                {
+                    batch = ChestLootTable.ChooseEntry(loot, ref random, rarityMask: rarityMask, chestsOnly: true);
+                    if (batch == null) break;
+                    var minimum = Mathf.Clamp(batch.MinimumAmount, 1, 16);
+                    batchRemaining = random.NextInt(minimum, Mathf.Clamp(batch.MaximumAmount, minimum, 16) + 1);
+                }
+                var definition = batch.Item;
+                for (var attempt = 0; attempt < 24; attempt++)
+                {
+                    var p = random.NextFloat2(-island.Diameter * 0.32f, island.Diameter * 0.32f);
+                    if (!island.TrySurface(p.x, p.y, out var surface, out var normal) ||
+                        surface.y < island.transform.position.y + 0.15f || normal.y < 0.7f) continue;
+                    var minimumDepth = Mathf.Max(0.4f, settings.BurialDepth.x);
+                    var depth = random.NextFloat(minimumDepth, Mathf.Max(minimumDepth + 0.01f, settings.BurialDepth.y));
+                    depth = Mathf.Min(depth, island.BedrockDepth * 0.7f);
+                    var position = surface - Vector3.up * depth;
+                    if (island.DensityAt(position - Vector3.up * 0.3f).y > -0.05f) continue;
+                    var tooClose = false;
+                    foreach (var existing in record.Markers.Values)
+                        if ((existing.Position - surface).sqrMagnitude < 1.2f) { tooClose = true; break; }
+                    if (tooClose) continue;
+                    var id = LootStressTest.SpawnPlacedServer(definition, position,
+                        Quaternion.Euler(0f, random.NextFloat(0f, 360f), 0f) * definition.RestingRotation, false, island.Id);
+                    if (id == 0) { batchRemaining = 0; break; }
+                    batchRemaining--;
+                    var packet = new Packet { Kind = Kind.Marker, Id = island.Id, ChestId = id,
+                        Position = surface + Vector3.up * 0.04f, Scene = CurrentScene() };
+                    Apply(packet); Broadcast(packet); break;
+                }
             }
             return true;
         }
@@ -337,6 +353,10 @@ namespace WaveByWave.Generation
         private void SpawnFloatingLoot()
         {
             if (NightWaveController.BattleInProgress) return;
+            var loot = settings.FloatingObjects;
+            var rarityMask = OceanGenerationSettings.UnlockedRarities(settings.FloatingRarityUnlocks,
+                NightWaveController.Active?.CurrentDay ?? 1);
+            if (loot == null || loot.Count == 0 || rarityMask == 0) return;
             var target = Mathf.Clamp(settings.FloatingLootPerShip, 1, 3000) * _ships.Length;
             for (var n = 0; n < Mathf.Clamp(settings.LootPerInterval, 1, 16) && _floating.Count < target; n++)
             for (var attempt = 0; attempt < 8; attempt++)
@@ -347,7 +367,7 @@ namespace WaveByWave.Generation
                 if (!IsOpenWater(position, 0.8f, out var level)) continue;
                 position.y = level;
                 if (_water.TryHeight(position, out var wave)) position.y = wave;
-                var definition = ChestLootTable.Choose(settings.FloatingLoot, ref _random);
+                var definition = ChestLootTable.Choose(loot, ref _random, rarityMask: rarityMask);
                 if (definition == null) return;
                 var id = LootStressTest.SpawnPlacedServer(definition, position,
                     Quaternion.Euler(0f, _random.NextFloat(0f, 360f), 0f) * definition.RestingRotation,

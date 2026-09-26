@@ -25,6 +25,45 @@ namespace WaveByWave.Editor
         private static void RunRequested()
         {
             if (!File.Exists(Request) || EditorApplication.isCompiling || EditorApplication.isUpdating) return;
+            if (File.GetLastWriteTimeUtc("Assets/_Project/Editor/EnemyPursuitChecks.cs") >
+                File.GetLastWriteTimeUtc(typeof(EnemyPursuitChecks).Assembly.Location))
+            { AssetDatabase.Refresh(); return; }
+            string command;
+            try { command = File.ReadAllText(Request).Trim(); }
+            catch (IOException) { return; }
+            if (command == "palm-grounding")
+            {
+                File.Delete(Request);
+                try { OceanGenerationChecks.CheckDecorationPlacement(); File.WriteAllText("Temp/IslandPalmGrounding.result", "PASS: actual configured palm mesh, seeded island generation, child offsets, rotation, random scale and support points."); }
+                catch (Exception error) { File.WriteAllText("Temp/IslandPalmGrounding.result", "FAIL: " + error); }
+                return;
+            }
+            if (command == "catalog-binding")
+            {
+                File.Delete(Request);
+                try
+                {
+                    CheckSkeletonCatalogBinding();
+                    var catalog = Resources.Load<DotsEnemyCatalog>(DotsEnemyCatalog.SkeletonResourcePath);
+                    File.WriteAllText("Temp/EnemyCatalogBinding.result", $"PASS: {AssetDatabase.GetAssetPath(catalog)}; step={catalog.StepHeight}; drop={catalog.MaximumDrop}; gap={catalog.MaximumSurfaceGap}; transferHeight={catalog.SurfaceTransferHeight}; edgeFollowing={catalog.EnableSurfaceEdgeFollowing}; edgeDetours={catalog.EnableSurfaceEdgeDetours}");
+                }
+                catch (Exception error) { File.WriteAllText("Temp/EnemyCatalogBinding.result", "FAIL: " + error); }
+                return;
+            }
+            if (command == "climbing-regression")
+            {
+                File.Delete(Request);
+                try { CheckClimbing(); File.WriteAllText("Temp/EnemyClimbing.result", "PASS: mesh deck recovery, raised ledge, ship gap, disabled edge following, gap and height limits."); }
+                catch (Exception error) { File.WriteAllText("Temp/EnemyClimbing.result", "FAIL: " + error); }
+                return;
+            }
+            if (command == "boarding-snapshot")
+            {
+                File.Delete(Request);
+                try { CaptureBoardingSnapshot(); }
+                catch (Exception error) { File.WriteAllText("Temp/EnemyBoardingSnapshot.result", error.ToString()); }
+                return;
+            }
             if (EditorApplication.isPlayingOrWillChangePlaymode)
             { _safeEditorFrames = 0; return; }
             // isPlayingOrWillChangePlaymode can turn false one update before the editor
@@ -46,10 +85,207 @@ namespace WaveByWave.Editor
         private static void Check(bool condition, string reason)
         { if (!condition) throw new InvalidOperationException(reason); }
 
+        private static void CheckSkeletonCatalogBinding()
+        {
+            var authored = AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(
+                "Assets/_Project/Resources/Enemies/SkeletonEnemyCatalog.asset");
+            Check(authored != null && authored.IsBaked, "The authored skeleton profile is missing or not baked.");
+            Check(Resources.Load<DotsEnemyCatalog>(DotsEnemyCatalog.SkeletonResourcePath) == authored,
+                "Runtime loads a different skeleton profile than the one authored in Resources/Enemies.");
+            Check(AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(EnemyContentSetup.CatalogPath) == authored,
+                "Skeleton baking/editor tools address a different profile than runtime.");
+        }
+
+        private static void CheckClimbing()
+        {
+            // An inactive runtime avoids Awake/bootstrap and never touches live entities.
+            // Fixtures are far from gameplay, exist only during this synchronous check,
+            // and are removed without changing the active scene or Play Mode.
+            var activeScene = SceneManager.GetActiveScene();
+            var scene = Application.isPlaying ? SceneManager.CreateScene("Enemy climbing regression " + Guid.NewGuid()) :
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            var root = new GameObject("Climbing check runtime");
+            root.SetActive(false);
+            var hull = new GameObject("Single mesh hull and deck");
+            var destination = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var mesh = new Mesh();
+            var catalog = ScriptableObject.CreateInstance<DotsEnemyCatalog>();
+            var water = new EquipmentWaterQuery(null);
+            try
+            {
+                SceneManager.MoveGameObjectToScene(root, scene);
+                SceneManager.MoveGameObjectToScene(hull, scene);
+                SceneManager.MoveGameObjectToScene(destination, scene);
+                var runtime = root.AddComponent<DotsEnemyRuntime>();
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                typeof(DotsEnemyRuntime).GetProperty("Catalog").SetValue(runtime, catalog);
+                typeof(DotsEnemyRuntime).GetField("_water", flags).SetValue(runtime, water);
+                catalog.StepHeight = 10;
+                catalog.MaximumDrop = 10;
+                catalog.SurfaceTransferHeight = 20;
+                catalog.MaximumSurfaceGap = 20;
+                catalog.SurfaceVerticalSpeed = 4;
+                catalog.MaximumSlope = 70;
+                catalog.IgnoredObstacleWidth = 0;
+                catalog.EnableSurfaceEdgeFollowing = false;
+                catalog.EnableSurfaceEdgeDetours = false;
+                catalog.EnableSurfaceTransfers = true;
+                var origin = new Vector3(10000, 10000, 10000);
+                hull.transform.position = origin;
+                hull.AddComponent<EnemySurfaceAnchor>().Key = "Climbing source";
+                destination.AddComponent<EnemySurfaceAnchor>().Key = "Climbing destination";
+                mesh.vertices = new[]
+                {
+                    new Vector3(-1,0,-2), new Vector3(-1,0,2), new Vector3(1,0,2), new Vector3(1,0,-2),
+                    new Vector3(-1,1,-2), new Vector3(-1,1,2), new Vector3(1,9,2), new Vector3(1,9,-2)
+                };
+                mesh.triangles = new[] { 0,1,2,0,2,3,4,5,6,4,6,7 };
+                mesh.RecalculateNormals(); mesh.RecalculateBounds();
+                var collider = hull.AddComponent<UnityEngine.MeshCollider>();
+                collider.sharedMesh = mesh;
+                destination.transform.localScale = new Vector3(3,1,4);
+                destination.transform.position = origin + new Vector3(4.5f,3.5f,0);
+                UnityEngine.Physics.SyncTransforms();
+                runtime.RegisterSurface(hull.transform);
+                runtime.RegisterSurface(destination.transform);
+                Check(collider.Raycast(new UnityEngine.Ray(origin + Vector3.up * 10, Vector3.down), out var first, 20) &&
+                    first.normal.y < Mathf.Cos(catalog.MaximumSlope * Mathf.Deg2Rad), "Fixture did not hit the steep hull first.");
+                var recover = typeof(DotsEnemyRuntime).GetMethod("TryWalkableFace", flags);
+                object[] faceArgs = { first, 20f, catalog };
+                Check((bool)recover.Invoke(runtime, faceArgs) &&
+                    Mathf.Abs(((RaycastHit)faceArgs[0]).point.y - origin.y) < 0.01f,
+                    "The steep hull hid its own walkable deck.");
+                var groundAt = typeof(DotsEnemyRuntime).GetMethod("GroundAt", flags);
+                object[] groundArgs = { origin, default(RaycastHit) };
+                Check((bool)groundAt.Invoke(runtime, groundArgs) &&
+                    Mathf.Abs(((RaycastHit)groundArgs[1]).point.y - origin.y) < 0.01f,
+                    "GroundAt missed a deck inside a compound ship mesh.");
+                using (var commands = new NativeArray<RaycastCommand>(new[] {
+                    new RaycastCommand(origin + Vector3.up * 10, Vector3.down,
+                        new QueryParameters(~0, false, QueryTriggerInteraction.Ignore, false), 20)
+                }, Allocator.TempJob))
+                using (var hits = new NativeArray<RaycastHit>(8, Allocator.TempJob))
+                {
+                    RaycastCommand.ScheduleBatch(commands, hits, 1, 8).Complete();
+                    var selected = (RaycastHit)typeof(DotsEnemyRuntime).GetMethod("SelectBatchGround", flags)
+                        .Invoke(runtime, new object[] { hits, 0, false });
+                    Check(selected.collider == collider && Mathf.Abs(selected.point.y - origin.y) < 0.01f,
+                        "The production ground batch still rejected the deck below the hull.");
+                }
+                var attach = typeof(DotsEnemyRuntime).GetMethod("AttachSurface", flags);
+                var begin = typeof(DotsEnemyRuntime).GetMethod("TryBeginSurfaceTransfer", flags);
+                var advance = typeof(DotsEnemyRuntime).GetMethod("AdvanceSurfaceTransfer", flags);
+                DotsEnemyState Start(int id)
+                {
+                    object[] args = { new DotsEnemyState { Id = id, Health = 60,
+                        Position = origin + Vector3.right * 0.98f, Rotation = quaternion.identity }, collider };
+                    attach.Invoke(runtime, args);
+                    return (DotsEnemyState)args[0];
+                }
+                void Finish(ref DotsEnemyState state, float minimumY)
+                {
+                    var brain = new DotsEnemyBrain();
+                    for (var frame = 0; frame < 500; frame++)
+                    {
+                        var previous = state.Position;
+                        object[] args = { state, brain, 0.02f, 10f };
+                        if (!(bool)advance.Invoke(runtime, args)) break;
+                        state = (DotsEnemyState)args[0]; brain = (DotsEnemyBrain)args[1];
+                        Check(math.abs(state.Position.y - previous.y) <= catalog.SurfaceVerticalSpeed * 0.02f + 0.005f,
+                            "Climbing exceeded the configured vertical speed.");
+                    }
+                    Check(state.Position.y >= minimumY - 0.01f, "The bot failed to finish its climb.");
+                }
+                var state = Start(9901);
+                Check((bool)begin.Invoke(runtime, new object[] { state, destination.transform.position }),
+                    "Gap transfer did not start with a steep hull above the departure deck and edge following OFF.");
+                Finish(ref state, origin.y + 4);
+                Check(state.Position.x > origin.x + 3, "The bot did not reach the far side of the gap.");
+                catalog.MaximumSurfaceGap = 1;
+                Check(!(bool)begin.Invoke(runtime, new object[] { Start(9902), destination.transform.position }),
+                    "Transfer ignored the maximum gap.");
+                catalog.MaximumSurfaceGap = 20;
+                catalog.SurfaceTransferHeight = 1;
+                Check(!(bool)begin.Invoke(runtime, new object[] { Start(9903), destination.transform.position }),
+                    "Transfer ignored the maximum height.");
+                // A high ledge directly ahead must stay selected while the feet climb.
+                destination.transform.position = origin + new Vector3(2.5f,3.5f,0);
+                UnityEngine.Physics.SyncTransforms();
+                Check(destination.GetComponent<UnityEngine.Collider>().Raycast(
+                    new UnityEngine.Ray(origin + new Vector3(1.05f,10,0), Vector3.down), out var landing, 20), "Missing ledge fixture.");
+                state = Start(9904);
+                Check((bool)typeof(DotsEnemyRuntime).GetMethod("BeginGroundStep", flags)
+                    .Invoke(runtime, new object[] { state, landing, 0.02f }), "Raised ledge was not committed.");
+                Finish(ref state, origin.y + 4);
+                Check(state.Position.x >= origin.x + 1, "Climbing did not reach the ledge.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(root); Object.DestroyImmediate(hull); Object.DestroyImmediate(destination);
+                Object.DestroyImmediate(mesh); Object.DestroyImmediate(catalog); water.Dispose();
+                if (Application.isPlaying) SceneManager.UnloadSceneAsync(scene);
+                else EditorSceneManager.CloseScene(scene, true);
+                if (activeScene.IsValid() && activeScene.isLoaded) SceneManager.SetActiveScene(activeScene);
+            }
+        }
+
+        [MenuItem("Tools/Wave by Wave/Enemies/Capture boarding diagnostics")]
+        public static void CaptureBoardingSnapshot()
+        {
+            var output = new System.Text.StringBuilder();
+            var runtime = DotsEnemyRuntime.Instance;
+            var world = Unity.NetCode.ClientServerBootstrap.ServerWorld;
+            output.AppendLine($"Playing={EditorApplication.isPlaying}; server={runtime != null && runtime.CanSimulate}");
+            if (runtime == null || world == null || !world.IsCreated)
+            {
+                File.WriteAllText("Temp/EnemyBoardingSnapshot.result", output.ToString());
+                return;
+            }
+            var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+            var groundAt = typeof(DotsEnemyRuntime).GetMethod("GroundAt", flags);
+            var transferAt = typeof(DotsEnemyRuntime).GetMethod("TransferGroundAt", flags);
+            var water = (EquipmentWaterQuery)typeof(DotsEnemyRuntime).GetField("_water", flags).GetValue(runtime);
+            var transfers = (System.Collections.IDictionary)typeof(DotsEnemyRuntime).GetField("_surfaceTransfers", flags).GetValue(runtime);
+            var catalog = runtime.Catalog;
+            output.AppendLine($"catalog={AssetDatabase.GetAssetPath(catalog)}");
+            output.AppendLine($"time={runtime.Now}; step={catalog.StepHeight}; drop={catalog.MaximumDrop}; gap={catalog.MaximumSurfaceGap}; transferHeight={catalog.SurfaceTransferHeight}; activeTransfers={transfers.Count}");
+            using var query = world.EntityManager.CreateEntityQuery(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
+            using var entities = query.ToEntityArray(Allocator.Temp);
+            var sampled = 0;
+            string Hit(RaycastHit hit) => hit.collider == null ? "none" :
+                $"{hit.collider.name} y={hit.point.y:F3} normalY={hit.normal.y:F3} root={hit.collider.transform.root.name}";
+            foreach (var entity in entities)
+            {
+                var state = world.EntityManager.GetComponentData<DotsEnemyState>(entity);
+                if (state.Health <= 0 || !DotsEnemyRuntime.IsShipSurface(state.SupportId)) continue;
+                var brain = world.EntityManager.GetComponentData<DotsEnemyBrain>(entity);
+                output.AppendLine($"Bot={state.Id} type={state.CombatType} pos={state.Position} support={state.SupportId} target={brain.Target} distance={brain.TargetDistance:F3} attacking={brain.Attacking} stunnedUntil={state.StunUntil:F3} blocked={brain.CrowdBlockedTime:F3} moving={brain.MoveDirection} updated={state.MovementUpdatedAt:F3} transfer={transfers.Contains(state.Id)}");
+                if (++sampled > 16) break;
+                if (water != null && water.TryWaterLevel(state.Position, out var level)) output.AppendLine($"  water={level:F3}");
+                var root = runtime.ResolveSurface(state.SupportId);
+                object[] sourceArgs = { (Vector3)state.Position, default(RaycastHit), root };
+                var source = (bool)transferAt.Invoke(runtime, sourceArgs);
+                output.AppendLine($"  departure={source} {Hit((RaycastHit)sourceArgs[1])}; root={(root == null ? "none" : root.name)}");
+                var direction = math.normalizesafe(brain.Direction);
+                foreach (var distance in new[] { 0f, 0.2f, 0.5f, 1f, 2f, 5f, 10f })
+                {
+                    var point = (Vector3)(state.Position + direction * distance);
+                    object[] args = { point, default(RaycastHit) };
+                    var ground = (bool)groundAt.Invoke(runtime, args);
+                    object[] transferArgs = { point, default(RaycastHit), null };
+                    var landing = (bool)transferAt.Invoke(runtime, transferArgs);
+                    output.AppendLine($"  d={distance:F2}: ground={ground} {Hit((RaycastHit)args[1])}; transfer={landing} {Hit((RaycastHit)transferArgs[1])}");
+                }
+            }
+            output.AppendLine($"Living bots on DOTS ship sampled={sampled}; total entities={entities.Length}");
+            File.WriteAllText("Temp/EnemyBoardingSnapshot.result", output.ToString());
+        }
+
         [MenuItem("Tools/Wave by Wave/Enemies/Check pursuit, edges and hull contacts")]
         public static void Run()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) throw new InvalidOperationException("Run outside Play Mode.");
+            CheckSkeletonCatalogBinding();
             CheckSteering();
             CheckSkeletonCrowd();
             CheckHullCast();
@@ -57,6 +293,7 @@ namespace WaveByWave.Editor
             CheckEdgeBudget();
             CheckMovementStability();
             CheckRenderBounds();
+            CheckClimbing();
             CheckEdges();
             CheckCrewSinking();
             Debug.Log("[Enemy pursuit checks] PASS");
@@ -332,11 +569,15 @@ namespace WaveByWave.Editor
                     foreach (var lateral in new[] { 3f, -3f })
                     {
                         var goal = origin + rotation * new Vector3(5,-2,lateral);
+                        var brain = new DotsEnemyBrain();
                         for (var step = 0; step < 150; step++)
                         {
-                            object[] args = { state, goal, 0.05f, default(RaycastHit) };
+                            object[] args = { state, brain, goal, 0.05f, default(RaycastHit) };
                             if (!(bool)follow.Invoke(runtime, args)) break;
-                            state.Position = ((RaycastHit)args[3]).point;
+                            brain = (DotsEnemyBrain)args[1];
+                            state.Position = ((RaycastHit)args[4]).point;
+                            var arrived = Quaternion.Inverse(rotation) * ((Vector3)state.Position - origin);
+                            if (Mathf.Abs(arrived.z - lateral) < 0.2f) break;
                         }
                         var local = Quaternion.Inverse(rotation) * ((Vector3)state.Position - origin);
                         Check(local.x <= 1.002f && Mathf.Abs(local.z - lateral) < 0.3f,
@@ -347,6 +588,22 @@ namespace WaveByWave.Editor
                 UnityEngine.Physics.SyncTransforms();
                 Check(!(bool)continuous.Invoke(runtime, new object[] { origin, origin + Vector3.right * 3 }),
                     "Unsupported path was accepted after jump removal.");
+                var detour = new DotsEnemyState { Id = 8001, SupportId = key, Position = origin + Vector3.right * 0.999f };
+                var detourBrain = new DotsEnemyBrain();
+                var detourSign = 0f;
+                for (var step = 0; step < 10; step++)
+                {
+                    var before = detour.Position;
+                    object[] args = { detour, detourBrain, origin + Vector3.right * 5, 0.05f, default(RaycastHit) };
+                    Check((bool)follow.Invoke(runtime, args), "Bot stopped at a local distance minimum instead of searching along the railing.");
+                    detourBrain = (DotsEnemyBrain)args[1];
+                    detour.Position = ((RaycastHit)args[4]).point;
+                    var dz = detour.Position.z - before.z;
+                    if (step == 0) detourSign = Mathf.Sign(dz);
+                    Check(dz * detourSign > 0 && Mathf.Abs(detour.Position.x - origin.x) <= 1.002f,
+                        "Edge detour reversed itself or left the supporting deck.");
+                }
+                Check(Mathf.Abs(detour.Position.z - origin.z) > 1.5f, "Edge detour did not make useful lateral progress.");
                 CheckSurfaceTransfers(runtime, deck, catalog, origin, key);
             }
             finally
@@ -466,6 +723,24 @@ namespace WaveByWave.Editor
                 Check(!(bool)begin.Invoke(runtime, new object[] { Start(id++, Quaternion.identity), origin + Vector3.right * 3 }),
                     "Zero gap limit did not disable walking transfers.");
                 catalog.MaximumSurfaceGap = 1;
+                destination.transform.position = origin + Vector3.right * 2 - Vector3.up * 0.5f;
+                UnityEngine.Physics.SyncTransforms();
+                Check((bool)begin.Invoke(runtime, new object[] { Start(id++, Quaternion.identity), origin + Vector3.right * 3 }),
+                    "Touching decks required an empty water sample to change support.");
+                destination.transform.position = origin + Vector3.right * 1.8f - Vector3.up * 0.5f;
+                UnityEngine.Physics.SyncTransforms();
+                Check((bool)begin.Invoke(runtime, new object[] { Start(id++, Quaternion.identity), origin + Vector3.right * 3 }),
+                    "Overlapping deck edges could not change support.");
+                foreach (var gap in new[] { 9.9f, 10f, 10.1f, 19.9f, 20f, 20.1f })
+                {
+                    catalog.MaximumSurfaceGap = gap < 15 ? 10 : 20;
+                    destination.transform.position = origin + Vector3.right * (2 + gap) - Vector3.up * 0.5f;
+                    UnityEngine.Physics.SyncTransforms();
+                    Check((bool)begin.Invoke(runtime, new object[] { Start(id++, Quaternion.identity), destination.transform.position }) ==
+                        (gap <= catalog.MaximumSurfaceGap), $"Extended gap limit failed at {gap} metres.");
+                }
+                catalog.MaximumSurfaceGap = 1;
+                destination.transform.position = origin + Vector3.right * 2.7f - Vector3.up * 0.5f;
                 destination.transform.position += Vector3.up * 1.5f;
                 UnityEngine.Physics.SyncTransforms();
                 Check(!(bool)begin.Invoke(runtime, new object[] { Start(id++, Quaternion.identity), origin + Vector3.right * 3 }),

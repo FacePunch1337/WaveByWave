@@ -117,7 +117,7 @@ MonoBehaviour:
   yawLimits: {x: -45, y: 45}
   elevationLimits: {x: -10, y: 60}
   aimSpeed: 50
-  baseDamage: 40
+  baseDamage: 100
   reloadDuration: 3
   muzzleSpeed: 55
   ballRadius: 0.13

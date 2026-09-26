@@ -15,6 +15,7 @@ namespace WaveByWave.Items
     {
         internal const byte ChestOpening = 4, ChestBurst = 5;
         private static readonly List<int> OpeningChests = new();
+        private static readonly ChestReward[] ChestRewards = new ChestReward[ChestLootTable.MaximumRewards];
         public static event Action<int> ServerItemRemoved;
         public static bool HasServerItem(int id) => ServerItems.ContainsKey(id);
 
@@ -80,20 +81,11 @@ namespace WaveByWave.Items
                 if (tier != null)
                 {
                     var random = new Unity.Mathematics.Random(unchecked((uint)id * 747796405u + 2891336453u) | 1u);
-                    var minimumRolls = Mathf.Clamp(tier.MinimumRolls, 1, 24);
-                    var rolls = random.NextInt(minimumRolls, Mathf.Clamp(tier.MaximumRolls, minimumRolls, 24) + 1);
-                    rolls = Mathf.Min(48, rolls + Mathf.FloorToInt(item.OpenerLuck * 2f));
-                    var emitted = 0;
-                    for (var roll = 0; roll < rolls && emitted < 48; roll++)
+                    var rolls = table.BuildRewards(tier, ref random, item.OpenerLuck, ChestRewards);
+                    for (var roll = 0; roll < rolls; roll++)
                     {
-                        var reward = ChestLootTable.Choose(tier.Items, ref random, item.OpenerLuck);
-                        if (reward == null || reward.IsChest) continue;
-                        var entry = tier.Items.Find(e => e != null && e.Item == reward);
-                        var amount = random.NextInt(Mathf.Clamp(entry.MinimumAmount, 1, 16),
-                            Mathf.Clamp(entry.MaximumAmount, Mathf.Clamp(entry.MinimumAmount, 1, 16), 16) + 1);
-                        if (reward.IsCoinReward)
-                            amount = Mathf.Min(48, Mathf.CeilToInt(amount * (1f + item.OpenerLuck)));
-                        for (var n = 0; n < amount && emitted < 48; n++, emitted++)
+                        var reward = ChestRewards[roll].Item;
+                        for (var n = 0; n < ChestRewards[roll].Amount; n++)
                         {
                             var angle = random.NextFloat(0f, Mathf.PI * 2f);
                             var direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));

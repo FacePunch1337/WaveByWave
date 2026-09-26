@@ -125,7 +125,7 @@ namespace WaveByWave.Enemies
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
-            Catalog = Resources.Load<DotsEnemyCatalog>("SkeletonEnemyCatalog");
+            Catalog = Resources.Load<DotsEnemyCatalog>(DotsEnemyCatalog.SkeletonResourcePath);
             _species[1] = Resources.Load<DotsEnemyCatalog>("Enemies/TrollEnemyCatalog");
             _species[2] = Resources.Load<DotsEnemyCatalog>("Enemies/SharkEnemyCatalog");
             _species[3] = Resources.Load<DotsEnemyCatalog>("Enemies/AmphibianEnemyCatalog");
@@ -176,7 +176,7 @@ namespace WaveByWave.Enemies
                 DotsEnemyPresentation.Clear();
             }
             _wasServer = server;
-            if (Catalog == null) Catalog = Resources.Load<DotsEnemyCatalog>("SkeletonEnemyCatalog");
+            if (Catalog == null) Catalog = Resources.Load<DotsEnemyCatalog>(DotsEnemyCatalog.SkeletonResourcePath);
         }
         private void LateUpdate() => DotsEnemyPresentation.Update(this);
 
@@ -388,17 +388,21 @@ namespace WaveByWave.Enemies
                 var rule = settings != null ? settings.EnemyRuleForDay(NightWaveController.Active?.CurrentDay ?? 1) : null;
                 if (rule == null)
                 {
+                    // A configured schedule must not fall back to unrestricted enemies before its first day.
+                    if (settings?.EnemySpawnDays != null && settings.EnemySpawnDays.Count > 0) continue;
                     QueueIslandPoint(point, point, point.Kind, ref random);
                     continue;
                 }
+                if (rule.Enemies == null) continue;
                 // Reservoir selection avoids allocating a temporary species list per point.
                 var choices = 0;
                 var selected = EnemyKind.Skeleton;
-                for (var species = 0; species < _species.Length; species++)
+                foreach (var entry in rule.Enemies)
                 {
-                    var kind = (EnemyKind)species;
+                    if (entry == null) continue;
+                    var kind = entry.EnemyType;
                     var catalog = GetCatalog(kind);
-                    if (!rule.Allows(kind) || catalog == null || !catalog.IsBaked ||
+                    if (catalog == null || !catalog.IsBaked ||
                         !catalog.CanSpawnType(EnemyCombatType.Random)) continue;
                     if (!rule.Random) QueueIslandPoint(point, IslandPointTemplate(settings, point, kind), kind, ref random);
                     else if (random.NextInt(++choices) == 0) selected = kind;
@@ -800,6 +804,7 @@ namespace WaveByWave.Enemies
                 }
                 var movedDistance = 0f;
                 var movementEvaluated = true;
+                if (ground.collider != null) brain.SurfaceEdgeSide = 0;
                 if (ground.collider == null && (Catalog.EnableSurfaceTransfers || Catalog.EnableSurfaceEdgeFollowing) &&
                     brain.Target >= 0 && brain.Target < _players.Count && brain.Attacking == 0 &&
                     state.StunUntil <= now)
@@ -808,7 +813,7 @@ namespace WaveByWave.Enemies
                     {
                         edgeSearchesRemaining--;
                         var transferGoal = Feet(_players[brain.Target].Player);
-                        if (TryBeginSurfaceTransfer(state, transferGoal))
+                        if (SearchSurfaceTransfer(state, ref brain, transferGoal, now))
                         {
                             AdvanceSurfaceTransfer(ref state, ref brain, probe.DeltaTime, now);
                             UpdateCrowdSnapshot(in state);
@@ -816,12 +821,20 @@ namespace WaveByWave.Enemies
                             manager.SetComponentData(probe.Entity, brain);
                             continue;
                         }
-                        TryFollowEdge(state, brain.MoveTarget, probe.DeltaTime, out ground);
+                        TryFollowEdge(state, ref brain, brain.MoveTarget, probe.DeltaTime, out ground);
                     }
                     else movementEvaluated = false;
                 }
                 if (ground.collider != null)
                 {
+                    if (BeginGroundStep(state, ground, probe.DeltaTime))
+                    {
+                        AdvanceSurfaceTransfer(ref state, ref brain, probe.DeltaTime, now);
+                        UpdateCrowdSnapshot(in state);
+                        manager.SetComponentData(probe.Entity, state);
+                        manager.SetComponentData(probe.Entity, brain);
+                        continue;
+                    }
                     var previous = state.Position;
                     state.Position = new float3(ground.point.x,
                         SmoothSurfaceHeight(previous.y, ground.point.y,
@@ -860,7 +873,9 @@ namespace WaveByWave.Enemies
                 if (hit.collider == null) break;
                 if (ground.collider != null && hit.distance >= ground.distance) continue;
                 if (ValidSolid(hit.collider) &&
-                    !(ignoreMinor ? IsMinorObstacle(hit.collider) : IsIslandDecoration(hit.collider)) && Walkable(hit))
+                    !(ignoreMinor ? IsMinorObstacle(hit.collider) : IsIslandDecoration(hit.collider)) &&
+                    TryWalkableFace(ref hit, Catalog.StepHeight + Catalog.MaximumDrop + 0.1f, Catalog) &&
+                    (ground.collider == null || hit.distance < ground.distance))
                     ground = hit;
             }
             return ground;
@@ -907,11 +922,38 @@ namespace WaveByWave.Enemies
             var count = Physics.RaycastNonAlloc(origin, Vector3.down, _hits, distance,
                 navigation.SurfaceLayers, QueryTriggerInteraction.Ignore);
             for (var i = 0; i < count; i++)
-                if ((result.collider == null || _hits[i].distance < result.distance) &&
-                    ValidSolid(_hits[i].collider) && !IsMinorObstacle(_hits[i].collider, navigation) &&
-                    Walkable(_hits[i], navigation))
-                    result = _hits[i];
+            {
+                var hit = _hits[i];
+                if ((result.collider == null || hit.distance < result.distance) &&
+                    ValidSolid(hit.collider) && !IsMinorObstacle(hit.collider, navigation) &&
+                    TryWalkableFace(ref hit, distance, navigation) &&
+                    (result.collider == null || hit.distance < result.distance))
+                    result = hit;
+            }
             return result.collider != null;
+        }
+
+        private bool TryWalkableFace(ref RaycastHit hit, float rayDistance, DotsEnemyCatalog navigation)
+        {
+            if (Walkable(hit, navigation)) return true;
+            // A horizontal face rejected only because it is underwater cannot reveal
+            // dry ground farther down. Do not spend recovery probes on the seabed.
+            if (hit.normal.y >= Mathf.Cos(navigation.MaximumSlope * Mathf.Deg2Rad)) return false;
+            // PhysX returns only one face per MeshCollider. A steep hull/railing face
+            // must not hide the deck in that very same mesh. Retry only this collider,
+            // only after rejecting a face, with a fixed limit and no allocations.
+            if (hit.collider is not MeshCollider mesh || mesh.convex) return false;
+            for (var face = 0; face < GroundHitsPerProbe; face++)
+            {
+                var travelled = hit.distance + 0.002f;
+                if (travelled >= rayDistance || !mesh.Raycast(
+                        new Ray(hit.point + Vector3.down * 0.002f, Vector3.down),
+                        out var next, rayDistance - travelled)) return false;
+                next.distance += travelled;
+                hit = next;
+                if (Walkable(hit, navigation)) return true;
+            }
+            return false;
         }
         // Player melee keeps its physical occlusion rules; only enemy perception ignores props.
         public bool SolidBetween(Vector3 from, Vector3 to) => SolidBetween(from, to, false);

@@ -52,6 +52,8 @@ namespace WaveByWave.Ships
         [Min(10f)] public float CapacityLitres = 600f;
         [Min(0.01f)] public float LeakLitresPerSecond = 3f;
         [Min(1f)] public float ReferenceCannonDamage = 25f;
+        [Range(0f, 100f), Tooltip("Chance per damage hit to open or worsen a breach. Battlefield boundary breaches always bypass this chance.")]
+        public float DamageBreachChancePercent = 50f;
         [Min(0.25f)] public float RepairSeconds = 4f;
         [Min(0.5f)] public float RepairDistance = 2.8f;
         [Min(1f)] public float SinkDuration = 8f;
@@ -125,6 +127,9 @@ namespace WaveByWave.Ships
         {
             if (!IsServer || !IsSpawned || IsSinking || _battery.VoyageEnded ||
                 !float.IsFinite(damage) || damage <= 0f || Hull == null) return;
+            // Roll once on the server; clients receive the resulting breach through the network list.
+            if (DamageBreachChancePercent <= 0f || (DamageBreachChancePercent < 100f &&
+                UnityEngine.Random.value * 100f >= DamageBreachChancePercent)) return;
             if (HoleCount < ShipHullHoles.MaximumHoles && Hull.TryChooseSite(point, Occupied, out var site))
             {
                 _holes.Add(new HullBreach { Id = ++_nextHole, UV = site.UV, RadiusUV = Hull.RadiusUV(site),
@@ -149,6 +154,7 @@ namespace WaveByWave.Ships
 
         public bool OpenBoundaryBreachServer(float leakMultiplier)
         {
+            // Zone damage is guaranteed and intentionally ignores DamageBreachChancePercent.
             if (!IsServer || !IsSpawned || IsSinking || _battery.VoyageEnded || Hull == null ||
                 !float.IsFinite(leakMultiplier) || leakMultiplier <= 0f ||
                 HoleCount >= ShipHullHoles.MaximumHoles) return false;

@@ -42,6 +42,10 @@ namespace WaveByWave.Enemies
         public float3 Direction;
         public float3 MoveDirection;
         public float3 MoveTarget;
+        public int SurfaceEdgeSide;
+        public ulong SurfaceEdgeSupport;
+        public float3 SurfaceEdgeOrigin, SurfaceEdgeTarget;
+        public float NextSurfaceTransferSearch;
         public float TargetDistance;
         // Cached profile dimensions used by Burst steering; zero retains the legacy
         // defaults for skeleton crews and editor-created test entities.

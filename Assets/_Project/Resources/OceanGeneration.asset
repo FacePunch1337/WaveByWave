@@ -22,31 +22,33 @@ MonoBehaviour:
   LootDespawnRadius: 100
   LootFadeDuration: 1.2
   PresentationRefreshInterval: 0.2
-  FloatingLoot:
+  FloatingObjects:
   - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
     Weight: 3
-    MinimumAmount: 1
-    MaximumAmount: 1
   - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
     Weight: 2
-    MinimumAmount: 1
-    MaximumAmount: 1
   - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
     Weight: 0.5
-    MinimumAmount: 1
-    MaximumAmount: 1
   - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
     Weight: 0.2
-    MinimumAmount: 1
-    MaximumAmount: 1
   - Item: {fileID: 11400000, guid: 298a8c701dfa4681944fba4ebb0bc3b3, type: 2}
     Weight: 0.1
-    MinimumAmount: 1
-    MaximumAmount: 1
   - Item: {fileID: 11400000, guid: ab844d8473b14fbaa6827e333ad5bb11, type: 2}
     Weight: 0.01
-    MinimumAmount: 1
-    MaximumAmount: 1
+  FloatingRarityUnlocks:
+  - FromDay: 1
+    Rarities:
+    - Rarity: 0
+    - Rarity: 1
+  - FromDay: 2
+    Rarities:
+    - Rarity: 2
+  - FromDay: 3
+    Rarities:
+    - Rarity: 3
+  - FromDay: 4
+    Rarities:
+    - Rarity: 4
   InitialIslandRadius: {x: 200, y: 200}
   InitialIslandCount: 1
   IslandChainDistance: {x: 450, y: 550}
@@ -81,6 +83,7 @@ MonoBehaviour:
     MinimumHeightAboveWater: 0.25
     Spacing: 1.4
     AlignToSurface: 0
+    GroundMeshBase: 1
   - Prefab: {fileID: 1538027470874685010, guid: bdd2a5c95ae34574f9e6a41cc59cbf91, type: 3}
     InstancesPerSquareMetre: 0.001
     ScaleRange: {x: 0.25, y: 0.6}
@@ -88,26 +91,21 @@ MonoBehaviour:
     MinimumHeightAboveWater: 0.25
     Spacing: 1.4
     AlignToSurface: 0
-  GenerateEnemySpawnPoints: 1
   EnemySpawnDays:
   - FromDay: 1
-    Skeleton: 1
-    Troll: 0
-    Shark: 0
-    Amphibian: 0
-    Random: 1
+    Random: 0
+    Enemies:
+    - EnemyType: 0
   - FromDay: 2
-    Skeleton: 0
-    Troll: 1
-    Shark: 0
-    Amphibian: 0
-    Random: 1
+    Random: 0
+    Enemies:
+    - EnemyType: 1
   - FromDay: 3
-    Skeleton: 1
-    Troll: 1
-    Shark: 0
-    Amphibian: 0
-    Random: 1
+    Random: 0
+    Enemies:
+    - EnemyType: 0
+    - EnemyType: 1
+  GenerateEnemySpawnPoints: 1
   EnemySpawnPointPrefabs:
   - {fileID: 7781738345221626232, guid: 839d93365f4604242988f79aea861bf7, type: 3}
   - {fileID: 1574576170766270260, guid: 71ea93d9a08be264c988486819881b40, type: 3}
@@ -146,6 +144,20 @@ MonoBehaviour:
     Weight: 3
     MinimumAmount: 1
     MaximumAmount: 1
+  BuriedChestRarityUnlocks:
+  - FromDay: 1
+    Rarities:
+    - Rarity: 0
+    - Rarity: 1
+  - FromDay: 2
+    Rarities:
+    - Rarity: 2
+  - FromDay: 3
+    Rarities:
+    - Rarity: 3
+  - FromDay: 4
+    Rarities:
+    - Rarity: 4
   BuriedMarkerPrefab: {fileID: 1754251648626121848, guid: d8da2295886fcae4ea7a979c4f72de7c, type: 3}
   Catalog: {fileID: 11400000, guid: 2b563eb9625a0ab42b49b9db3e7db374, type: 2}
   WaterProfile: {fileID: 11400000, guid: 343e9ebae18bc0f48811edac300d64d0, type: 2}

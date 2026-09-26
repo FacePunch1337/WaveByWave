@@ -43,12 +43,14 @@ MonoBehaviour:
   WaterSampleSize: {x: 6, y: 15}
   PreferredBroadsideRange: 20
   RangeCorrectionBand: 12
-  OrbitWeight: 1
+  OrbitWeight: 0.5
   RangeCorrectionWeight: 3
-  BroadsideFireAngle: 30
-  FireRange: 60
+  BroadsideFireAngle: 45
+  FireRange: 100
   FireCooldown: 5
   FireCooldownJitter: 0.5
+  CannonAccuracy: 75
+  MaximumAimSpreadAngle: 15
   ProjectileSpeed: 44
   ProjectileGravity: 9.81
   ProjectileRadius: 0.16

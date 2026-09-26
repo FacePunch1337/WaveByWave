@@ -105,6 +105,9 @@ namespace WaveByWave.Enemies
         fileName = "SkeletonEnemyCatalog")]
     public sealed class DotsEnemyCatalog : ScriptableObject
     {
+        // Runtime, baking and editor tools must address the same authored profile.
+        public const string SkeletonResourcePath = "Enemies/SkeletonEnemyCatalog";
+        public const float MaximumTransferGap = 20f;
         [Header("Species")]
         public EnemyKind Kind;
         public string DisplayName = "Скелеты";
@@ -226,7 +229,7 @@ namespace WaveByWave.Enemies
         public LayerMask SurfaceLayers = ~0;
         public WaveProfile WaterProfile;
 
-        [Range(0f, 5f), Tooltip("Maximum water/air gap that can be crossed with a straight walking step, without a jump. Zero requires continuous ground.")]
+        [Range(0f, MaximumTransferGap), Tooltip("Maximum horizontal water/air gap between surface edges, in metres. Independent of Step Height and Maximum Drop. Zero disables gap transfers. Search samples and per-frame search count remain bounded at long distances.")]
         public float MaximumSurfaceGap = 1f;
         [Min(0.05f), Tooltip("Maximum height difference for a walking transfer between separated surfaces.")]
         public float SurfaceTransferHeight = 1f;
@@ -252,6 +255,8 @@ namespace WaveByWave.Enemies
         public bool EnableSurfaceContinuityChecks = true;
         [Tooltip("Search lateral directions along a blocked surface edge, on both baked decks and colliders. Off stops this search; crowd avoidance is a separate toggle.")]
         public bool EnableSurfaceEdgeFollowing = true;
+        [Tooltip("Allow a blocked bot to detour sideways along a railing even when that step temporarily moves away from the player. Off restores only distance-reducing edge steps and skips the extra detour probes. Applies live on the server; requires Enable Surface Edge Following and collider-based movement.")]
+        public bool EnableSurfaceEdgeDetours = true;
         [Tooltip("Search for walking transfers across water/air gaps. Off skips new searches; bots already crossing return to their departure surface without teleporting.")]
         public bool EnableSurfaceTransfers = true;
         [Tooltip("Allow enemy attacks, including their visibility checks and damage. Off cancels an ongoing attack. Incoming damage, stuns, pursuit and surface movement still work.")]

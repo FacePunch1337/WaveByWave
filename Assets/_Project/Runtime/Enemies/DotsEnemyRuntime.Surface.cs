@@ -13,8 +13,8 @@ namespace WaveByWave.Enemies
             public DotsEnemyState From, To;
             public Collider Source, Landing;
             public Vector3 EdgeFromLocal, EdgeToLocal;
-            public float Progress;
-            public bool Returning;
+            public float Progress, StepSpan;
+            public bool Returning, GroundStep;
         }
         private readonly Dictionary<int, SurfaceTransfer> _surfaceTransfers = new();
         private readonly struct MovementCrowdKey : IEquatable<MovementCrowdKey>
@@ -311,23 +311,86 @@ namespace WaveByWave.Enemies
             return true;
         }
 
-        private bool TransferGroundAt(Vector3 feet, out RaycastHit hit)
+        private bool TransferGroundAt(Vector3 feet, out RaycastHit hit, Transform sourceRoot = null)
         {
             var height = Mathf.Max(0.05f, Catalog.SurfaceTransferHeight);
-            return TryGround(feet + Vector3.up * (height + 0.01f), height * 2f + 0.02f, out hit) &&
-                Mathf.Abs(hit.point.y - feet.y) <= height;
+            // Departure is the surface under the feet, not a higher deck/railing
+            // somewhere within the full transfer-height range above this passenger.
+            var origin = feet + Vector3.up * (sourceRoot != null ? 0.08f : height + 0.01f);
+            var rayDistance = sourceRoot != null ? height + 0.09f : height * 2f + 0.02f;
+            if (sourceRoot == null)
+                return TryGround(origin, rayDistance, out hit) &&
+                    Mathf.Abs(hit.point.y - feet.y) <= height;
+
+            // Overlapping ship projections must not replace the bot's departure support
+            // with the neighbouring hull before it has actually boarded that hull.
+            hit = default;
+            var nearest = float.PositiveInfinity;
+            var count = Physics.RaycastNonAlloc(origin, Vector3.down, _hits, rayDistance,
+                Catalog.SurfaceLayers, QueryTriggerInteraction.Ignore);
+            for (var i = 0; i < count; i++)
+            {
+                var candidate = _hits[i];
+                if (!ValidSolid(candidate.collider) || !candidate.collider.transform.IsChildOf(sourceRoot) ||
+                    IsMinorObstacle(candidate.collider) ||
+                    !TryWalkableFace(ref candidate, rayDistance, Catalog)) continue;
+                var distance = Mathf.Abs(candidate.point.y - feet.y);
+                if (distance > height || distance >= nearest) continue;
+                nearest = distance;
+                hit = candidate;
+            }
+            return hit.collider != null;
+        }
+
+        private static bool SameTransferSurface(Collider source, Collider candidate)
+        {
+            if (source == candidate) return true;
+            if (source.attachedRigidbody != null)
+                return source.attachedRigidbody == candidate.attachedRigidbody;
+            var anchor = source.GetComponentInParent<EnemySurfaceAnchor>();
+            return anchor != null && candidate.GetComponentInParent<EnemySurfaceAnchor>() == anchor;
+        }
+
+        private bool SearchSurfaceTransfer(DotsEnemyState state, ref DotsEnemyBrain brain, Vector3 target, float now)
+        {
+            if (now < brain.NextSurfaceTransferSearch) return false;
+            // Stagger blocked bots and reuse the shared frame budget. Nearby moving ships
+            // are reconsidered within 0.15-0.22 seconds rather than raycasting every frame.
+            brain.NextSurfaceTransferSearch = now + 0.15f + (math.hash(new int2(state.Id, 823)) & 7u) * 0.01f;
+            return TryBeginSurfaceTransfer(state, target);
+        }
+
+        private bool BeginGroundStep(DotsEnemyState state, RaycastHit landing, float deltaTime)
+        {
+            var rise = landing.point.y - state.Position.y;
+            if (rise <= Mathf.Max(0.1f, Catalog.SurfaceVerticalSpeed * deltaTime) ||
+                rise > Catalog.StepHeight + 0.08f) return false;
+            // Keep an accepted ledge until the feet reach it. Recasting every frame
+            // while still below the deck can alternate between hull, deck and water.
+            var destination = state;
+            destination.Position = landing.point;
+            AttachSurface(ref destination, landing.collider);
+            _surfaceTransfers[state.Id] = new SurfaceTransfer
+            {
+                From = state, To = destination, Landing = landing.collider, GroundStep = true,
+                StepSpan = math.distance(state.Position.xz, destination.Position.xz)
+            };
+            return true;
         }
 
         private bool TryBeginSurfaceTransfer(DotsEnemyState state, Vector3 target)
         {
             if (!Catalog.EnableSurfaceTransfers) return false;
-            var maximumGap = Mathf.Clamp(Catalog.MaximumSurfaceGap, 0f, 5f);
-            if (maximumGap <= 0 || !TransferGroundAt(state.Position, out var source)) return false;
+            var maximumGap = Mathf.Clamp(Catalog.MaximumSurfaceGap, 0f, DotsEnemyCatalog.MaximumTransferGap);
+            if (maximumGap <= 0 ||
+                !TransferGroundAt(state.Position, out var source, ResolveSurface(state.SupportId))) return false;
             Vector3 from = source.point;
             var toward = Vector3.ProjectOnPlane(target - from, Vector3.up);
             if (toward.sqrMagnitude < 0.0001f) return false;
             var rotation = TryGetSurfaceFrame(state.SupportId, true, out var frame) ? frame.rotation : Quaternion.identity;
-            const float spacing = 0.1f;
+            // Keep a bounded sample count as the permitted gap grows. Binary refinement
+            // below still measures the actual edges accurately before accepting a path.
+            var spacing = Mathf.Max(0.1f, maximumGap / 64f);
             // Only search at a blocked edge, never across the entire water surface.
             for (var directionIndex = 0; directionIndex < 9; directionIndex++)
             {
@@ -339,19 +402,25 @@ namespace WaveByWave.Enemies
                 if (Vector3.Dot(direction, toward) <= 0) continue;
                 var lastSolid = 0f;
                 var firstEmpty = -1f;
+                var touchingSurface = false;
                 for (var distance = spacing; distance <= maximumGap + 0.4f; distance += spacing)
                 {
                     var supported = TransferGroundAt(from + direction * distance, out var landing);
                     if (firstEmpty < 0)
                     {
-                        if (supported) { lastSolid = distance; continue; }
+                        if (supported && SameTransferSurface(source.collider, landing.collider))
+                        { lastSolid = distance; continue; }
+                        // Touching or overlapping decks can change support without an empty
+                        // sample. They still need a transfer when a baked/blocked step fails.
+                        touchingSurface = supported;
                         firstEmpty = distance;
                         // Refine the departure edge so the setting measures water, not
                         // distance from the skeleton's centre to the other deck.
                         for (var refine = 0; refine < 6; refine++)
                         {
                             var middle = (lastSolid + firstEmpty) * 0.5f;
-                            if (TransferGroundAt(from + direction * middle, out _)) lastSolid = middle;
+                            if (TransferGroundAt(from + direction * middle, out var edge) &&
+                                SameTransferSurface(source.collider, edge.collider)) lastSolid = middle;
                             else firstEmpty = middle;
                         }
                     }
@@ -362,7 +431,8 @@ namespace WaveByWave.Enemies
                     for (var refine = 0; refine < 6; refine++)
                     {
                         var middle = (wet + dry) * 0.5f;
-                        if (TransferGroundAt(from + direction * middle, out _)) dry = middle;
+                        if (TransferGroundAt(from + direction * middle, out var edge) &&
+                            (!touchingSurface || !SameTransferSurface(source.collider, edge.collider))) dry = middle;
                         else wet = middle;
                     }
                     if (dry - lastSolid > maximumGap + 0.005f) break;
@@ -370,7 +440,6 @@ namespace WaveByWave.Enemies
                     if (!TransferGroundAt(from + direction * (dry + 0.08f), out landing)) break;
                     if (Vector3.ProjectOnPlane(target - landing.point, Vector3.up).sqrMagnitude >= toward.sqrMagnitude) break;
                     var departure = state;
-                    departure.Position = from;
                     AttachSurface(ref departure, source.collider);
                     var destination = state;
                     destination.Position = landing.point;
@@ -379,7 +448,8 @@ namespace WaveByWave.Enemies
                     {
                         From = departure, To = destination, Source = source.collider, Landing = landing.collider,
                         EdgeFromLocal = SurfacePoint(departure.SupportId, from + direction * lastSolid, true),
-                        EdgeToLocal = SurfacePoint(destination.SupportId, from + direction * dry, true)
+                        EdgeToLocal = SurfacePoint(destination.SupportId,
+                            new Vector3(from.x + direction.x * dry, landing.point.y, from.z + direction.z * dry), true)
                     };
                     return true;
                 }
@@ -399,13 +469,18 @@ namespace WaveByWave.Enemies
             Carry(ref transfer.From);
             Carry(ref transfer.To);
             var height = math.abs(transfer.From.Position.y - transfer.To.Position.y);
-            var gap = Vector3.ProjectOnPlane(SurfacePoint(transfer.From.SupportId, transfer.EdgeFromLocal, false) -
+            var span = math.distance(transfer.From.Position.xz, transfer.To.Position.xz);
+            var gap = transfer.GroundStep ? 0 : Vector3.ProjectOnPlane(SurfacePoint(transfer.From.SupportId, transfer.EdgeFromLocal, false) -
                 SurfacePoint(transfer.To.SupportId, transfer.EdgeToLocal, false), Vector3.up).magnitude;
             // Revalidate moving decks. No stale bridge to a ship that has sailed away.
-            var valid = Catalog.EnableSurfaceTransfers && !transfer.Returning && transfer.Source != null && transfer.Source.enabled && transfer.Source.gameObject.activeInHierarchy &&
-                transfer.Landing != null && transfer.Landing.enabled && transfer.Landing.gameObject.activeInHierarchy &&
-                Catalog.MaximumSurfaceGap > 0 && gap <= Mathf.Clamp(Catalog.MaximumSurfaceGap, 0f, 5f) + 0.005f &&
-                height <= Catalog.SurfaceTransferHeight;
+            var valid = !transfer.Returning && transfer.Landing != null && transfer.Landing.enabled &&
+                transfer.Landing.gameObject.activeInHierarchy &&
+                (transfer.GroundStep ? height <= Catalog.StepHeight + 0.08f &&
+                    (transfer.From.SupportId == transfer.To.SupportId || span <= transfer.StepSpan + 0.25f) :
+                    Catalog.EnableSurfaceTransfers && transfer.Source != null && transfer.Source.enabled &&
+                    transfer.Source.gameObject.activeInHierarchy && Catalog.MaximumSurfaceGap > 0 &&
+                    gap <= Mathf.Clamp(Catalog.MaximumSurfaceGap, 0f, DotsEnemyCatalog.MaximumTransferGap) + 0.005f &&
+                    height <= Catalog.SurfaceTransferHeight);
             if (!valid && !transfer.Returning)
             {
                 // Retreat from the current position, not from the now-displaced landing.
@@ -414,8 +489,9 @@ namespace WaveByWave.Enemies
                 transfer.To = state;
                 transfer.Progress = 1f;
             }
-            var span = math.distance(transfer.From.Position.xz, transfer.To.Position.xz);
-            var speed = (GetCatalog(state.Kind) ?? Catalog).MoveSpeed * deltaTime / Mathf.Max(0.01f, span);
+            var duration = Mathf.Max(span / Mathf.Max(0.1f, (GetCatalog(state.Kind) ?? Catalog).MoveSpeed),
+                height / Mathf.Max(0.1f, Catalog.SurfaceVerticalSpeed));
+            var speed = deltaTime / Mathf.Max(0.01f, duration);
             if (valid && state.StunUntil > now) speed = 0;
             transfer.Progress = Mathf.Clamp01(transfer.Progress + (valid ? speed : -speed));
             state.Position = math.lerp(transfer.From.Position, transfer.To.Position, transfer.Progress);
@@ -429,6 +505,7 @@ namespace WaveByWave.Enemies
             if (valid && transfer.Progress >= 1f)
             {
                 AttachSurface(ref state, transfer.Landing);
+                brain.SurfaceEdgeSide = 0;
                 ReleaseBoardedCrew(ref brain, state);
                 _surfaceTransfers.Remove(state.Id);
             }
@@ -438,9 +515,12 @@ namespace WaveByWave.Enemies
             return true;
         }
 
-        private bool TryFollowEdge(DotsEnemyState state, Vector3 target, float deltaTime, out RaycastHit best)
+        private bool TryFollowEdge(DotsEnemyState state, ref DotsEnemyBrain brain, Vector3 target,
+            float deltaTime, out RaycastHit best)
         {
             best = default;
+            if (!Catalog.EnableSurfaceEdgeFollowing || !Catalog.EnableSurfaceEdgeDetours)
+                brain.SurfaceEdgeSide = 0;
             if (!Catalog.EnableSurfaceEdgeFollowing) return false;
             Vector3 from = state.Position;
             var toTarget = Vector3.ProjectOnPlane(target - from, Vector3.up);
@@ -455,6 +535,10 @@ namespace WaveByWave.Enemies
                 right = Vector3.ProjectOnPlane(frame.rotation * Vector3.right, Vector3.up).normalized;
                 forward = Vector3.ProjectOnPlane(frame.rotation * Vector3.forward, Vector3.up).normalized;
             }
+            if (brain.SurfaceEdgeSupport != state.SupportId ||
+                math.distancesq(brain.SurfaceEdgeTarget.xz, ((float3)target).xz) > 1f)
+                brain.SurfaceEdgeSide = 0;
+            var lateral = Vector3.Cross(Vector3.up, direction);
             // Re-evaluate against the current player direction on every surface turn.
             // Shortened steps approach the edge; oblique steps follow its boundary.
             for (var sample = 0; sample < 17; sample++)
@@ -469,14 +553,54 @@ namespace WaveByWave.Enemies
                     var point = from + candidate * (distance * scale);
                     var offset = Vector3.ProjectOnPlane(point - from, Vector3.up);
                     var gain = toTarget.sqrMagnitude - (toTarget - offset).sqrMagnitude;
+                    // Once a detour starts, do not immediately undo it just because the
+                    // previous point was closer to the player. A clear direct step ends it.
+                    if (brain.SurfaceEdgeSide != 0 && sample != 0 &&
+                        Vector3.Dot(offset, lateral) * brain.SurfaceEdgeSide < -0.0001f) continue;
                     if (gain <= progress || !GroundAt(point, out var hit) ||
                         !HasContinuousGround(from, hit.point)) continue;
+                    if (sample == 0 && scale == 1f) brain.SurfaceEdgeSide = 0;
                     progress = gain;
                     best = hit;
                     break;
                 }
             }
-            return best.collider != null;
+            if (best.collider != null) return true;
+            if (!Catalog.EnableSurfaceEdgeDetours) return false;
+
+            // A local distance minimum at a railing is not a dead end. Walk sideways
+            // on solid ground to find another boarding point, with a persistent side.
+            if (brain.SurfaceEdgeSide == 0)
+            {
+                brain.SurfaceEdgeSide = (math.hash(new int2(state.Id, 719)) & 1u) == 0 ? 1 : -1;
+                brain.SurfaceEdgeSupport = state.SupportId;
+                brain.SurfaceEdgeOrigin = SurfacePoint(state.SupportId, from, true);
+                brain.SurfaceEdgeTarget = target;
+            }
+            var detourOrigin = SurfacePoint(state.SupportId, brain.SurfaceEdgeOrigin, false);
+            var detourRange = Mathf.Clamp(Catalog.MaximumSurfaceGap * 2f, 2f, 10f);
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
+                var side = brain.SurfaceEdgeSide * (attempt == 0 ? 1 : -1);
+                var bestScore = 0f;
+                for (var sample = 0; sample < 7; sample++)
+                {
+                    var candidate = sample == 3 ? right : sample == 4 ? -right
+                        : sample == 5 ? forward : sample == 6 ? -forward
+                        : Quaternion.AngleAxis(side * (90f + sample * 15f), Vector3.up) * direction;
+                    var point = from + candidate * distance;
+                    var score = Vector3.Dot(candidate, lateral) * side;
+                    if (score <= bestScore ||
+                        Vector3.ProjectOnPlane(point - detourOrigin, Vector3.up).sqrMagnitude > detourRange * detourRange ||
+                        !GroundAt(point, out var hit) || !HasContinuousGround(from, hit.point)) continue;
+                    bestScore = score;
+                    best = hit;
+                }
+                if (best.collider == null) continue;
+                brain.SurfaceEdgeSide = side;
+                return true;
+            }
+            return false;
         }
     }
 }

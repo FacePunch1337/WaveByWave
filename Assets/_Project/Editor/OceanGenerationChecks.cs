@@ -17,6 +17,63 @@ namespace WaveByWave.Editor
             Debug.Log("[Ocean checks] PASS: all sizes, seed determinism, mesh validity, immutable bedrock, dig replay and chunk borders.");
         }
 
+        public static void CheckDecorationPlacement()
+        {
+            var authored = AssetDatabase.LoadAssetAtPath<OceanGenerationSettings>("Assets/_Project/Resources/OceanGeneration.asset");
+            var palm = authored.Decorations.Find(entry => entry.Prefab != null && entry.Prefab.name == "SW3_PalmTree");
+            Require(palm != null && palm.GroundMeshBase, "The configured palm must use mesh-base grounding.");
+            var anchor = ProceduralIsland.DecorationGroundAnchor(palm.Prefab);
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            foreach (var seed in new uint[] { 1, 42, 481516 })
+            {
+                var root = new GameObject("Palm grounding regression"); root.SetActive(false);
+                var settings = UnityEngine.Object.Instantiate(authored);
+                settings.SmallDiameter = 10;
+                settings.Decorations = new System.Collections.Generic.List<IslandDecoration> {
+                    new IslandDecoration { Prefab = palm.Prefab, GroundMeshBase = true,
+                        InstancesPerSquareMetre = 0.06f, ScaleRange = palm.ScaleRange,
+                        MaximumSlope = 50, MinimumHeightAboveWater = 0.1f, Spacing = 0.5f } };
+                var island = root.AddComponent<ProceduralIsland>();
+                try
+                {
+                    island.Initialize(-99999, IslandSize.Small, seed, settings);
+                    var builder = (System.Collections.Generic.IEnumerable<byte>)typeof(ProceduralIsland)
+                        .GetMethod("CreateDecorations", flags).Invoke(island, null);
+                    foreach (var unused in builder) { }
+                    Require(root.transform.childCount > 0, "Regression seed placed no palms.");
+                    foreach (Transform tree in root.transform)
+                    {
+                        var contact = tree.TransformPoint(anchor);
+                        Require(island.TrySurface(contact.x, contact.z, out var surface, out _, true) &&
+                            Mathf.Abs(contact.y - surface.y) < 0.002f, "Generated palm base missed the island surface.");
+                        Require(island.DensityAt(contact - Vector3.up * 0.15f).x >= -0.1f,
+                            "The palm lost its digging support after pivot compensation.");
+                        var lowest = float.PositiveInfinity;
+                        // Editor-only read access proves contact against the actual FBX
+                        // vertices without enabling Read/Write or changing its importer.
+                        foreach (var filter in tree.GetComponentsInChildren<MeshFilter>(true))
+                        {
+                            using var dataArray = MeshUtility.AcquireReadOnlyMeshData(filter.sharedMesh);
+                            var data = dataArray[0];
+                            using var vertices = new NativeArray<Vector3>(data.vertexCount, Allocator.Temp);
+                            data.GetVertices(vertices);
+                            foreach (var vertex in vertices)
+                                lowest = Mathf.Min(lowest, filter.transform.TransformPoint(vertex).y);
+                        }
+                        Require(Mathf.Abs(lowest - surface.y) < 0.005f,
+                            $"Actual palm geometry floats/sinks: bottom={lowest}, ground={surface.y}, seed={seed}.");
+                    }
+                }
+                finally
+                {
+                    // The fixture stays inactive, so explicitly release its native jobs.
+                    typeof(ProceduralIsland).GetMethod("OnDestroy", flags).Invoke(island, null);
+                    UnityEngine.Object.DestroyImmediate(root); UnityEngine.Object.DestroyImmediate(settings);
+                }
+            }
+            Debug.Log($"[Palm grounding] PASS; authored prefab base anchor={anchor}.");
+        }
+
         private static void Validate(float diameter)
         {
             var cell = 0.2f;

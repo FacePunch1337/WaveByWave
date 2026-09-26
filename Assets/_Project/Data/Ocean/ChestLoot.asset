@@ -16,248 +16,121 @@ MonoBehaviour:
   ShakeDuration: 0.8
   EjectionSpeed: 2.4
   OpenEffectPrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
+  LootPool:
+  - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 3
+  - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 3
+  - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 3
+  - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
+    Weight: 3
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 9a00d65fcb6b4c378994904efb11a804, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 3
+  - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
+    Weight: 3
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: cdebffec146b46ebae61f1ae484b5e59, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 088144fcaa324c5aa733ea57942635d8, type: 2}
+    Weight: 2
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: ead5284002304cd99d0216e70b4f7c1d, type: 2}
+    Weight: 2
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 298a8c701dfa4681944fba4ebb0bc3b3, type: 2}
+    Weight: 3
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: c65ad41c94214d8388862b9bb6b48b6e, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: e03826056540489086a18b8a7dee19f4, type: 2}
+    Weight: 2
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: ab844d8473b14fbaa6827e333ad5bb11, type: 2}
+    Weight: 3
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 97e5c9d8c8db433582ea213f73e0b68d, type: 2}
+    Weight: 2
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: d9ead096e4e84db9b6311b28a9dd243d, type: 2}
+    Weight: 2
+    MinimumAmount: 1
+    MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: bdaf002cb48a49b6818d5445b74fcfc0, type: 2}
+    Weight: 2
+    MinimumAmount: 1
+    MaximumAmount: 1
   Tiers:
   - Tier: 0
     MinimumRolls: 2
     MaximumRolls: 4
-    Items:
-    - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
+    AllowedRarities:
+    - Rarity: 0
+    - Rarity: 1
+    MatchingRarityPercent: 65
   - Tier: 1
     MinimumRolls: 3
     MaximumRolls: 5
-    Items:
-    - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 9a00d65fcb6b4c378994904efb11a804, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: cdebffec146b46ebae61f1ae484b5e59, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: 088144fcaa324c5aa733ea57942635d8, type: 2}
-      Weight: 2
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: ead5284002304cd99d0216e70b4f7c1d, type: 2}
-      Weight: 2
-      MinimumAmount: 1
-      MaximumAmount: 1
+    AllowedRarities:
+    - Rarity: 0
+    - Rarity: 1
+    - Rarity: 2
+    MatchingRarityPercent: 65
   - Tier: 2
     MinimumRolls: 4
     MaximumRolls: 6
-    Items:
-    - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 9a00d65fcb6b4c378994904efb11a804, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: 298a8c701dfa4681944fba4ebb0bc3b3, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: cdebffec146b46ebae61f1ae484b5e59, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: c65ad41c94214d8388862b9bb6b48b6e, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: e03826056540489086a18b8a7dee19f4, type: 2}
-      Weight: 2
-      MinimumAmount: 1
-      MaximumAmount: 1
+    AllowedRarities:
+    - Rarity: 0
+    - Rarity: 1
+    - Rarity: 2
+    - Rarity: 3
+    MatchingRarityPercent: 65
   - Tier: 3
     MinimumRolls: 5
     MaximumRolls: 7
-    Items:
-    - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 9a00d65fcb6b4c378994904efb11a804, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: 298a8c701dfa4681944fba4ebb0bc3b3, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: ab844d8473b14fbaa6827e333ad5bb11, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: cdebffec146b46ebae61f1ae484b5e59, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: c65ad41c94214d8388862b9bb6b48b6e, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: 97e5c9d8c8db433582ea213f73e0b68d, type: 2}
-      Weight: 2
-      MinimumAmount: 1
-      MaximumAmount: 1
+    AllowedRarities:
+    - Rarity: 0
+    - Rarity: 1
+    - Rarity: 2
+    - Rarity: 3
+    - Rarity: 4
+    MatchingRarityPercent: 65
   - Tier: 4
     MinimumRolls: 6
     MaximumRolls: 8
-    Items:
-    - Item: {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 9a00d65fcb6b4c378994904efb11a804, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 3
-    - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: 298a8c701dfa4681944fba4ebb0bc3b3, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: ab844d8473b14fbaa6827e333ad5bb11, type: 2}
-      Weight: 3
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: cdebffec146b46ebae61f1ae484b5e59, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: c65ad41c94214d8388862b9bb6b48b6e, type: 2}
-      Weight: 1
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: d9ead096e4e84db9b6311b28a9dd243d, type: 2}
-      Weight: 2
-      MinimumAmount: 1
-      MaximumAmount: 1
-    - Item: {fileID: 11400000, guid: bdaf002cb48a49b6818d5445b74fcfc0, type: 2}
-      Weight: 2
-      MinimumAmount: 1
-      MaximumAmount: 1
+    AllowedRarities:
+    - Rarity: 0
+    - Rarity: 1
+    - Rarity: 2
+    - Rarity: 3
+    - Rarity: 4
+    MatchingRarityPercent: 65

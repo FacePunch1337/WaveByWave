@@ -61,6 +61,12 @@ namespace WaveByWave.Enemies
         [Min(0.1f)] public float FireCooldown = 5.5f;
         [Min(0f)] public float FireCooldownJitter = 1.5f;
 
+        [Header("Cannon accuracy")]
+        [Range(0f, 100f), Tooltip("Aim precision, not hit probability. 100 = no added spread; 0 = Maximum Aim Spread Angle. Each shot deviates independently, with larger misses at longer distances.")]
+        public float CannonAccuracy = 75f;
+        [Range(0f, 45f), Tooltip("Maximum deviation from the calculated ballistic direction, in degrees, at 0 accuracy. Actual spread = this angle multiplied by (1 - accuracy / 100).")]
+        public float MaximumAimSpreadAngle = 15f;
+
         [Header("Cannon balls")]
         [Min(1f)] public float ProjectileSpeed = 44f;
         [Min(0f)] public float ProjectileGravity = 9.81f;

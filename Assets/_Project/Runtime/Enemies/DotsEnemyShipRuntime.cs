@@ -593,6 +593,9 @@ namespace WaveByWave.Enemies
                     out var velocity))
                 velocity = (aim - origin).normalized * Definition.ProjectileSpeed;
             var revision = state.ShotRevision + 1;
+            var random = new Random(math.hash(new uint3(state.Seed, revision, (uint)state.Id)) | 1u);
+            var nextFire = now + Definition.FireCooldown + random.NextFloat(0, Definition.FireCooldownJitter);
+            velocity = ApplyAimSpread(velocity, Definition.CannonAccuracy, Definition.MaximumAimSpreadAngle, ref random);
             if (!DotsCannonProjectileSystem.Spawn(new DotsCannonProjectile
                 {
                     Position = origin, Previous = origin, Origin = origin, Velocity = velocity,
@@ -605,8 +608,27 @@ namespace WaveByWave.Enemies
             state.ShotOrigin = origin;
             state.ShotVelocity = velocity;
             state.ShotStarted = now;
-            var random = new Random(math.hash(new uint3(state.Seed, state.ShotRevision, (uint)state.Id)) | 1u);
-            brain.NextFire = now + Definition.FireCooldown + random.NextFloat(0, Definition.FireCooldownJitter);
+            brain.NextFire = nextFire;
+        }
+
+        private static Vector3 ApplyAimSpread(Vector3 velocity, float accuracy, float maximumAngle, ref Random random)
+        {
+            var angle = math.radians(math.clamp(maximumAngle, 0f, 45f) *
+                                     (1f - math.saturate(accuracy / 100f)));
+            var speed = math.length((float3)velocity);
+            if (angle <= 0f || speed <= 0.0001f) return velocity;
+
+            // Uniform directions inside a cone around the ballistic solution. Change only
+            // the direction; projectile speed, gravity and damage remain authored values.
+            var direction = (float3)velocity / speed;
+            var reference = math.abs(direction.y) < 0.999f ? new float3(0, 1, 0) : new float3(1, 0, 0);
+            var right = math.normalize(math.cross(reference, direction));
+            var up = math.cross(direction, right);
+            var cosTheta = math.lerp(1f, math.cos(angle), random.NextFloat());
+            var sinTheta = math.sqrt(math.max(0f, 1f - cosTheta * cosTheta));
+            math.sincos(random.NextFloat(0f, math.PI * 2f), out var sinPhi, out var cosPhi);
+            var scattered = direction * cosTheta + (right * cosPhi + up * sinPhi) * sinTheta;
+            return math.normalize(scattered) * speed;
         }
 
         private bool HasLineOfFire(int shipId, Vector3 origin, Vector3 target, ShipCannonBattery intendedTarget)

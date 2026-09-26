@@ -44,6 +44,7 @@ namespace WaveByWave.Generation
         private readonly Queue<int> _dirty = new();
         private readonly HashSet<int> _queued = new();
         private readonly List<Transform> _decorations = new();
+        private readonly List<Vector3> _decorationSupportPoints = new();
         private readonly HashSet<Collider> _decorationColliders = new();
         private IEnumerator<byte> _decorationBuilder;
         private static int _uploadFrame = -1, _uploadsThisFrame;
@@ -52,9 +53,10 @@ namespace WaveByWave.Generation
 
         public bool IsDecorationCollider(Collider collider) => _decorationColliders.Contains(collider);
 
-        private void RegisterDecoration(Transform decoration)
+        private void RegisterDecoration(Transform decoration, Vector3? supportPoint = null)
         {
             _decorations.Add(decoration);
+            _decorationSupportPoints.Add(transform.InverseTransformPoint(supportPoint ?? decoration.position));
             foreach (var collider in decoration.GetComponentsInChildren<Collider>(true))
                 _decorationColliders.Add(collider);
         }
@@ -272,9 +274,9 @@ namespace WaveByWave.Generation
             for (var i = _decorations.Count - 1; i >= 0; i--)
             {
                 var decoration = _decorations[i];
-                if (decoration == null) { _decorations.RemoveAt(i); continue; }
-                if (DensityAt(decoration.position - Vector3.up * 0.15f).x < -0.1f)
-                { Destroy(decoration.gameObject); _decorations.RemoveAt(i); }
+                if (decoration == null) { _decorations.RemoveAt(i); _decorationSupportPoints.RemoveAt(i); continue; }
+                if (DensityAt(transform.TransformPoint(_decorationSupportPoints[i]) - Vector3.up * 0.15f).x < -0.1f)
+                { Destroy(decoration.gameObject); _decorations.RemoveAt(i); _decorationSupportPoints.RemoveAt(i); }
             }
             return true;
         }
@@ -404,6 +406,42 @@ namespace WaveByWave.Generation
             return false;
         }
 
+        public static Vector3 DecorationGroundAnchor(GameObject prefab)
+        {
+            var anchor = Vector3.zero;
+            var lowest = float.PositiveInfinity;
+            var inverse = prefab.transform.worldToLocalMatrix;
+            // Bounds are available even on non-readable imported meshes. Calculate once
+            // per prefab entry, never per spawned tree or frame. Use the model pivot in
+            // XZ (the trunk axis), not the centre of an asymmetric palm canopy.
+            foreach (var filter in prefab.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter.sharedMesh == null || !filter.TryGetComponent<MeshRenderer>(out var renderer) ||
+                    !renderer.enabled) continue;
+                var matrix = inverse * filter.transform.localToWorldMatrix;
+                var bounds = filter.sharedMesh.bounds;
+                var bottom = float.PositiveInfinity;
+                for (var corner = 0; corner < 8; corner++)
+                {
+                    var point = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
+                        (corner & 1) == 0 ? -1 : 1, (corner & 2) == 0 ? -1 : 1, (corner & 4) == 0 ? -1 : 1));
+                    bottom = Mathf.Min(bottom, matrix.MultiplyPoint3x4(point).y);
+                }
+                if (bottom >= lowest) continue;
+                lowest = bottom;
+                anchor = matrix.MultiplyPoint3x4(Vector3.zero);
+                anchor.y = bottom;
+            }
+            return anchor;
+        }
+
+        public static void PlaceDecorationBase(Transform instance, Vector3 anchor, Vector3 surfacePoint)
+        {
+            // TransformPoint includes prefab scale, random scale, parent scale and
+            // surface alignment. Move the entire hierarchy, including its colliders.
+            instance.position += surfacePoint - instance.TransformPoint(anchor);
+        }
+
         private IEnumerable<byte> CreateDecorations()
         {
             var random = new Unity.Mathematics.Random(Seed == 0 ? 1u : Seed);
@@ -411,6 +449,7 @@ namespace WaveByWave.Generation
             foreach (var entry in Settings.Decorations)
             {
                 if (entry?.Prefab == null) continue;
+                var groundAnchor = entry.GroundMeshBase ? DecorationGroundAnchor(entry.Prefab) : Vector3.zero;
                 var count = Mathf.RoundToInt(Diameter * Diameter * Mathf.Max(0f, entry.InstancesPerSquareMetre));
                 for (var n = 0; n < count; n++)
                 for (var attempt = 0; attempt < 12; attempt++)
@@ -434,8 +473,9 @@ namespace WaveByWave.Generation
                     if (DensityAt(point - Vector3.up * 0.15f).x < -0.1f) break;
                     var instance = Instantiate(entry.Prefab, point, rotation, transform);
                     instance.transform.localScale *= scale;
+                    if (entry.GroundMeshBase) PlaceDecorationBase(instance.transform, groundAnchor, point);
                     instance.SetActive(_hasCompletedInitialBuild && _presentationRequested);
-                    RegisterDecoration(instance.transform);
+                    RegisterDecoration(instance.transform, point);
                     break;
                 }
             }

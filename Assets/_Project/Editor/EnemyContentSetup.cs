@@ -16,7 +16,7 @@ namespace WaveByWave.Editor
     [InitializeOnLoad]
     public static class EnemyContentSetup
     {
-        public const string CatalogPath = "Assets/_Project/Resources/SkeletonEnemyCatalog.asset";
+        public const string CatalogPath = "Assets/_Project/Resources/" + DotsEnemyCatalog.SkeletonResourcePath + ".asset";
         private const string Folder = "Assets/_Project/Prefabs/Enemies";
         private const string BakeFolder = "Assets/_Project/Data/Enemies";
         private static bool _started;
@@ -52,6 +52,7 @@ namespace WaveByWave.Editor
                 throw new InvalidOperationException("Stop Play Mode before baking enemy content.");
             Directory.CreateDirectory(Folder);
             Directory.CreateDirectory(BakeFolder);
+            Directory.CreateDirectory(Path.GetDirectoryName(CatalogPath));
             AssetDatabase.Refresh();
             var catalog = AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(CatalogPath);
             if (catalog == null)

@@ -19,11 +19,14 @@ MonoBehaviour:
   SwimSpeed: 4
   SwimmingDepth: 1.1
   MinimumWaterDepth: 1.2
+  ShipBoardingHeight: 5
   SwimClip: {fileID: 0}
   CustomHitCapsule: 0
   HitCapsuleStart: {x: 0, y: 0.4, z: -0.8}
   HitCapsuleEnd: {x: 0, y: 0.4, z: 0.8}
   SpawnWhenPlayerEntersOcean: 0
+  OceanEncounterMaximumSharks: 5
+  OceanEncounterRespawnDelay: 3
   OceanEncounterMinimumDistance: 8
   OceanEncounterMaximumDistance: 16
   ShowHealthBars: 0
@@ -2323,7 +2326,8 @@ MonoBehaviour:
   EnableCrowdSeparation: 0
   EnableCrowdCollisions: 1
   EnableSurfaceContinuityChecks: 1
-  EnableSurfaceEdgeFollowing: 1
+  EnableSurfaceEdgeFollowing: 0
+  EnableSurfaceEdgeDetours: 0
   EnableSurfaceTransfers: 1
   EnableCombat: 1
   SpawnsPerFrame: 32

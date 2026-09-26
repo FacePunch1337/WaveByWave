@@ -679,7 +679,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 39f546d89f400cc4c9884adb88871c78, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.ShipMastControl
   ship: {fileID: 876225290783369156}
   station: {fileID: 3546626559397749986}
@@ -3180,8 +3180,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4500667313592668005}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.021349613, y: 0, z: 0.0017057395, w: 0.99977064}
-  m_LocalPosition: {x: 0, y: -2.7216125, z: 0}
+  m_LocalRotation: {x: -0.0021395474, y: 0, z: -0.0009985028, w: 0.9999972}
+  m_LocalPosition: {x: 0, y: -2.619033, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -3206,7 +3206,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3143973582
+  GlobalObjectIdHash: 3631190888
   InScenePlacedSourceGlobalObjectIdHash: 1481422077
   DeferredDespawnTick: 0
   Ownership: 1
@@ -3432,8 +3432,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c68841eefea141e58de3486b2cff379f, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.CannonNetworkController
+  ShowTopMostFoldoutHeaderGroup: 1
   cannons:
   - {fileID: 2891368975326566933}
   - {fileID: 242384460324385228}
@@ -3447,7 +3448,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 48a08799f81d41d983d115537e848cb2, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.ShipHullHealth
   ShowTopMostFoldoutHeaderGroup: 1
   maximumHealth: 400
@@ -3491,6 +3492,7 @@ MonoBehaviour:
   CapacityLitres: 600
   LeakLitresPerSecond: 3
   ReferenceCannonDamage: 25
+  DamageBreachChancePercent: 50
   RepairSeconds: 4
   RepairDistance: 2.8
   SinkDuration: 8

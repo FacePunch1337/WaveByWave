@@ -45,8 +45,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Enemies.EnemySpawnPoint
   Mode: 1
+  Kind: 0
+  HealthBar: 0
   CombatType: 0
   Count: 4
-  SpawnRadius: 4
+  SpawnRadius: 6
   ActivationRadius: 20
   Seed: 0

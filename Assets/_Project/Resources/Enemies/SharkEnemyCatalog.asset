@@ -142,7 +142,8 @@ MonoBehaviour:
   EnableCrowdSeparation: 0
   EnableCrowdCollisions: 1
   EnableSurfaceContinuityChecks: 1
-  EnableSurfaceEdgeFollowing: 1
+  EnableSurfaceEdgeFollowing: 0
+  EnableSurfaceEdgeDetours: 0
   EnableSurfaceTransfers: 1
   EnableCombat: 1
   SpawnsPerFrame: 32

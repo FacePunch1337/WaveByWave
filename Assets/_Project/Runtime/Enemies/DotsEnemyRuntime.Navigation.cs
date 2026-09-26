@@ -60,7 +60,7 @@ namespace WaveByWave.Enemies
                     if (edgeBudget > 0)
                     {
                         edgeBudget--;
-                        if (TryBeginSurfaceTransfer(state, transferGoal))
+                        if (SearchSurfaceTransfer(state, ref brain, transferGoal, now))
                         {
                             AdvanceSurfaceTransfer(ref state, ref brain, deltaTime, now);
                             UpdateCrowdSnapshot(in state);

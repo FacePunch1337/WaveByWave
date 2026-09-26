@@ -44,11 +44,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0d941f89414837047b685ad2e43678c1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Enemies.EnemySpawnPoint
-  Mode: 0
+  Mode: 1
   Kind: 1
   HealthBar: 1
   CombatType: 0
   Count: 1
-  SpawnRadius: 4
+  SpawnRadius: 10
   ActivationRadius: 20
   Seed: 0

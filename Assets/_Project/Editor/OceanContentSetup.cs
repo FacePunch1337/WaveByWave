@@ -67,17 +67,18 @@ namespace WaveByWave.Editor
             {
                 table = ScriptableObject.CreateInstance<ChestLootTable>();
                 table.OpenEffectPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Effects/DeathDust.prefab");
+                foreach (var item in catalog.Items)
+                {
+                    if (item == null || (item.Category != ItemCategory.Supply &&
+                        item.Category != ItemCategory.Treasure && item.Category != ItemCategory.Weapon)) continue;
+                    table.LootPool.Add(new WeightedLootEntry { Item = item, Weight = item.Category == ItemCategory.Treasure ? 3f : 1f,
+                        MinimumAmount = 1, MaximumAmount = item.Category == ItemCategory.Supply ? 3 : 1 });
+                }
                 for (var rarity = 0; rarity < 5; rarity++)
                 {
                     var tier = new ChestTierLoot { Tier = (ItemRarity)rarity, MinimumRolls = 2 + rarity, MaximumRolls = 4 + rarity };
-                    foreach (var item in catalog.Items)
-                    {
-                        if (item == null || item.Category == ItemCategory.Chest || (int)item.Rarity > rarity + 1) continue;
-                        if (item.Category != ItemCategory.Supply && item.Category != ItemCategory.Treasure &&
-                            item.Category != ItemCategory.Weapon) continue;
-                        tier.Items.Add(new WeightedLootEntry { Item = item, Weight = item.Category == ItemCategory.Treasure ? 3f : 1f,
-                            MinimumAmount = 1, MaximumAmount = item.Category == ItemCategory.Supply ? 3 : 1 });
-                    }
+                    for (var rewardRarity = 0; rewardRarity <= Mathf.Min(rarity + 1, 4); rewardRarity++)
+                        tier.AllowedRarities.Add(new LootRarityTier { Rarity = (ItemRarity)rewardRarity });
                     table.Tiers.Add(tier);
                 }
                 AssetDatabase.CreateAsset(table, tablePath);
@@ -125,7 +126,7 @@ namespace WaveByWave.Editor
                 settings.RarityEffectPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Effects/LootRarity.prefab");
                 foreach (var item in catalog.Items)
                     if (item != null && (item.Category == ItemCategory.Supply || item.Category == ItemCategory.Treasure))
-                        settings.FloatingLoot.Add(new WeightedLootEntry { Item = item, Weight = item.Category == ItemCategory.Supply ? 4f : 1f });
+                        settings.FloatingObjects.Add(new WeightedItemEntry { Item = item, Weight = item.Category == ItemCategory.Supply ? 4f : 1f });
                 for (var i = 0; i < chests.Count; i++) settings.BuriedChests.Add(new WeightedLootEntry
                     { Item = chests[i], Weight = i == 0 ? 45f : i == 1 ? 28f : i == 2 ? 16f : i == 3 ? 8f : 3f });
                 AddDecoration(settings, "Assets/Stylized Water 3/_Demo/DemoAssets/Prefabs/Vegetation/SW3_PalmTree.prefab", 0.025f, 0.55f, 0.85f);

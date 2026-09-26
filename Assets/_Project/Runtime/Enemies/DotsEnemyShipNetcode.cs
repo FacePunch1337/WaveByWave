@@ -57,7 +57,7 @@ namespace WaveByWave.Enemies
     {
         protected override void OnUpdate()
         {
-            var definition = Resources.Load<EnemyShipDefinition>("EnemyShipDefinition");
+            var definition = EnemyShipDefinition.Load();
             var prefab = EntityManager.CreateEntity(typeof(DotsEnemyShipState), typeof(DotsEnemyShipBrain));
             GhostPrefabCreation.ConvertToGhostPrefab(EntityManager, prefab, new GhostPrefabCreation.Config
             {

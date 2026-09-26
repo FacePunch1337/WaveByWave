@@ -52,6 +52,7 @@ namespace WaveByWave.Networking
         private bool _ownsSteamClient;
         private bool _disposed;
         private bool _voyageInProgress;
+        private string _freshPlayerScene;
         private readonly List<TaskCompletionSource<bool>> _frameWaiters = new();
 
         private void Awake()
@@ -251,10 +252,12 @@ namespace WaveByWave.Networking
             SetVoyageInProgress(true);
             ClearDynamicWorldItems();
             PreparePlayersForSceneTransition();
+            _freshPlayerScene = GameScenes.Ocean;
             OceanWorldDirector.BeginOceanLoading();
             var result = networkManager.SceneManager.LoadScene(GameScenes.Ocean, LoadSceneMode.Single);
             if (result != SceneEventProgressStatus.Started)
             {
+                _freshPlayerScene = null;
                 CancelLocalSceneTransition();
                 OceanWorldDirector.CancelOceanLoading();
                 SetVoyageInProgress(false);
@@ -271,10 +274,12 @@ namespace WaveByWave.Networking
             if (networkManager != null && networkManager.IsServer)
             {
                 PreparePlayersForSceneTransition();
-                ResetVoyageStateAndRecreatePlayers();
+                ClearDynamicWorldItems();
+                _freshPlayerScene = GameScenes.Port;
                 var result = networkManager.SceneManager.LoadScene(GameScenes.Port, LoadSceneMode.Single);
                 if (result != SceneEventProgressStatus.Started)
                 {
+                    _freshPlayerScene = null;
                     CancelLocalSceneTransition();
                     SetStatus($"Не удалось вернуться в порт: {result}");
                 }
@@ -643,6 +648,11 @@ namespace WaveByWave.Networking
         private void OnNetworkSceneLoadCompleted(string sceneName, LoadSceneMode loadSceneMode,
             List<ulong> completed, List<ulong> timedOut)
         {
+            if (networkManager != null && networkManager.IsServer && _freshPlayerScene == sceneName)
+            {
+                _freshPlayerScene = null;
+                ResetVoyageStateAndRecreatePlayers();
+            }
             // Reopen only after the crew has finished loading Port, never during the return transition.
             if (networkManager != null && networkManager.IsServer && sceneName == GameScenes.Port)
                 SetVoyageInProgress(false);
@@ -673,8 +683,6 @@ namespace WaveByWave.Networking
             if (networkManager == null || !networkManager.IsServer)
                 return;
 
-            ClearDynamicWorldItems();
-
             var playerPrefab = networkManager.NetworkConfig.PlayerPrefab;
             var playerPrefabObject = playerPrefab != null ? playerPrefab.GetComponent<NetworkObject>() : null;
             if (playerPrefabObject == null)
@@ -701,6 +709,8 @@ namespace WaveByWave.Networking
                     playerPrefabObject, clientId, false, true);
                 if (player == null)
                     Debug.LogError($"Не удалось пересоздать игрока {clientId} после завершения заплыва.");
+                else if (player.TryGetComponent<NetworkPlayerController>(out var controller))
+                    FindFirstObjectByType<NetworkSpawnDirector>()?.RespawnPlayerServer(controller);
             }
         }
 
@@ -708,6 +718,8 @@ namespace WaveByWave.Networking
         {
             if (networkManager == null || !networkManager.IsServer || networkManager.SpawnManager == null)
                 return;
+
+            LootStressTest.ClearSceneItemsServer();
 
             // Use NGO's authoritative spawned-object registry so items in the
             // DontDestroyOnLoad scene are included in the cleanup.

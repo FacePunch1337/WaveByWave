@@ -107,7 +107,9 @@ namespace WaveByWave.Editor
             var shipController = Require(ship.GetComponent<NetworkShipController>(), "Ship controller");
             Require(ship.GetComponent<MovingPlatform>(), "Ship moving-platform compensation");
             var battery = Require(ship.GetComponent<ShipCannonBattery>(), "Ship cannon battery");
-            var cannons = ship.GetComponentsInChildren<ShipCannon>(true);
+            Require(ship.GetComponent<CannonNetworkController>(), "Cannon network controller");
+            Require(ship.GetComponent<ShipHullHealth>(), "Ship hull health");
+            var cannons = ship.GetComponentsInChildren<Cannon>(true);
             if (cannons.Length != 2)
                 throw new InvalidOperationException("The ship needs exactly two broadside cannons.");
             foreach (var cannon in cannons)

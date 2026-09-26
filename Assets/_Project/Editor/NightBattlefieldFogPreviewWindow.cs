@@ -9,8 +9,10 @@ namespace WaveByWave.Editor
     [InitializeOnLoad]
     public sealed class NightBattlefieldFogPreviewWindow : EditorWindow
     {
-        private const string SettingsPath = "Assets/_Project/Resources/NightWaveSettings.asset";
-        private static NightWaveSettings _settings;
+        private const string SettingsPath = "Assets/_Project/Resources/NightBattlefieldSettings.asset";
+        private const string WavesPath = "Assets/_Project/Resources/NightWaveSettings.asset";
+        private static NightBattlefieldSettings _settings;
+        private static NightWaveSettings _waves;
         private static double _nextRepaint;
 
         static NightBattlefieldFogPreviewWindow()
@@ -22,20 +24,23 @@ namespace WaveByWave.Editor
         [MenuItem("Tools/Wave by Wave/Voyage/Night battlefield fog preview")]
         private static void Open() => GetWindow<NightBattlefieldFogPreviewWindow>("Night fog preview");
 
-        private static NightWaveSettings Settings => _settings ??=
-            AssetDatabase.LoadAssetAtPath<NightWaveSettings>(SettingsPath);
+        private static NightBattlefieldSettings Settings => _settings ??=
+            AssetDatabase.LoadAssetAtPath<NightBattlefieldSettings>(SettingsPath);
+        private static NightWaveSettings Waves => _waves ??=
+            AssetDatabase.LoadAssetAtPath<NightWaveSettings>(WavesPath);
 
         private void OnGUI()
         {
             var settings = Settings;
-            if (settings == null)
+            var waves = Waves;
+            if (settings == null || waves == null)
             {
-                EditorGUILayout.HelpBox("NightWaveSettings.asset was not found.", MessageType.Error);
+                EditorGUILayout.HelpBox("NightBattlefieldSettings.asset or NightWaveSettings.asset was not found.", MessageType.Error);
                 return;
             }
             EditorGUILayout.HelpBox("Preview renders in Scene View without Play Mode. It does not start a wave or damage the ship.",
                 MessageType.Info);
-            if (Application.isPlaying && NightWaveController.TryGetBattlefield(out var liveCircle, out _))
+            if (Application.isPlaying && NightBattlefieldController.TryGetBattlefield(out var liveCircle, out _))
             {
                 var ship = FindFirstObjectByType<ShipCannonBattery>();
                 var distance = ship == null ? 0f : Vector2.Distance(
@@ -61,14 +66,14 @@ namespace WaveByWave.Editor
                 settings.PreviewFogInSceneView = enabled;
                 Changed(settings);
             }
-            if (settings.Waves == null || settings.Waves.Length == 0)
+            if (waves.Waves == null || waves.Waves.Length == 0)
             {
                 EditorGUILayout.HelpBox("Add at least one night wave to preview its radius.", MessageType.Warning);
                 return;
             }
-            var names = new string[settings.Waves.Length];
+            var names = new string[waves.Waves.Length];
             for (var i = 0; i < names.Length; i++)
-                names[i] = $"{i + 1}: {settings.Waves[i]?.Name ?? "Wave"}";
+                names[i] = $"{i + 1}: {waves.Waves[i]?.Name ?? "Wave"}";
             var index = Mathf.Clamp(settings.PreviewWaveIndex, 0, names.Length - 1);
             var selected = EditorGUILayout.Popup("Wave", index, names);
             if (selected != settings.PreviewWaveIndex)
@@ -77,15 +82,15 @@ namespace WaveByWave.Editor
                 settings.PreviewWaveIndex = selected;
                 Changed(settings);
             }
-            var wave = settings.Waves[selected];
+            var wave = waves.Waves[selected];
             if (wave != null)
             {
                 var radius = Mathf.Max(20f, EditorGUILayout.FloatField("Battlefield radius", wave.BattlefieldRadius));
                 if (!Mathf.Approximately(radius, wave.BattlefieldRadius))
                 {
-                    Undo.RecordObject(settings, "Change battlefield radius");
+                    Undo.RecordObject(waves, "Change battlefield radius");
                     wave.BattlefieldRadius = radius;
-                    Changed(settings);
+                    Changed(waves);
                 }
             }
             var center = EditorGUILayout.Vector3Field("Preview center", settings.PreviewCenter);
@@ -113,7 +118,7 @@ namespace WaveByWave.Editor
             if (GUILayout.Button("Open all fog settings")) Selection.activeObject = settings;
         }
 
-        private static void SetCenter(NightWaveSettings settings, Vector3 center)
+        private static void SetCenter(NightBattlefieldSettings settings, Vector3 center)
         {
             Undo.RecordObject(settings, "Move fog preview center");
             settings.PreviewCenter = center;
@@ -129,7 +134,7 @@ namespace WaveByWave.Editor
             return false;
         }
 
-        private static void Changed(NightWaveSettings settings)
+        private static void Changed(Object settings)
         {
             EditorUtility.SetDirty(settings);
             AssetDatabase.SaveAssets();
@@ -151,7 +156,7 @@ namespace WaveByWave.Editor
             float radius;
             if (Application.isPlaying)
             {
-                if (!NightWaveController.TryGetBattlefield(out var liveCircle, out _)) return;
+                if (!NightBattlefieldController.TryGetBattlefield(out var liveCircle, out _)) return;
                 center = new Vector3(liveCircle.x, liveCircle.y, liveCircle.z);
                 radius = liveCircle.w;
             }
@@ -159,8 +164,8 @@ namespace WaveByWave.Editor
             {
                 var settings = Settings;
                 if (settings == null || !settings.PreviewFogInSceneView ||
-                    settings.Waves == null || settings.Waves.Length == 0) return;
-                var wave = settings.Waves[Mathf.Clamp(settings.PreviewWaveIndex, 0, settings.Waves.Length - 1)];
+                    Waves == null || Waves.Waves == null || Waves.Waves.Length == 0) return;
+                var wave = Waves.Waves[Mathf.Clamp(settings.PreviewWaveIndex, 0, Waves.Waves.Length - 1)];
                 if (wave == null) return;
                 center = settings.PreviewCenter;
                 radius = wave.BattlefieldRadius;

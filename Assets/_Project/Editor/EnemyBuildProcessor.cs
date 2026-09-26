@@ -16,6 +16,13 @@ namespace WaveByWave.Editor
                 EnemyContentSetup.Bake(catalog);
             if (catalog.UseCombinedVariants && catalog.CombinedSourceHash != EnemyCombinedVariantBaker.SourceHash(catalog))
                 EnemyCombinedVariantBaker.Bake(catalog);
+            foreach (var name in new[] { "Troll", "Shark", "Amphibian" })
+            {
+                var species = AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>($"{EnemySpeciesSetup.ProfileFolder}/{name}EnemyCatalog.asset");
+                if (species == null) throw new BuildFailedException($"Missing {name} enemy catalog. Use Tools/Wave by Wave/Enemies/Create and bake troll, shark and amphibian.");
+                if (!species.IsBaked || species.BakeSourceHash != EnemyContentSetup.SourceHash(species))
+                    EnemyContentSetup.Bake(species);
+            }
         }
     }
 }

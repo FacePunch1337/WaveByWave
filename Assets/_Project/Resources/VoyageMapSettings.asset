@@ -16,9 +16,9 @@ MonoBehaviour:
   SunsetDuration: 20
   NightDuration: 120
   SunriseDuration: 20
-  DayStartHour: 10
+  DayStartHour: 12.34
   OverrideTime: 0
-  TimeOfDay: 19.8
+  TimeOfDay: 0
   SceneSunHour: 10
   SunAzimuth: 0
   SunMaximumIntensity: 1.25

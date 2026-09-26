@@ -39,7 +39,8 @@ namespace WaveByWave.Player
         private void Refresh()
         {
             if (_inventory == null) return;
-            _carriedLabel.text = _inventory.IsCarryingChest ? "СУНДУК В РУКАХ · Q — положить" : "";
+            if (_carriedLabel != null)
+                _carriedLabel.text = _inventory.IsCarryingChest ? "СУНДУК В РУКАХ · Q — положить" : "";
             for (var i = 0; i < _slots.Count; i++)
             {
                 var slot = _inventory.GetSlot(i);

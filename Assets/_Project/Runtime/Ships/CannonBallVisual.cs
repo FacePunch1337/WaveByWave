@@ -6,8 +6,8 @@ namespace WaveByWave.Ships
     [DefaultExecutionOrder(3000)]
     public sealed class CannonBallVisual : MonoBehaviour
     {
-        private ShipCannonBattery _battery;
-        private ShipCannon _cannon;
+        private CannonNetworkController _controller;
+        private Cannon _cannon;
         private PlatformNetworkTransform _motion;
         private int _id;
         private Vector3 _origin, _velocity, _gravity, _hitPoint, _normal;
@@ -18,12 +18,13 @@ namespace WaveByWave.Ships
         private TrailRenderer _trail;
         private Renderer _renderer;
 
-        public void Initialize(ShipCannonBattery battery, ShipCannon cannon, int id, Vector3 origin, Vector3 velocity, Vector3 gravity,
+        public void Initialize(CannonNetworkController controller, Cannon cannon, int id,
+            Vector3 origin, Vector3 velocity, Vector3 gravity,
             double started, float lifetime, GameObject muzzleEffect)
         {
-            _battery = battery; _cannon = cannon; _id = id; _origin = origin; _velocity = velocity; _gravity = gravity;
+            _controller = controller; _cannon = cannon; _id = id; _origin = origin; _velocity = velocity; _gravity = gravity;
             _started = started; _lifetime = lifetime; _muzzleEffect = muzzleEffect;
-            _motion = battery.GetComponent<PlatformNetworkTransform>();
+            _motion = controller.GetComponent<PlatformNetworkTransform>();
             _trail = GetComponent<TrailRenderer>();
             _renderer = GetComponent<Renderer>();
             if (_renderer != null) _renderer.enabled = false;
@@ -37,8 +38,8 @@ namespace WaveByWave.Ships
         }
         private void LateUpdate()
         {
-            if (_battery == null || !_battery.IsSpawned) { Destroy(gameObject); return; }
-            var now = !_battery.IsServer && _motion != null ? _motion.PresentationServerTime : _battery.NetworkManager.ServerTime.Time;
+            if (_controller == null || !_controller.IsSpawned) { Destroy(gameObject); return; }
+            var now = !_controller.IsServer && _motion != null ? _motion.PresentationServerTime : _controller.NetworkManager.ServerTime.Time;
             if (now < _started) return;
             var age = (float)(System.Math.Min(now, _impact ? _impactAt : now) - _started);
             transform.position = _origin + _velocity * age + _gravity * (0.5f * age * age);
@@ -58,7 +59,7 @@ namespace WaveByWave.Ships
             }
             else if (age > _lifetime + 2f) Destroy(gameObject);
         }
-        private void OnDestroy() => CannonEffects.Forget(_battery, _id);
+        private void OnDestroy() => CannonEffects.Forget(_controller, _id);
     }
 
 }

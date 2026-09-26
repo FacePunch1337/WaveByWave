@@ -62,9 +62,13 @@ namespace WaveByWave.Combat
         }
 
         public void ApplyRingHealthBonusServer(float bonus)
+            => ApplyRingHealthChangeServer(bonus);
+
+        public void ApplyRingHealthChangeServer(float difference)
         {
-            if (IsServer && bonus > 0f && !_dead.Value)
-                _health.Value = Mathf.Min(MaximumHealth, _health.Value + bonus);
+            if (!IsServer || _dead.Value) return;
+            _health.Value = Mathf.Min(MaximumHealth,
+                difference > 0f ? _health.Value + difference : _health.Value);
         }
 
         private sealed class RendererState

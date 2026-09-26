@@ -10,6 +10,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1001}
   - component: {fileID: 1004}
+  - component: {fileID: 1007}
+  - component: {fileID: 1008}
   - component: {fileID: 1006}
   m_Layer: 0
   m_Name: Cannon
@@ -50,12 +52,52 @@ BoxCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
   m_Size: {x: 1.15, y: 0.7, z: 1.4}
   m_Center: {x: 0, y: 0.35, z: 0}
+--- !u!114 &1007
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 2362630963
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 1
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!114 &1008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c68841eefea141e58de3486b2cff379f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.CannonNetworkController
+  ShowTopMostFoldoutHeaderGroup: 1
+  cannons:
+  - {fileID: 1006}
 --- !u!114 &1006
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -65,9 +107,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1000}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d62ef82ac18445b40bd113020d6db4c1, type: 3}
+  m_Script: {fileID: 11500000, guid: 7087430bd1ada0344933e412afed6453, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.ShipCannon
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Ships.Cannon
   yawPivot: {fileID: 2001}
   elevationPivot: {fileID: 2101}
   muzzle: {fileID: 2301}
@@ -75,11 +117,16 @@ MonoBehaviour:
   yawLimits: {x: -45, y: 45}
   elevationLimits: {x: -10, y: 60}
   aimSpeed: 50
+  baseDamage: 40
   reloadDuration: 3
   muzzleSpeed: 55
   ballRadius: 0.13
   projectileLifetime: 15
   gravity: 9.81
+  projectilePrefab: {fileID: 1752187800401385198, guid: d0c8f100476894344b61b12807f04981, type: 3}
+  muzzleEffectPrefab: {fileID: 3414420187532498168, guid: e5c5e2442186f72439b239c27776697e, type: 3}
+  impactEffectPrefab: {fileID: 8210145221990291125, guid: 2f58c8616dce4ee4095bf677be6a8c6c, type: 3}
+  waterSplashPrefab: {fileID: 1402041941817024963, guid: ade152f810abc93439076107c5a46d15, type: 3}
   recoilDistance: 0.3
   recoilKickTime: 0.06
   recoilReturnTime: 0.55

@@ -243,7 +243,7 @@ namespace WaveByWave.Enemies
             // probes must not report a successful flank or an impassable one respectively.
             if (evaluated)
                 brain.CrowdBlockedTime = wantsToMove && brain.Attacking == 0 && state.StunUntil <= now &&
-                    distance < Mathf.Max(0.004f, Catalog.MoveSpeed * deltaTime * 0.15f)
+                    distance < Mathf.Max(0.004f, (GetCatalog(state.Kind) ?? Catalog).MoveSpeed * deltaTime * 0.15f)
                     ? brain.CrowdBlockedTime + deltaTime : 0;
             var animation = ResolveLocomotionAnimation(state.Animation, brain.Attacking != 0,
                 state.StunUntil > now, distance, deltaTime, evaluated, wantsToMove,
@@ -415,7 +415,7 @@ namespace WaveByWave.Enemies
                 transfer.Progress = 1f;
             }
             var span = math.distance(transfer.From.Position.xz, transfer.To.Position.xz);
-            var speed = Catalog.MoveSpeed * deltaTime / Mathf.Max(0.01f, span);
+            var speed = (GetCatalog(state.Kind) ?? Catalog).MoveSpeed * deltaTime / Mathf.Max(0.01f, span);
             if (valid && state.StunUntil > now) speed = 0;
             transfer.Progress = Mathf.Clamp01(transfer.Progress + (valid ? speed : -speed));
             state.Position = math.lerp(transfer.From.Position, transfer.To.Position, transfer.Progress);
@@ -446,7 +446,7 @@ namespace WaveByWave.Enemies
             var toTarget = Vector3.ProjectOnPlane(target - from, Vector3.up);
             var direction = toTarget.normalized;
             if (direction.sqrMagnitude < 0.01f) return false;
-            var distance = Catalog.MoveSpeed * deltaTime;
+            var distance = (GetCatalog(state.Kind) ?? Catalog).MoveSpeed * deltaTime;
             var progress = 0.0001f;
             var right = Vector3.right;
             var forward = Vector3.forward;

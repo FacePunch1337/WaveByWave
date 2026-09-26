@@ -1,0 +1,155 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57f2c2e6d3b9c6644bec30f69242f62e, type: 3}
+  m_Name: SharkEnemyCatalog
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Enemies.DotsEnemyCatalog
+  Kind: 2
+  DisplayName: "\u0410\u043A\u0443\u043B\u0430"
+  Habitat: 1
+  RandomizeAppearance: 0
+  SwimSpeed: 5.2
+  SwimmingDepth: 1.6
+  MinimumWaterDepth: 1.8
+  ShipBoardingHeight: 0
+  SwimClip: {fileID: 7400000, guid: cca3b5f4ec5e8c1439b68fdec2a7e3b1, type: 2}
+  CustomHitCapsule: 1
+  HitCapsuleStart: {x: 0, y: 0.55, z: -1.25}
+  HitCapsuleEnd: {x: 0, y: 0.55, z: 1.15}
+  SpawnWhenPlayerEntersOcean: 1
+  OceanEncounterMaximumSharks: 5
+  OceanEncounterRespawnDelay: 3
+  OceanEncounterMinimumDistance: 8
+  OceanEncounterMaximumDistance: 16
+  ShowHealthBars: 0
+  HealthBarHeight: 1.6
+  HealthBarSize: {x: 1.25, y: 0.12}
+  HealthBarDistance: 45
+  HealthBarMaterial: {fileID: -7554452687029998314, guid: 8dac0f59370762743b6811617de074f5, type: 2}
+  HealthBarMesh: {fileID: 4300000, guid: 8dac0f59370762743b6811617de074f5, type: 2}
+  EnableMeleeSpawns: 1
+  EnablePistolSpawns: 0
+  EnableRifleSpawns: 0
+  BakingRigPrefab: {fileID: 3073152463019563043, guid: a3f90ed96eaf11e48be25dd77c1798e0, type: 3}
+  PartSources:
+  - Category: 0
+    Prefab: {fileID: 3073152463019563043, guid: a3f90ed96eaf11e48be25dd77c1798e0, type: 3}
+    Pair: 0
+    AttachBone: 
+    LocalPosition: {x: 0, y: 0, z: 0}
+    LocalEulerAngles: {x: 0, y: 0, z: 0}
+    LocalScale: {x: 1, y: 1, z: 1}
+  SkeletonMaterials: []
+  IdleClip: {fileID: 7400000, guid: 6948d7b840fcbda46a5dfdcca264bd6a, type: 2}
+  RunClip: {fileID: 7400000, guid: cca3b5f4ec5e8c1439b68fdec2a7e3b1, type: 2}
+  MeleeAttackClip: {fileID: 7400000, guid: 978acac00d4e5f1429cd844af92c5184, type: 2}
+  PistolAttackClip: {fileID: 7400000, guid: 978acac00d4e5f1429cd844af92c5184, type: 2}
+  RifleAttackClip: {fileID: 7400000, guid: 978acac00d4e5f1429cd844af92c5184, type: 2}
+  BakeFramesPerSecond: 16
+  UseCombinedVariants: 0
+  CombinedVariantsPerType: 8
+  CombinedVariants: []
+  CombinedSourceHash: 
+  BakedParts:
+  - Name: Enemy_0_SharkRig(Clone)
+    Category: 0
+    Pair: 0
+    SourceIndex: 0
+    BodySlot: SharkRig(Clone)
+    Mesh: {fileID: 4300000, guid: c1f95016a56ce67478d93f328a3c8bba, type: 2}
+    Positions: {fileID: 2945227018101320920, guid: c1f95016a56ce67478d93f328a3c8bba, type: 2}
+    Normals: {fileID: 2732697610534674285, guid: c1f95016a56ce67478d93f328a3c8bba, type: 2}
+    Materials:
+    - {fileID: -2009950496542974738, guid: c1f95016a56ce67478d93f328a3c8bba, type: 2}
+    Clips:
+    - FirstRow: 0
+      Count: 25
+      Duration: 1.5
+    - FirstRow: 25
+      Count: 16
+      Duration: 0.9
+    - FirstRow: 41
+      Count: 14
+      Duration: 0.8
+    - FirstRow: 55
+      Count: 14
+      Duration: 0.8
+    - FirstRow: 69
+      Count: 14
+      Duration: 0.8
+    - FirstRow: 83
+      Count: 25
+      Duration: 1.5
+    - FirstRow: 108
+      Count: 16
+      Duration: 0.9
+  BakeSourceHash: vat5:320f14420deae0dab6b03b38cad85736
+  SpawnSmokePrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
+  DeathSmokePrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
+  StunEffectPrefab: {fileID: 3851572283197178760, guid: da7da3015244d454580cb100bca9f23e, type: 3}
+  VisualScale: 1
+  DayMinimumLight: 0.65
+  NightMinimumLight: 0.25
+  MaximumHealth: 160
+  MoveSpeed: 5.2
+  MeleeRange: 2.2
+  RangedMinimumRange: 5
+  RangedMaximumRange: 28
+  MeleeDamage: 28
+  PistolDamage: 14
+  RifleDamage: 22
+  MeleeCooldown: 1.6
+  PistolCooldown: 1.75
+  RifleCooldown: 2.4
+  AttackHitNormalizedTime: 0.52
+  PistolHitNormalizedTime: 0.15
+  RifleHitNormalizedTime: 0.5
+  DamageKnockback: 2.8
+  DamageFlashDuration: 0.12
+  ParryStunDuration: 2
+  ParryKnockback: 2.25
+  MaximumSlope: 48
+  StepHeight: 0.85
+  MaximumDrop: 1.5
+  SurfaceVerticalSpeed: 4
+  BodyRadius: 0.55
+  BodyHeight: 1.3
+  ProjectileHitRadius: 0.55
+  CrowdSeparationRadius: 0.82
+  CrowdSeparationStrength: 0.9
+  CrowdAvoidanceLookAhead: 1.5
+  SurfaceProbesPerFrame: 256
+  IgnoredObstacleWidth: 3
+  SurfaceLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  WaterProfile: {fileID: 11400000, guid: 1ca4610f5bf9e2f4bb39535503a79eeb, type: 2}
+  MaximumSurfaceGap: 1
+  SurfaceTransferHeight: 1
+  EdgeSearchesPerFrame: 32
+  UseBakedDeckNavigation: 0
+  EnableTargetSlots: 0
+  TargetSlotSpacing: 0.35
+  EnableCrowdAvoidance: 0
+  EnableCrowdSeparation: 0
+  EnableCrowdCollisions: 1
+  EnableSurfaceContinuityChecks: 1
+  EnableSurfaceEdgeFollowing: 1
+  EnableSurfaceTransfers: 1
+  EnableCombat: 1
+  SpawnsPerFrame: 32
+  MaximumEnemies: 6000
+  LootDrops:
+  - {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
+  - {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
+  - {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
+  - {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
+  - {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}

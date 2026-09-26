@@ -271,14 +271,4 @@ namespace WaveByWave.Editor.Items
         }
     }
 
-    [CustomEditor(typeof(ItemDefinition))]
-    internal sealed class ItemDefinitionIconEditor : UnityEditor.Editor
-    {
-        public override void OnInspectorGUI()
-        {
-            DrawDefaultInspector();
-            EditorGUILayout.Space();
-            if (GUILayout.Button("Открыть запекание иконки…")) ItemIconBakerWindow.OpenFor((ItemDefinition)target);
-        }
-    }
 }

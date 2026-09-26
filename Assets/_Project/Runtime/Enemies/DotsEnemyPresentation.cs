@@ -24,8 +24,10 @@ namespace WaveByWave.Enemies
         public float4 Frame;
         public float Time;
         public byte Stunned;
+        public float HealthFraction, HealthBarHeight;
+        public float2 HealthBarSize;
     }
-    public struct EnemyPartOwner : IComponentData { public Entity Root; public byte Orbit; }
+    public struct EnemyPartOwner : IComponentData { public Entity Root; public byte Orbit; public byte HealthBar; }
 
     [BurstCompile]
     internal struct EnemyRenderJob : IJobChunk
@@ -37,6 +39,7 @@ namespace WaveByWave.Enemies
         public ComponentTypeHandle<EnemyFrameProperty> Animations;
         public ComponentTypeHandle<WorldRenderBounds> WorldBounds;
         public ComponentTypeHandle<ChunkWorldRenderBounds> ChunkBounds;
+        public float3 CameraRight, CameraUp, CameraForward;
 
         public void Execute(in ArchetypeChunk chunk, int unfilteredChunkIndex,
             bool useEnabledMask, in v128 chunkEnabledMask)
@@ -54,7 +57,14 @@ namespace WaveByWave.Enemies
                 { combined.Encapsulate(worldBounds[i].Value); continue; }
                 var matrix = pose.Matrix;
                 var animation = pose.Frame;
-                if (owner.Orbit != 0)
+                if (owner.HealthBar != 0)
+                {
+                    var center = matrix.c3.xyz + math.up() * pose.HealthBarHeight;
+                    matrix = new float4x4(new float4(CameraRight * pose.HealthBarSize.x, 0),
+                        new float4(CameraUp * pose.HealthBarSize.y, 0), new float4(CameraForward, 0), new float4(center, 1));
+                    animation = new float4(pose.HealthFraction, 0, 0, 0);
+                }
+                else if (owner.Orbit != 0)
                 {
                     animation = float4.zero;
                     if (pose.Stunned != 0)
@@ -122,6 +132,7 @@ namespace WaveByWave.Enemies
                 Now = _now, RenderTime = UnityEngine.Time.unscaledTime, EffectTime = UnityEngine.Time.time,
                 RotationBlend = 1f - math.exp(-18f * UnityEngine.Time.unscaledDeltaTime), Scale = _scale
             }.Schedule(_updates.Length, 64, Dependency);
+            var camera = Camera.main;
             Dependency = new EnemyRenderJob
             {
                 Poses = GetComponentLookup<EnemyVisualPose>(true),
@@ -130,17 +141,21 @@ namespace WaveByWave.Enemies
                 Transforms = GetComponentTypeHandle<LocalToWorld>(),
                 Animations = GetComponentTypeHandle<EnemyFrameProperty>(),
                 WorldBounds = GetComponentTypeHandle<WorldRenderBounds>(),
-                ChunkBounds = GetComponentTypeHandle<ChunkWorldRenderBounds>()
+                ChunkBounds = GetComponentTypeHandle<ChunkWorldRenderBounds>(),
+                CameraRight = camera != null ? camera.transform.right : Vector3.right,
+                CameraUp = camera != null ? camera.transform.up : Vector3.up,
+                CameraForward = camera != null ? camera.transform.forward : Vector3.forward
             }.ScheduleParallel(_parts, Dependency);
             Dependency.Complete();
         }
     }
 
-    public static class DotsEnemyPresentation
+    public static partial class DotsEnemyPresentation
     {
         private sealed class View
         {
             public Entity Root;
+            public Entity HealthBar;
             public readonly List<Entity> Parts = new();
             public List<Entity> Stars;
             public uint Hit;
@@ -165,8 +180,8 @@ namespace WaveByWave.Enemies
             public bool Valid;
         }
         private static readonly Dictionary<int, View> Views = new();
-        private static readonly Dictionary<int, Template> Templates = new();
-        private static readonly Dictionary<int, Template> CombinedTemplates = new();
+        private static readonly Dictionary<(EnemyKind, int), Template> Templates = new();
+        private static readonly Dictionary<(EnemyKind, int), Template> CombinedTemplates = new();
         private static readonly List<Material> Materials = new();
         private static readonly List<int> Removed = new();
         private static readonly List<Smoke> Smokes = new();
@@ -207,27 +222,30 @@ namespace WaveByWave.Enemies
             if (!VisualUpdates.IsCreated) VisualUpdates = new NativeList<EnemyVisualUpdate>(256, Allocator.Persistent);
             VisualUpdates.Clear();
             var creationBudget = Mathf.Clamp(_catalog.SpawnsPerFrame, 1, 512);
-            var clips = _catalog.BakedParts[0].Clips;
+
             // Only share frames within this LateUpdate, after ship presentation is final.
             // Never reuse last frame's ship pose or the server's physics pose here.
             SurfaceFrames.Clear();
             foreach (var state in states)
             {
                 if (state.Id == 0 || state.Scene != scene) continue;
+                var catalog = runtime.GetCatalog(state.Kind);
+                if (catalog == null || !catalog.IsBaked) continue;
+                var clips = catalog.BakedParts[0].Clips;
                 if (!Views.TryGetValue(state.Id, out var view))
                 {
                     if (state.Health <= 0 || creationBudget <= 0) continue;
                     creationBudget--;
-                    view = Create(state);
+                    view = Create(state, catalog);
                     Views.Add(state.Id, view);
-                    PlaySmoke(_catalog.SpawnSmokePrefab, state.Position);
+                    PlaySmoke(catalog.SpawnSmokePrefab, state.Position);
                 }
                 view.Seen = _generation;
                 if (state.Health <= 0)
                 {
                     if (!view.Dead)
                     {
-                        PlaySmoke(_catalog.DeathSmokePrefab, state.Position);
+                        PlaySmoke(catalog.DeathSmokePrefab, state.Position);
                         DestroyParts(view); view.Dead = true;
                     }
                     continue;
@@ -235,7 +253,7 @@ namespace WaveByWave.Enemies
                 if (view.Dead) continue;
                 if (view.Hit != state.HitRevision)
                 {
-                    view.Hit = state.HitRevision; view.FlashUntil = Time.unscaledTime + _catalog.DamageFlashDuration;
+                    view.Hit = state.HitRevision; view.FlashUntil = Time.unscaledTime + catalog.DamageFlashDuration;
                 }
                 var stunned = state.StunUntil > now;
                 UpdateStars(view, stunned);
@@ -257,7 +275,8 @@ namespace WaveByWave.Enemies
                 var clipIndex = state.Animation == EnemyAnimationState.Stunned ? 0 : (int)state.Animation;
                 var clip = clips[Mathf.Clamp(clipIndex, 0, clips.Length - 1)];
                 var loop = state.Animation == EnemyAnimationState.Idle || state.Animation == EnemyAnimationState.Run ||
-                           state.Animation == EnemyAnimationState.Stunned;
+                           state.Animation == EnemyAnimationState.Stunned || state.Animation == EnemyAnimationState.Swim;
+                UpdateHealthBar(view, state, catalog);
                 VisualUpdates.Add(new EnemyVisualUpdate
                 {
                     Root = view.Root, Position = position, Rotation = rotation, Support = support,
@@ -266,7 +285,9 @@ namespace WaveByWave.Enemies
                     Duration = state.AnimationDuration > 0 ? state.AnimationDuration : clip.Duration,
                     FirstRow = clip.FirstRow, FrameCount = clip.Count, FlashUntil = view.FlashUntil,
                     Loop = loop ? (byte)1 : (byte)0,
-                    Stunned = stunned ? (byte)1 : (byte)0
+                    Stunned = stunned ? (byte)1 : (byte)0, Scale = catalog.VisualScale,
+                    HealthFraction = math.saturate(state.Health / catalog.MaximumHealth),
+                    HealthBarHeight = catalog.HealthBarHeight, HealthBarSize = catalog.HealthBarSize
                 });
             }
             Removed.Clear();
@@ -282,36 +303,36 @@ namespace WaveByWave.Enemies
                 if (smoke.Object != null && smoke.Object.activeSelf && Time.unscaledTime >= smoke.Until)
                     smoke.Object.SetActive(false);
         }
-        private static View Create(DotsEnemyState state)
+        private static View Create(DotsEnemyState state, DotsEnemyCatalog catalog)
         {
             var manager = _world.EntityManager;
             var view = new View { Root = manager.CreateEntity(typeof(EnemyVisualPose), typeof(EnemyVisualInterpolation)),
                 Hit = state.HitRevision };
-            if (_catalog.UseCombinedVariants)
+            if (catalog.RandomizeAppearance && catalog.UseCombinedVariants)
             {
                 var count = 0;
-                foreach (var variant in _catalog.CombinedVariants)
+                foreach (var variant in catalog.CombinedVariants)
                     if (variant.CombatType == state.CombatType && variant.Visual?.Mesh != null) count++;
                 // Spawn seeds are always odd; skip that fixed bit so every variant is reachable.
                 var chosen = count > 0 ? (int)((state.Seed >> 1) % (uint)count) : -1;
-                for (var i = 0; chosen >= 0 && i < _catalog.CombinedVariants.Count; i++)
+                for (var i = 0; chosen >= 0 && i < catalog.CombinedVariants.Count; i++)
                 {
-                    var variant = _catalog.CombinedVariants[i];
+                    var variant = catalog.CombinedVariants[i];
                     if (variant.CombatType != state.CombatType || variant.Visual?.Mesh == null || chosen-- != 0) continue;
-                    if (!CombinedTemplates.TryGetValue(i, out var combined))
+                    if (!CombinedTemplates.TryGetValue((state.Kind, i), out var combined))
                     {
-                        combined = CreateTemplate(variant.Visual, -1);
-                        CombinedTemplates.Add(i, combined);
+                        combined = CreateTemplate(catalog, variant.Visual, -1);
+                        CombinedTemplates.Add((state.Kind, i), combined);
                     }
                     InstantiateParts(combined, view);
                     return view;
                 }
             }
-            SelectParts(state.Seed, state.CombatType, _catalog, Selected);
-            var skin = (int)(state.Seed % (uint)Mathf.Max(1, _catalog.SkeletonMaterials.Length));
+            SelectParts(state.Seed, state.CombatType, catalog, Selected);
+            var skin = catalog.RandomizeAppearance ? (int)(state.Seed % (uint)Mathf.Max(1, catalog.SkeletonMaterials.Length)) : -1;
             foreach (var index in Selected)
             {
-                InstantiateParts(GetTemplate(index, skin), view);
+                InstantiateParts(GetTemplate(catalog, index, skin), view);
             }
             return view;
         }
@@ -364,6 +385,12 @@ namespace WaveByWave.Enemies
         public static void SelectParts(uint seed, EnemyCombatType type, DotsEnemyCatalog catalog, List<int> selected)
         {
             selected.Clear();
+            if (!catalog.RandomizeAppearance)
+            {
+                for (var i = 0; i < catalog.BakedParts.Count; i++)
+                    if (catalog.BakedParts[i].Category == EnemyBakedPartCategory.Body) selected.Add(i);
+                return;
+            }
             var random = new Unity.Mathematics.Random(seed | 1u);
             var categories = new[] { EnemyBakedPartCategory.Bandana, EnemyBakedPartCategory.Hat,
                 EnemyBakedPartCategory.Coat, EnemyBakedPartCategory.EyePatch, EnemyBakedPartCategory.Earring,
@@ -412,28 +439,28 @@ namespace WaveByWave.Enemies
                 else if (selectedSources.Contains(part.SourceIndex)) selected.Add(i);
             }
         }
-        private static Template GetTemplate(int index, int skin)
+        private static Template GetTemplate(DotsEnemyCatalog catalog, int index, int skin)
         {
-            if (_catalog.BakedParts[index].Category != EnemyBakedPartCategory.Body) skin = 0;
-            var key = index * 16 + skin;
+            if (catalog.BakedParts[index].Category != EnemyBakedPartCategory.Body) skin = 0;
+            var key = (catalog.Kind, index * 16 + skin);
             if (Templates.TryGetValue(key, out var template)) return template;
-            var part = _catalog.BakedParts[index];
-            template = CreateTemplate(part, skin);
+            var part = catalog.BakedParts[index];
+            template = CreateTemplate(catalog, part, skin);
             Templates.Add(key, template);
             return template;
         }
 
-        private static Template CreateTemplate(EnemyBakedPart part, int skin)
+        private static Template CreateTemplate(DotsEnemyCatalog catalog, EnemyBakedPart part, int skin)
         {
             var materials = new Material[part.Materials.Length];
             for (var i = 0; i < materials.Length; i++)
             {
                 var material = new Material(part.Materials[i]) { enableInstancing = true };
-                material.SetFloat("_DayMinimumLight", _catalog.DayMinimumLight);
-                material.SetFloat("_NightMinimumLight", _catalog.NightMinimumLight);
-                if (part.Category == EnemyBakedPartCategory.Body && skin >= 0 && skin < _catalog.SkeletonMaterials.Length)
+                material.SetFloat("_DayMinimumLight", catalog.DayMinimumLight);
+                material.SetFloat("_NightMinimumLight", catalog.NightMinimumLight);
+                if (part.Category == EnemyBakedPartCategory.Body && skin >= 0 && skin < catalog.SkeletonMaterials.Length)
                 {
-                    var source = _catalog.SkeletonMaterials[skin];
+                    var source = catalog.SkeletonMaterials[skin];
                     if (source != null)
                     {
                         var texture = source.HasProperty("_BaseMap") ? source.GetTexture("_BaseMap") : source.mainTexture;
@@ -510,6 +537,7 @@ namespace WaveByWave.Enemies
         private static void DestroyParts(View view)
         {
             ReleaseStars(view);
+            DestroyHealthBar(view);
             if (_world != null && _world.IsCreated)
             {
                 foreach (var entity in view.Parts) if (_world.EntityManager.Exists(entity)) _world.EntityManager.DestroyEntity(entity);
@@ -544,6 +572,7 @@ namespace WaveByWave.Enemies
             }
             foreach (var material in Materials) if (material != null) Object.Destroy(material);
             foreach (var smoke in Smokes) if (smoke.Object != null) Object.Destroy(smoke.Object);
+            DisposeHealthBars();
             Smokes.Clear(); Materials.Clear(); Templates.Clear(); CombinedTemplates.Clear();
             if (_source != null && _source.IsCreated) _query.Dispose();
             _starTemplate = Entity.Null; _world = _source = null; _catalog = null;

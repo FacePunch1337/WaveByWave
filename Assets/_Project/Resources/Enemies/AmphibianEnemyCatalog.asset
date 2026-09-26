@@ -1,0 +1,281 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57f2c2e6d3b9c6644bec30f69242f62e, type: 3}
+  m_Name: AmphibianEnemyCatalog
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Enemies.DotsEnemyCatalog
+  Kind: 3
+  DisplayName: "\u0417\u0435\u043C\u043D\u043E\u0432\u043E\u0434\u043D\u044B\u0439"
+  Habitat: 2
+  RandomizeAppearance: 0
+  SwimSpeed: 4
+  SwimmingDepth: 1.05
+  MinimumWaterDepth: 1.1
+  ShipBoardingHeight: 5
+  SwimClip: {fileID: 7400000, guid: d5edb1ebcf7e45e4e98b4f06d7e5dcb0, type: 3}
+  CustomHitCapsule: 0
+  HitCapsuleStart: {x: 0, y: 0.4, z: -0.8}
+  HitCapsuleEnd: {x: 0, y: 0.4, z: 0.8}
+  SpawnWhenPlayerEntersOcean: 0
+  OceanEncounterMinimumDistance: 8
+  OceanEncounterMaximumDistance: 16
+  ShowHealthBars: 0
+  HealthBarHeight: 2.1
+  HealthBarSize: {x: 0.9, y: 0.1}
+  HealthBarDistance: 45
+  HealthBarMaterial: {fileID: -7554452687029998314, guid: 8dac0f59370762743b6811617de074f5, type: 2}
+  HealthBarMesh: {fileID: 4300000, guid: 8dac0f59370762743b6811617de074f5, type: 2}
+  EnableMeleeSpawns: 1
+  EnablePistolSpawns: 0
+  EnableRifleSpawns: 0
+  BakingRigPrefab: {fileID: 953924139841632721, guid: 499616233ca3d9b4b95a2b163a840792, type: 3}
+  PartSources:
+  - Category: 0
+    Prefab: {fileID: 953924139841632721, guid: 499616233ca3d9b4b95a2b163a840792, type: 3}
+    Pair: 0
+    AttachBone: 
+    LocalPosition: {x: 0, y: 0, z: 0}
+    LocalEulerAngles: {x: 0, y: 0, z: 0}
+    LocalScale: {x: 1, y: 1, z: 1}
+  SkeletonMaterials: []
+  IdleClip: {fileID: 7400000, guid: bf3d7654965043f48a2b53566cd4e70e, type: 3}
+  RunClip: {fileID: 7400000, guid: f73905ec72aa2444e931a9aee4a4eec2, type: 3}
+  MeleeAttackClip: {fileID: 7400000, guid: b675568fc72773c499073abf2902c8f0, type: 3}
+  PistolAttackClip: {fileID: 7400000, guid: b675568fc72773c499073abf2902c8f0, type: 3}
+  RifleAttackClip: {fileID: 7400000, guid: b675568fc72773c499073abf2902c8f0, type: 3}
+  BakeFramesPerSecond: 16
+  UseCombinedVariants: 0
+  CombinedVariantsPerType: 8
+  CombinedVariants: []
+  CombinedSourceHash: 
+  BakedParts:
+  - Name: Enemy_0_Hand_Left
+    Category: 0
+    Pair: 0
+    SourceIndex: 0
+    BodySlot: Hand_Left
+    Mesh: {fileID: 4300000, guid: b03f1d07570deb14c89f6480b3ee8e06, type: 2}
+    Positions: {fileID: 9166081101644015264, guid: b03f1d07570deb14c89f6480b3ee8e06, type: 2}
+    Normals: {fileID: 5072297181749216044, guid: b03f1d07570deb14c89f6480b3ee8e06, type: 2}
+    Materials:
+    - {fileID: 3360957401680924220, guid: b03f1d07570deb14c89f6480b3ee8e06, type: 2}
+    Clips:
+    - FirstRow: 0
+      Count: 17
+      Duration: 1
+    - FirstRow: 17
+      Count: 12
+      Duration: 0.6666667
+    - FirstRow: 29
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 47
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 65
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 83
+      Count: 17
+      Duration: 1
+    - FirstRow: 100
+      Count: 23
+      Duration: 1.333334
+  - Name: Enemy_0_Hand_Right
+    Category: 0
+    Pair: 0
+    SourceIndex: 0
+    BodySlot: Hand_Right
+    Mesh: {fileID: 4300000, guid: 9da6e66185d1ee4468fe0bb8c3982eeb, type: 2}
+    Positions: {fileID: 8344199605331631481, guid: 9da6e66185d1ee4468fe0bb8c3982eeb, type: 2}
+    Normals: {fileID: 6072232200485701336, guid: 9da6e66185d1ee4468fe0bb8c3982eeb, type: 2}
+    Materials:
+    - {fileID: 4814330435652730814, guid: 9da6e66185d1ee4468fe0bb8c3982eeb, type: 2}
+    Clips:
+    - FirstRow: 0
+      Count: 17
+      Duration: 1
+    - FirstRow: 17
+      Count: 12
+      Duration: 0.6666667
+    - FirstRow: 29
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 47
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 65
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 83
+      Count: 17
+      Duration: 1
+    - FirstRow: 100
+      Count: 23
+      Duration: 1.333334
+  - Name: Enemy_0_Leg_Left
+    Category: 0
+    Pair: 0
+    SourceIndex: 0
+    BodySlot: Leg_Left
+    Mesh: {fileID: 4300000, guid: 715117cb62d2ee142aa7b2995e4189b6, type: 2}
+    Positions: {fileID: 2329634430439804334, guid: 715117cb62d2ee142aa7b2995e4189b6, type: 2}
+    Normals: {fileID: -4820520665841679347, guid: 715117cb62d2ee142aa7b2995e4189b6, type: 2}
+    Materials:
+    - {fileID: -6467425842460075182, guid: 715117cb62d2ee142aa7b2995e4189b6, type: 2}
+    Clips:
+    - FirstRow: 0
+      Count: 17
+      Duration: 1
+    - FirstRow: 17
+      Count: 12
+      Duration: 0.6666667
+    - FirstRow: 29
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 47
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 65
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 83
+      Count: 17
+      Duration: 1
+    - FirstRow: 100
+      Count: 23
+      Duration: 1.333334
+  - Name: Enemy_0_Leg_Right
+    Category: 0
+    Pair: 0
+    SourceIndex: 0
+    BodySlot: Leg_Right
+    Mesh: {fileID: 4300000, guid: bb412c494e8c6b744918504c3602399a, type: 2}
+    Positions: {fileID: -8817445493429877496, guid: bb412c494e8c6b744918504c3602399a, type: 2}
+    Normals: {fileID: -8710380659648202810, guid: bb412c494e8c6b744918504c3602399a, type: 2}
+    Materials:
+    - {fileID: 1627334755824293661, guid: bb412c494e8c6b744918504c3602399a, type: 2}
+    Clips:
+    - FirstRow: 0
+      Count: 17
+      Duration: 1
+    - FirstRow: 17
+      Count: 12
+      Duration: 0.6666667
+    - FirstRow: 29
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 47
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 65
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 83
+      Count: 17
+      Duration: 1
+    - FirstRow: 100
+      Count: 23
+      Duration: 1.333334
+  - Name: Enemy_0_Skeleton
+    Category: 0
+    Pair: 0
+    SourceIndex: 0
+    BodySlot: Skeleton
+    Mesh: {fileID: 4300000, guid: 87f6a3bd0fc3b1d4fafa8268d543e10d, type: 2}
+    Positions: {fileID: 346370619192697530, guid: 87f6a3bd0fc3b1d4fafa8268d543e10d, type: 2}
+    Normals: {fileID: -9220788102688439888, guid: 87f6a3bd0fc3b1d4fafa8268d543e10d, type: 2}
+    Materials:
+    - {fileID: -6257359771882972802, guid: 87f6a3bd0fc3b1d4fafa8268d543e10d, type: 2}
+    Clips:
+    - FirstRow: 0
+      Count: 17
+      Duration: 1
+    - FirstRow: 17
+      Count: 12
+      Duration: 0.6666667
+    - FirstRow: 29
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 47
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 65
+      Count: 18
+      Duration: 1.000001
+    - FirstRow: 83
+      Count: 17
+      Duration: 1
+    - FirstRow: 100
+      Count: 23
+      Duration: 1.333334
+  BakeSourceHash: vat5:c882e1d2e500cbd20722bb3afca81ea9
+  SpawnSmokePrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
+  DeathSmokePrefab: {fileID: 8279892500089411184, guid: c853196eb29aafb4e9018cc0d49fb0eb, type: 3}
+  StunEffectPrefab: {fileID: 3851572283197178760, guid: da7da3015244d454580cb100bca9f23e, type: 3}
+  VisualScale: 1.7
+  DayMinimumLight: 0.65
+  NightMinimumLight: 0.25
+  MaximumHealth: 50
+  MoveSpeed: 3.8
+  MeleeRange: 1.45
+  RangedMinimumRange: 5
+  RangedMaximumRange: 28
+  MeleeDamage: 16
+  PistolDamage: 14
+  RifleDamage: 22
+  MeleeCooldown: 1.15
+  PistolCooldown: 1.75
+  RifleCooldown: 2.4
+  AttackHitNormalizedTime: 0.52
+  PistolHitNormalizedTime: 0.15
+  RifleHitNormalizedTime: 0.5
+  DamageKnockback: 2.8
+  DamageFlashDuration: 0.12
+  ParryStunDuration: 2
+  ParryKnockback: 2.25
+  MaximumSlope: 48
+  StepHeight: 10
+  MaximumDrop: 10
+  SurfaceVerticalSpeed: 4
+  BodyRadius: 0.38
+  BodyHeight: 1.7
+  ProjectileHitRadius: 0.42
+  CrowdSeparationRadius: 0.82
+  CrowdSeparationStrength: 0.9
+  CrowdAvoidanceLookAhead: 1.5
+  SurfaceProbesPerFrame: 256
+  IgnoredObstacleWidth: 3
+  SurfaceLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  WaterProfile: {fileID: 11400000, guid: 1ca4610f5bf9e2f4bb39535503a79eeb, type: 2}
+  MaximumSurfaceGap: 1
+  SurfaceTransferHeight: 1
+  EdgeSearchesPerFrame: 32
+  UseBakedDeckNavigation: 0
+  EnableTargetSlots: 0
+  TargetSlotSpacing: 0.35
+  EnableCrowdAvoidance: 0
+  EnableCrowdSeparation: 0
+  EnableCrowdCollisions: 1
+  EnableSurfaceContinuityChecks: 1
+  EnableSurfaceEdgeFollowing: 1
+  EnableSurfaceTransfers: 1
+  EnableCombat: 1
+  SpawnsPerFrame: 32
+  MaximumEnemies: 6000
+  LootDrops:
+  - {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
+  - {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
+  - {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
+  - {fileID: 11400000, guid: e72c8509e3ca95e4e86e74f4079425e1, type: 2}
+  - {fileID: 11400000, guid: f04350f64760aab418b2b7e7b8885a3c, type: 2}

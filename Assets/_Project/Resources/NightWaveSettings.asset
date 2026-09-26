@@ -12,40 +12,52 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b19b4e6468364981acef8f30cdf13916, type: 3}
   m_Name: NightWaveSettings
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.NightWaveSettings
-  FogFadeInSeconds: 4
-  FogFadeOutSeconds: 4
-  FogImmersionDistance: 3
   VictoryDisplayDuration: 5
   Waves:
-  - Name: 1
-    Bots: []
-    EnemyShips: 1
-    SpawnRadius: 50
+  - Name: Wave 1
     BattlefieldRadius: 100
-  - Name: 2
-    Bots: []
-    EnemyShips: 3
-    SpawnRadius: 50
+    Fragments:
+    - Name: Fragment 1
+      Enemies:
+      - EnemyType: {fileID: 11400000, guid: 83d39ebc5b14459a8ff5f8470e2d3b2c, type: 2}
+        Count: 1
+        SpawnRadius: 100
+        SpawnBandWidth: 1
+  - Name: Wave 2
     BattlefieldRadius: 150
-  - Name: 3
-    Bots: []
-    EnemyShips: 10
-    SpawnRadius: 100
-    BattlefieldRadius: 200
-  BoundaryGraceSeconds: 8
-  BoundaryBreachInterval: 10
-  BoundaryBreachLeakMultiplier: 1
-  BoundaryCheckInterval: 0.25
-  FogNearColor: {r: 0, g: 1, b: 0.7137255, a: 1}
-  FogFarColor: {r: 0, g: 1, b: 0.71535873, a: 1}
-  FogDensity: 0.015
-  FogEdgeWidth: 10
-  FogHeight: 10
-  FogNoiseStrength: 1
-  FogNoiseScale: 0.0025
-  FogWindSpeed: 4
-  FogSampleCount: 8
-  FogViewDistance: 100
-  PreviewFogInSceneView: 0
-  PreviewWaveIndex: 2
-  PreviewCenter: {x: 0, y: -0.7046841, z: 0}
+    Fragments:
+    - Name: Fragment 1
+      Enemies:
+      - EnemyType: {fileID: 11400000, guid: 83d39ebc5b14459a8ff5f8470e2d3b2c, type: 2}
+        Count: 2
+        SpawnRadius: 150
+        SpawnBandWidth: 1
+    - Name: Fragment 2
+      Enemies:
+      - EnemyType: {fileID: 11400000, guid: 83d39ebc5b14459a8ff5f8470e2d3b2c, type: 2}
+        Count: 2
+        SpawnRadius: 150
+        SpawnBandWidth: 1
+      - EnemyType: {fileID: 11400000, guid: ca8756fadd514ebab3513ce28bf4df0c, type: 2}
+        Count: 50
+        SpawnRadius: 20
+        SpawnBandWidth: 5
+  - Name: Wave 3
+    BattlefieldRadius: 150
+    Fragments:
+    - Name: Fragment 1
+      Enemies:
+      - EnemyType: {fileID: 11400000, guid: 83d39ebc5b14459a8ff5f8470e2d3b2c, type: 2}
+        Count: 3
+        SpawnRadius: 150
+        SpawnBandWidth: 20
+    - Name: Fragment 2
+      Enemies:
+      - EnemyType: {fileID: 11400000, guid: 83d39ebc5b14459a8ff5f8470e2d3b2c, type: 2}
+        Count: 3
+        SpawnRadius: 20
+        SpawnBandWidth: 1
+      - EnemyType: {fileID: 11400000, guid: ca8756fadd514ebab3513ce28bf4df0c, type: 2}
+        Count: 100
+        SpawnRadius: 20
+        SpawnBandWidth: 5

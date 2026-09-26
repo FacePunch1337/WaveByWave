@@ -6,6 +6,10 @@ namespace WaveByWave.Enemies
     [CreateAssetMenu(menuName = "Wave By Wave/Enemies/DOTS enemy ship", fileName = "EnemyShipDefinition")]
     public sealed class EnemyShipDefinition : ScriptableObject
     {
+        public const string ResourcesPath = "Enemies/EnemyShipDefinition";
+
+        public static EnemyShipDefinition Load() => Resources.Load<EnemyShipDefinition>(ResourcesPath);
+
         [Header("Presentation")]
         [Tooltip("Hybrid view instantiated for each replicated DOTS ship. It must contain EnemyShipView and a solid hull collider.")]
         public GameObject ViewPrefab;

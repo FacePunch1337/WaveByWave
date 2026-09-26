@@ -25,6 +25,7 @@ namespace WaveByWave.Editor
         private static NetworkManager _manager;
         private static ShipFlooding _ship;
         private static ShipCannonBattery _battery;
+        private static ShipHullHealth _hullHealth;
         private static string _result;
         private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
 
@@ -95,6 +96,7 @@ namespace WaveByWave.Editor
             root.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             root.GetComponent<NetworkObject>().Spawn();
             _ship = root.GetComponent<ShipFlooding>(); _battery = root.GetComponent<ShipCannonBattery>();
+            _hullHealth = root.GetComponent<ShipHullHealth>();
             // Keep amounts deterministic; network tick and KCC continue running.
             _ship.enabled = false; _battery.enabled = false;
         }
@@ -125,7 +127,7 @@ namespace WaveByWave.Editor
                 "Boundary must create spaced breaches after grace and reset on re-entry");
             var site = _ship.Hull.Sites[_ship.Hull.Sites.Length / 2];
             var point = _ship.Hull.transform.TransformPoint(site.Position);
-            _battery.ApplyDamageServer(25f, point);
+            _hullHealth.ApplyDamageServer(25f, point);
             Check(_ship.HoleCount == 1 && _ship.Inflow > 0f, "Cannon hit must open a leaking breach on the server");
             var waterPoint = _ship.WaterVolume.transform.TransformPoint(_ship.WaterVolume.LocalBounds.center);
             _ship.AddWaterServer(6f, waterPoint);
@@ -175,17 +177,17 @@ namespace WaveByWave.Editor
             Check(_ship.transform.Find("Nailed plank " + hole.Id) == null,
                 "Repair must not leave a visual plank on the hull");
             Check(Mathf.Abs(_ship.WaterLitres - 6f) < 0.001f, "Repair must not drain existing water");
-            _battery.ApplyDamageServer(25f, point);
+            _hullHealth.ApplyDamageServer(25f, point);
             Check(_ship.HoleCount == 1, "A new hit after repair must create another breach");
             var waterBeforeBoundary = _ship.WaterLitres;
-            Check(_battery.OpenBoundaryBreachServer(1f) && _ship.HoleCount == 2 &&
+            Check(_hullHealth.OpenBoundaryBreachServer(1f) && _ship.HoleCount == 2 &&
                   _ship.Inflow > _ship.LeakLitresPerSecond &&
                   Mathf.Approximately(_ship.WaterLitres, waterBeforeBoundary),
                 "Leaving the battlefield must open a leaking, repairable hole without adding water directly");
             _ship.AddWaterServer(_ship.CapacityLitres, waterPoint);
             Check(_ship.IsSinking && _battery.Phase == VoyagePhase.Defeat && _battery.ReturnToPortIn > 0f, "Full water must start defeat and the shared port countdown");
             var count = _ship.HoleCount;
-            _battery.ApplyDamageServer(25f, point);
+            _hullHealth.ApplyDamageServer(25f, point);
             Check(_ship.HoleCount == count && _ship.ScoopWaterServer(10f, waterPoint) == 0f, "Ended voyage cannot be revived by a late input");
         }
 

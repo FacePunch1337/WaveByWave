@@ -15,7 +15,8 @@ namespace WaveByWave.Generation
         private Texture2D _noise;
         private FogPass _pass;
 #if UNITY_EDITOR
-        private static NightWaveSettings _previewSettings;
+        private static NightBattlefieldSettings _previewSettings;
+        private static NightWaveSettings _previewWaves;
 #endif
         private static readonly int CenterRadius = Shader.PropertyToID("_BattlefieldCenterRadius");
         private static readonly int NearColor = Shader.PropertyToID("_BattlefieldFogNearColor");
@@ -39,16 +40,17 @@ namespace WaveByWave.Generation
         {
             if (_pass == null || renderingData.cameraData.renderType != CameraRenderType.Base) return;
             Vector4 zone;
-            NightWaveSettings settings;
+            NightBattlefieldSettings settings;
             var opacity = 1f;
             if (renderingData.cameraData.cameraType == CameraType.SceneView && !Application.isPlaying)
             {
 #if UNITY_EDITOR
-                _previewSettings ??= Resources.Load<NightWaveSettings>("NightWaveSettings");
+                _previewSettings ??= Resources.Load<NightBattlefieldSettings>("NightBattlefieldSettings");
+                _previewWaves ??= Resources.Load<NightWaveSettings>("NightWaveSettings");
                 settings = _previewSettings;
                 if (settings == null || !settings.PreviewFogInSceneView ||
-                    settings.Waves == null || settings.Waves.Length == 0) return;
-                var wave = settings.Waves[Mathf.Clamp(settings.PreviewWaveIndex, 0, settings.Waves.Length - 1)];
+                    _previewWaves == null || _previewWaves.Waves == null || _previewWaves.Waves.Length == 0) return;
+                var wave = _previewWaves.Waves[Mathf.Clamp(settings.PreviewWaveIndex, 0, _previewWaves.Waves.Length - 1)];
                 if (wave == null) return;
                 var center = settings.PreviewCenter;
                 zone = new Vector4(center.x, center.y, center.z, wave.BattlefieldRadius);
@@ -57,7 +59,7 @@ namespace WaveByWave.Generation
 #endif
             }
             else if (renderingData.cameraData.cameraType != CameraType.Game ||
-                     !NightWaveController.TryGetFog(out zone, out settings, out opacity)) return;
+                     !NightBattlefieldController.TryGetFog(out zone, out settings, out opacity)) return;
             _material.SetVector(CenterRadius, zone);
             _material.SetVector("_BattlefieldFogTransition", new Vector4(
                 opacity,

@@ -139,7 +139,7 @@ namespace WaveByWave.Editor
             void Asset(Object obj) => text.Append('|').Append(obj != null ?
                 AssetDatabase.GetAssetDependencyHash(AssetDatabase.GetAssetPath(obj)).ToString() : "null");
             Asset(catalog.BakingRigPrefab);
-            for (var i = 0; i < 5; i++) Asset(catalog.Clip((EnemyAnimationState)i));
+            for (var i = 0; i < (catalog.SwimClip != null ? 7 : 5); i++) Asset(catalog.Clip((EnemyAnimationState)i));
             foreach (var source in catalog.PartSources)
             {
                 Asset(source.Prefab);
@@ -220,9 +220,13 @@ namespace WaveByWave.Editor
             if (catalog.BakingRigPrefab == null) throw new InvalidOperationException("Assign a skeleton baking rig.");
             var shader = Shader.Find("WaveByWave/EnemyVertexAnimation");
             if (shader == null) throw new InvalidOperationException("EnemyVertexAnimation shader is missing.");
-            var clips = Enumerable.Range(0, 5).Select(i => catalog.Clip((EnemyAnimationState)i)).ToArray();
+            var bakeFolder = catalog.Kind == EnemyKind.Skeleton ? BakeFolder : BakeFolder + "/Species/" + catalog.Kind;
+            Directory.CreateDirectory(bakeFolder);
+            AssetDatabase.Refresh();
+            var clipCount = catalog.SwimClip != null ? 7 : 5;
+            var clips = Enumerable.Range(0, clipCount).Select(i => catalog.Clip((EnemyAnimationState)i)).ToArray();
             if (clips.Any(c => c == null)) throw new InvalidOperationException("Assign all five animation clips.");
-            var layouts = new EnemyAnimationFrames[5];
+            var layouts = new EnemyAnimationFrames[clipCount];
             var rows = 0;
             for (var i = 0; i < clips.Length; i++)
             {
@@ -267,7 +271,7 @@ namespace WaveByWave.Editor
                             renderer.updateWhenOffscreen = true;
                         }
                     }
-                    var curves = clips.Select(c => new ClipSampler(c, bones)).ToArray();
+                    var curves = clips.Select(c => new ClipSampler(c, bones, catalog.Kind == EnemyKind.Skeleton ? 12 : 1)).ToArray();
                     foreach (var renderer in partRoot.GetComponentsInChildren<Renderer>(true))
                     {
                         if (!renderer.gameObject.activeInHierarchy || !renderer.enabled || renderer is ParticleSystemRenderer) continue;
@@ -288,7 +292,14 @@ namespace WaveByWave.Editor
                             {
                                 curves[clipIndex].Sample(frame * layout.Duration / (layout.Count - 1));
                                 var sourceMesh = mesh;
-                                if (renderer is SkinnedMeshRenderer skin) { skin.BakeMesh(scratch, false); sourceMesh = scratch; }
+                                if (renderer is SkinnedMeshRenderer skin)
+                                {
+                                    // Imported generic rigs can carry FBX unit conversion on the renderer
+                                    // (the troll uses scale 100). Bake in renderer space before applying
+                                    // its full matrix; otherwise that scale is applied twice.
+                                    skin.BakeMesh(scratch, catalog.Kind != EnemyKind.Skeleton);
+                                    sourceMesh = scratch;
+                                }
                                 var vertices = sourceMesh.vertices;
                                 var ns = sourceMesh.normals;
                                 var matrix = rig.transform.worldToLocalMatrix * renderer.transform.localToWorldMatrix;
@@ -321,7 +332,7 @@ namespace WaveByWave.Editor
                         bounds.Expand(0.1f);
                         baked.bounds = bounds;
                         baked.name = $"Enemy_{sourceIndex}_{renderer.name}";
-                        var path = $"{BakeFolder}/{baked.name}.asset";
+                        var path = $"{bakeFolder}/{baked.name}.asset";
                         // Keep GUIDs stable when rebaking so inspector references are retained.
                         var old = AssetDatabase.LoadAssetAtPath<Mesh>(path);
                         if (old == null) AssetDatabase.CreateAsset(baked, path);
@@ -389,7 +400,7 @@ namespace WaveByWave.Editor
                 public readonly Dictionary<string, AnimationCurve> Curves = new();
             }
             private readonly List<BoneCurves> _bones = new();
-            public ClipSampler(AnimationClip clip, Dictionary<string, Transform> bones)
+            public ClipSampler(AnimationClip clip, Dictionary<string, Transform> bones, int minimumBones = 12)
             {
                 var map = new Dictionary<Transform, BoneCurves>();
                 foreach (var binding in AnimationUtility.GetCurveBindings(clip))
@@ -405,7 +416,7 @@ namespace WaveByWave.Editor
                     }
                     curves.Curves[binding.propertyName] = AnimationUtility.GetEditorCurve(clip, binding);
                 }
-                if (_bones.Count < 12) throw new InvalidOperationException($"Clip '{clip.name}' does not contain matching generic skeleton curves.");
+                if (_bones.Count < minimumBones) throw new InvalidOperationException($"Clip '{clip.name}' does not contain matching generic skeleton curves.");
             }
             public void Sample(float time)
             {
@@ -445,7 +456,7 @@ namespace WaveByWave.Editor
             {
                 if (GUILayout.Button("Bake prefab meshes and animation textures"))
                     EnemyContentSetup.Bake((DotsEnemyCatalog)target);
-                if (GUILayout.Button("Bake combined skeleton variants"))
+                if (((DotsEnemyCatalog)target).RandomizeAppearance && GUILayout.Button("Bake combined skeleton variants"))
                     EnemyCombinedVariantBaker.Bake((DotsEnemyCatalog)target);
             }
             var catalog = (DotsEnemyCatalog)target;

@@ -41,6 +41,7 @@ namespace WaveByWave.Player
         private float _localChestStarted, _nextChestHeartbeat;
         private double _serverChestStarted, _serverChestHeartbeat;
         private readonly RaycastHit[] _chestLineHits = new RaycastHit[32];
+        private bool _changedPending;
 
         public event Action Changed;
         public int Capacity => capacity;
@@ -126,6 +127,15 @@ namespace WaveByWave.Player
             Changed?.Invoke();
         }
 
+        private void LateUpdate()
+        {
+            if (!_changedPending) return;
+            _changedPending = false;
+            // UI listeners must never run inside a server inventory transaction. A missing
+            // UI reference must not interrupt pickup after the stack changes but before removal.
+            Changed?.Invoke();
+        }
+
         public InventorySlotState GetSlot(int index)
         {
             return _slots != null && index >= 0 && index < _slots.Count ? _slots[index] : default;
@@ -188,10 +198,7 @@ namespace WaveByWave.Player
             _serverSelectionRevision = revision;
             _serverSelectedIndex = index;
             _equippedSlot.Value = index;
-            var controller = GetComponent<NetworkPlayerController>();
-            var ship = controller != null ? controller.GetSupportingShipOnServer() : null;
-            if (ship != null && ship.TryGetComponent<ShipCannonBattery>(out var battery))
-                battery.NotifyInventorySelectionServer(OwnerClientId);
+            CannonNetworkController.NotifyInventorySelectionFor(OwnerClientId);
             return true;
         }
 
@@ -276,7 +283,7 @@ namespace WaveByWave.Player
 
         public void PickupStressItem(int id)
         {
-            if (IsOwner) PickupStressItemServerRpc(id);
+            if (IsOwner) PickupStressItemServerRpc(id, LootStressTest.ClientRevision);
         }
 
         public bool UpdateChestInteraction(IPlayerInteractable target, bool pressed, bool held, bool released)
@@ -288,14 +295,14 @@ namespace WaveByWave.Player
             {
                 _localChest = id; _localChestStarted = Time.unscaledTime;
                 _nextChestHeartbeat = Time.unscaledTime + 0.15f;
-                ChestHoldServerRpc(id, true);
+                ChestHoldServerRpc(id, true, LootStressTest.ClientRevision);
             }
             if (_localChest == id && held)
             {
                 LootStressTest.SetChestHoldProgress(id, (Time.unscaledTime - _localChestStarted) /
                     Mathf.Max(0.3f, definition.ChestLoot.HoldDuration));
                 if (Time.unscaledTime >= _nextChestHeartbeat)
-                { _nextChestHeartbeat = Time.unscaledTime + 0.15f; ChestHoldServerRpc(id, true); }
+                { _nextChestHeartbeat = Time.unscaledTime + 0.15f; ChestHoldServerRpc(id, true, LootStressTest.ClientRevision); }
             }
             if (_localChest == id && released)
             {
@@ -309,14 +316,15 @@ namespace WaveByWave.Player
         private void CancelLocalChestHold()
         {
             if (_localChest == int.MaxValue) return;
-            if (IsSpawned) ChestHoldServerRpc(_localChest, false);
+            if (IsSpawned) ChestHoldServerRpc(_localChest, false, LootStressTest.ClientRevision);
             _localChest = int.MaxValue;
             LootStressTest.SetChestHoldProgress(int.MaxValue, 0f);
         }
 
         [ServerRpc]
-        private void ChestHoldServerRpc(int id, bool holding)
+        private void ChestHoldServerRpc(int id, bool holding, uint revision)
         {
+            if (revision != LootStressTest.StateRevision) return;
             if (!holding) { if (_serverChest == id) _serverChest = int.MaxValue; return; }
             if (!LootStressTest.TryGetServerItem(id, out var definition, out var position) || !definition.IsChest ||
                 !CanReachChest(position) || (_health != null && _health.IsDead)) { _serverChest = int.MaxValue; return; }
@@ -354,20 +362,31 @@ namespace WaveByWave.Player
         }
 
         [ServerRpc]
-        private void PickupStressItemServerRpc(int id, ServerRpcParams rpcParams = default)
+        private void PickupStressItemServerRpc(int id, uint revision, ServerRpcParams rpcParams = default)
         {
-            if (!NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var client) ||
+            if (revision != LootStressTest.StateRevision ||
+                !NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var client) ||
                 client.PlayerObject == null || client.PlayerObject != NetworkObject ||
+                IsCarryingChest || (_health != null && _health.IsDead) ||
                 !LootStressTest.TryGetServerItem(id, out var definition, out var position) ||
                 Vector3.Distance(ServerInteractionPosition(), position) > 4f ||
-                (definition.IsChest && !CanReachChest(position)) ||
-                !(definition.IsChest ? TryCarryChestServer(definition) : TryStoreSingleServer(definition))) return;
-            LootStressTest.RemoveServerItem(id);
+                (definition.IsChest && !CanReachChest(position))) return;
+            var slotIndex = definition.IsChest ? -1 : FindStorageSlot(definition);
+            if (!definition.IsChest && slotIndex < 0) return;
+            // Claim the world item before granting it. Repeated RPCs can never grant the same ID twice.
+            if (!LootStressTest.RemoveServerItem(id)) return;
+            if (definition.IsChest) TryCarryChestServer(definition);
+            else
+            {
+                var slot = _slots[slotIndex];
+                _slots[slotIndex] = new InventorySlotState(definition.Id,
+                    (ushort)((slot.IsEmpty ? 0 : slot.Amount) + 1));
+            }
         }
 
-        private bool TryStoreSingleServer(ItemDefinition definition)
+        private int FindStorageSlot(ItemDefinition definition)
         {
-            if (!IsServer || IsCarryingChest || definition == null) return false;
+            if (!IsServer || IsCarryingChest || definition == null) return -1;
             var id = new FixedString64Bytes(definition.Id);
             for (var pass = 0; pass < 2; pass++)
             for (var i = 0; i < _slots.Count; i++)
@@ -375,10 +394,9 @@ namespace WaveByWave.Player
                 var slot = _slots[i];
                 if (pass == 0 && (slot.IsEmpty || !slot.ItemId.Equals(id) || slot.Amount >= definition.MaximumStack)) continue;
                 if (pass == 1 && !slot.IsEmpty) continue;
-                _slots[i] = new InventorySlotState(definition.Id, (ushort)((slot.IsEmpty ? 0 : slot.Amount) + 1));
-                return true;
+                return i;
             }
-            return false;
+            return -1;
         }
 
         [ServerRpc]
@@ -534,9 +552,9 @@ namespace WaveByWave.Player
                 item.SetState(item.ItemId, remaining);
         }
 
-        private void OnListChanged(NetworkListEvent<InventorySlotState> changeEvent) => Changed?.Invoke();
+        private void OnListChanged(NetworkListEvent<InventorySlotState> changeEvent) => _changedPending = true;
 
-        private void OnCarriedChestChanged(FixedString64Bytes previous, FixedString64Bytes current) => Changed?.Invoke();
+        private void OnCarriedChestChanged(FixedString64Bytes previous, FixedString64Bytes current) => _changedPending = true;
 
         private bool TryCarryChestServer(ItemDefinition definition)
         {

@@ -1,83 +1,27 @@
-using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
-using WaveByWave.Combat;
 using WaveByWave.Enemies;
 using WaveByWave.Networking;
 using WaveByWave.Ships;
 
 namespace WaveByWave.Generation
 {
-    // One ship, sampled a few times per second. Returning inside resets grace
-    // immediately; a frame hitch cannot create a burst of hull breaches.
-    public sealed class BattlefieldBoundaryBreachTimer
-    {
-        private float _outsideSince = -1f;
-        private float _nextBreachAt = -1f;
-        public void Reset() { _outsideSince = -1f; _nextBreachAt = -1f; }
-        public bool Step(float now, bool outside, float graceSeconds, float breachInterval)
-        {
-            if (!outside) { Reset(); return false; }
-            if (_outsideSince < 0f)
-            {
-                _outsideSince = now;
-                _nextBreachAt = now + Mathf.Max(0f, graceSeconds);
-            }
-            if (now < _nextBreachAt) return false;
-            _nextBreachAt = now + Mathf.Max(0.5f, breachInterval);
-            return true;
-        }
-    }
-
-    // Presentation outlives the gameplay boundary and fades from the last visible opacity.
-    public sealed class BattlefieldFogFade
-    {
-        private bool _wasActive;
-        private float _fadeOutStarted, _fadeOutFrom;
-        public float Opacity { get; private set; }
-
-        public void Step(bool active, float age, float now, float fadeInSeconds, float fadeOutSeconds)
-        {
-            if (active)
-            {
-                _wasActive = true;
-                Opacity = fadeInSeconds <= 0f ? 1f : Mathf.SmoothStep(0f, 1f, age / fadeInSeconds);
-                return;
-            }
-            if (_wasActive)
-            {
-                _wasActive = false;
-                _fadeOutStarted = now;
-                _fadeOutFrom = Opacity;
-            }
-            Opacity = fadeOutSeconds <= 0f ? 0f : _fadeOutFrom *
-                (1f - Mathf.SmoothStep(0f, 1f, (now - _fadeOutStarted) / fadeOutSeconds));
-        }
-
-        public void Reset() { _wasActive = false; _fadeOutFrom = 0f; Opacity = 0f; }
-    }
-
     // Gameplay waves depend on night notifications; the lighting clock never depends on waves.
     public sealed class NightWaveController : MonoBehaviour
     {
         public static NightWaveController Active { get; private set; }
-        public static bool BattleInProgress => Active != null && Active._battery != null &&
-            Active._battery.IsSpawned && Active._battery.BattlefieldActive;
+        public static bool BattleInProgress => NightBattlefieldController.BattleInProgress;
+        public int CurrentDay => _waveIndex + 1;
         [SerializeField] private NightWaveSettings settings;
         [SerializeField] private VoyageDayNightController dayNight;
         [SerializeField] private Transform[] waveSpawnPoints;
 
         private ShipCannonBattery _battery;
-        private readonly List<NetworkHealth> _wavePrefabs = new();
-        private int _waveIndex, _waveGroup;
+        private int _waveIndex, _fragmentIndex = -1, _waveGroup, _waveTotalBots;
         private bool _waveActive, _victoryRequested;
         private bool _waveNumberPublished;
         private float _nextWaveCheck;
-        private float _nextBoundaryCheck;
-        private readonly BattlefieldBoundaryBreachTimer _boundaryBreaches = new();
-        private readonly BattlefieldFogFade _fogFade = new();
-        private Vector4 _fogZone;
-        private float _localOutsideSince = -1f;
+        private NightBattlefieldController _battlefield;
         [SerializeField, Min(0.5f)] private float announcementDuration = 4f;
         private VoyagePhase _lastAnnouncedPhase;
         private bool _phaseObserved;
@@ -85,49 +29,17 @@ namespace WaveByWave.Generation
         private string _announcement;
         private float _announcementUntil;
 
-        public static bool TryGetBattlefield(out Vector4 centerRadius, out NightWaveSettings fogSettings)
-        {
-            centerRadius = default;
-            fogSettings = null;
-            var controller = Active;
-            if (controller == null || controller._battery == null || !controller._battery.IsSpawned ||
-                !controller._battery.BattlefieldActive || controller.settings == null) return false;
-            var center = controller._battery.BattlefieldCenter;
-            centerRadius = new Vector4(center.x, center.y, center.z, controller._battery.BattlefieldRadius);
-            fogSettings = controller.settings;
-            return true;
-        }
-
-        public static bool TryGetFog(out Vector4 centerRadius, out NightWaveSettings fogSettings, out float opacity)
-        {
-            var controller = Active;
-            centerRadius = controller != null ? controller._fogZone : default;
-            fogSettings = controller != null ? controller.settings : null;
-            opacity = controller != null ? controller._fogFade.Opacity : 0f;
-            return fogSettings != null && centerRadius.w > 0f && opacity > 0f;
-        }
-
-        private void LateUpdate()
-        {
-            if (settings == null) return;
-            var active = TryGetBattlefield(out var zone, out _);
-            if (active) _fogZone = zone;
-            _fogFade.Step(active, active ? _battery.BattlefieldAge : 0f, Time.unscaledTime,
-                settings.FogFadeInSeconds, settings.FogFadeOutSeconds);
-        }
-
         private void OnEnable()
         {
             Active = this;
             settings ??= Resources.Load<NightWaveSettings>("NightWaveSettings");
+            _battlefield = NightBattlefieldController.EnsureInstance(gameObject);
             dayNight ??= GetComponent<VoyageDayNightController>();
             if (dayNight != null) dayNight.NightStartedServer += OnNightStartedServer;
         }
 
         private void OnDisable()
         {
-            _fogFade.Reset();
-            _fogZone = default;
             if (Active == this) Active = null;
             if (dayNight != null) dayNight.NightStartedServer -= OnNightStartedServer;
         }
@@ -137,7 +49,6 @@ namespace WaveByWave.Generation
             if (_battery == null || !_battery.IsSpawned)
                 _battery = FindFirstObjectByType<ShipCannonBattery>();
             UpdateAnnouncement();
-            UpdateBoundaryWarning();
             if (settings == null || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
                 return;
             if (_battery == null || !_battery.IsSpawned || _battery.VoyageEnded) return;
@@ -153,25 +64,19 @@ namespace WaveByWave.Generation
                 return;
             }
             if (!_waveActive) return;
-            UpdateBoundaryServer();
             if (Time.time < _nextWaveCheck) return;
-            _nextWaveCheck = Time.time + 0.5f;
-            if (WaveRemaining() != 0) return;
-            _waveActive = false;
-            _battery.ClearBattlefieldServer();
-            _boundaryBreaches.Reset();
-            if (_waveIndex + 1 >= settings.Waves.Length)
+            _nextWaveCheck = Time.time + 0.25f;
+            PublishEnemyProgress();
+            if (FragmentRemaining() != 0) return;
+            var wave = CurrentWave;
+            if (wave != null && _fragmentIndex + 1 < (wave.Fragments?.Length ?? 0))
             {
-                _victoryRequested = true;
-                dayNight?.PauseClockServer();
-                _battery.SetVoyageVictoryServer(settings.VictoryDisplayDuration);
+                _fragmentIndex++;
+                SpawnFragment(wave.Fragments[_fragmentIndex]);
+                PublishEnemyProgress();
+                return;
             }
-            else
-            {
-                _waveIndex++;
-                _battery.SetVoyageWaveServer(_waveIndex + 1);
-                dayNight?.ReleaseNightServer();
-            }
+            FinishWave();
         }
 
         private void OnNightStartedServer()
@@ -186,32 +91,58 @@ namespace WaveByWave.Generation
                 return;
             }
             if (_waveIndex >= settings.Waves.Length) return;
+            var wave = settings.Waves[_waveIndex];
+            if (wave == null)
+            {
+                dayNight?.ReleaseNightServer();
+                return;
+            }
             _battery.SetVoyageWaveServer(_waveIndex + 1);
-            _battery.SetBattlefieldServer(_battery.transform.position,
-                settings.Waves[_waveIndex].BattlefieldRadius);
-            _boundaryBreaches.Reset();
-            _nextBoundaryCheck = Time.time;
-            SpawnWave();
+            _battlefield ??= NightBattlefieldController.EnsureInstance(gameObject);
+            _battlefield.BeginServer(_battery, _battery.transform.position, wave.BattlefieldRadius);
             _waveActive = true;
+            _fragmentIndex = 0;
+            _waveTotalBots = CountWaveBots(wave, ShipDefinition);
+            _battery.SetWaveEnemyProgressServer(0, _waveTotalBots);
+            if (wave.Fragments == null || wave.Fragments.Length == 0)
+            {
+                FinishWave();
+                return;
+            }
+            SpawnFragment(wave.Fragments[0]);
+            PublishEnemyProgress();
         }
 
-        private void UpdateBoundaryServer()
+        public bool StartAdminWaveServer(int waveIndex)
         {
-            if (!_battery.BattlefieldActive || Time.time < _nextBoundaryCheck) return;
-            _nextBoundaryCheck = Time.time + settings.BoundaryCheckInterval;
-            var outside = !_battery.IsInsideBattlefield(_battery.transform.position);
-            if (_boundaryBreaches.Step(Time.time, outside,
-                settings.BoundaryGraceSeconds, settings.BoundaryBreachInterval))
-                _battery.OpenBoundaryBreachServer(settings.BoundaryBreachLeakMultiplier);
-        }
+            settings ??= Resources.Load<NightWaveSettings>("NightWaveSettings");
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer ||
+                settings == null || settings.Waves == null ||
+                waveIndex < 0 || waveIndex >= settings.Waves.Length || settings.Waves[waveIndex] == null)
+                return false;
+            if (_battery == null || !_battery.IsSpawned)
+                _battery = FindFirstObjectByType<ShipCannonBattery>();
+            if (_battery == null || !_battery.IsSpawned || _battery.VoyageEnded) return false;
+            dayNight ??= GetComponent<VoyageDayNightController>();
+            if (dayNight == null) dayNight = FindFirstObjectByType<VoyageDayNightController>();
+            if (dayNight == null) return false;
 
-        private void UpdateBoundaryWarning()
-        {
-            if (_battery == null || !_battery.IsSpawned || !_battery.BattlefieldActive)
-            { _localOutsideSince = -1f; return; }
-            if (_battery.IsInsideBattlefield(_battery.transform.position))
-            { _localOutsideSince = -1f; return; }
-            if (_localOutsideSince < 0f) _localOutsideSince = Time.time;
+            if (_waveActive && _waveGroup != 0)
+            {
+                DotsEnemyRuntime.Instance?.DespawnGroup(_waveGroup);
+                DotsEnemyShipRuntime.Instance?.DespawnGroup(_waveGroup);
+            }
+            _battlefield?.EndServer();
+            _waveIndex = waveIndex;
+            _fragmentIndex = -1;
+            _waveGroup = 0;
+            _waveTotalBots = 0;
+            _waveActive = false;
+            _victoryRequested = false;
+            _waveNumberPublished = true;
+            _battery.SetVoyageWaveServer(_waveIndex + 1);
+            _battery.SetWaveEnemyProgressServer(0, CountWaveBots(settings.Waves[_waveIndex], ShipDefinition));
+            return dayNight.ForceNightServer();
         }
 
         private Vector3 SpawnCenter(int index)
@@ -222,69 +153,84 @@ namespace WaveByWave.Generation
             return _battery.transform.position;
         }
 
-        private void SpawnWave()
+        private NightWaveDefinition CurrentWave => settings != null && settings.Waves != null &&
+            _waveIndex >= 0 && _waveIndex < settings.Waves.Length ? settings.Waves[_waveIndex] : null;
+
+        private EnemyShipDefinition ShipDefinition => DotsEnemyShipRuntime.Instance != null
+            ? DotsEnemyShipRuntime.Instance.Definition
+            : EnemyShipDefinition.Load();
+
+        private void SpawnFragment(NightWaveFragment fragment)
         {
-            var wave = settings.Waves[_waveIndex];
-            _waveGroup = 100000 + _waveIndex;
-            _wavePrefabs.Clear();
-            var skeletons = DotsEnemyRuntime.Instance;
+            _waveGroup = 100000 + _waveIndex * 1000 + _fragmentIndex;
+            var enemies = DotsEnemyRuntime.EnsureInstance();
+            var ships = DotsEnemyShipRuntime.EnsureInstance();
             var entryIndex = 0;
-            foreach (var entry in wave.Bots ?? System.Array.Empty<NightWaveBot>())
+            foreach (var entry in fragment?.Enemies ?? System.Array.Empty<NightWaveEnemy>())
             {
-                if (entry == null || entry.Count <= 0) continue;
+                if (entry == null || entry.Count <= 0 || entry.EnemyType == null) continue;
                 var center = SpawnCenter(entryIndex++);
-                if (entry.Prefab != null && entry.Prefab.TryGetComponent<NetworkObject>(out _))
+                var minimumRadius = Mathf.Max(1f, entry.SpawnRadius);
+                var bandWidth = entry.SpawnBandWidth > 0f ? entry.SpawnBandWidth : 20f;
+                var maximumRadius = minimumRadius + Mathf.Max(1f, bandWidth);
+                if (entry.EnemyType.IsShip)
                 {
-                    if (!entry.Prefab.TryGetComponent<NetworkHealth>(out _))
-                    {
-                        Debug.LogWarning($"Night-wave prefab '{entry.Prefab.name}' needs NetworkHealth to track its defeat.", this);
-                        continue;
-                    }
-                    for (var i = 0; i < entry.Count; i++)
-                        SpawnNetworkBot(entry.Prefab, center, wave.SpawnRadius);
+                    ships?.SpawnAt(center, entry.Count, maximumRadius,
+                        unchecked((uint)(_waveGroup * 7919 + entryIndex * 104729)), _waveGroup,
+                        minimumRadius);
                     continue;
                 }
-                var type = entry.Prefab != null &&
-                    entry.Prefab.TryGetComponent<EnemySpawnPoint>(out var marker)
-                    ? marker.CombatType : entry.SkeletonType;
-                skeletons?.QueueNightWave(center, entry.Count, wave.SpawnRadius, type, _waveGroup);
+                enemies?.QueueNightWave(center, entry.Count, minimumRadius, maximumRadius,
+                    entry.EnemyType.CombatType, entry.EnemyType.Species, _waveGroup);
             }
-            if (wave.EnemyShips > 0)
-                DotsEnemyShipRuntime.Instance?.SpawnAt(_battery.transform.position +
-                    _battery.transform.forward * 65f, wave.EnemyShips,
-                    Mathf.Max(15f, wave.SpawnRadius * 2f),
-                    unchecked((uint)(_waveGroup * 7919)), _waveGroup);
             _nextWaveCheck = Time.time + 1f;
         }
 
-        private void SpawnNetworkBot(GameObject prefab, Vector3 center, float radius)
+        private int FragmentRemaining()
         {
-            var offset = Random.insideUnitCircle * radius;
-            var wanted = center + new Vector3(offset.x, 0f, offset.y);
-            var position = wanted + Vector3.up;
-            var hits = Physics.RaycastAll(wanted + Vector3.up * 25f, Vector3.down, 50f);
-            foreach (var hit in hits)
-                if (hit.collider.GetComponentInParent<StylizedWater3.WaterObject>() == null &&
-                    hit.normal.y >= 0.5f && hit.point.y > position.y - 10f)
-                    position = hit.point + Vector3.up * 0.1f;
-            var instance = Instantiate(prefab, position, Quaternion.identity);
-            if (!instance.TryGetComponent<NetworkObject>(out var networkObject))
-            { Destroy(instance); return; }
-            networkObject.Spawn();
-            if (instance.TryGetComponent<NetworkHealth>(out var health))
-            {
-                health.DisableWaveRespawnServer();
-                _wavePrefabs.Add(health);
-            }
+            return (DotsEnemyRuntime.Instance?.NightWaveRemaining(_waveGroup) ?? 0) +
+                   (DotsEnemyShipRuntime.Instance?.NightWaveRemaining(_waveGroup) ?? 0);
         }
 
-        private int WaveRemaining()
+        private void PublishEnemyProgress()
         {
-            var count = (DotsEnemyRuntime.Instance?.NightWaveRemaining(_waveGroup) ?? 0) +
-                (DotsEnemyShipRuntime.Instance?.NightWaveRemaining(_waveGroup) ?? 0);
-            foreach (var health in _wavePrefabs)
-                if (health != null && !health.IsDead) count++;
-            return count;
+            if (_battery == null || !_waveActive) return;
+            var wave = CurrentWave;
+            var future = CountWaveBots(wave, ShipDefinition, _fragmentIndex + 1);
+            var current = (DotsEnemyRuntime.Instance?.NightWaveRemaining(_waveGroup) ?? 0) +
+                (DotsEnemyShipRuntime.Instance?.NightWavePendingCrew(_waveGroup) ?? 0);
+            _battery.SetWaveEnemyProgressServer(Mathf.Clamp(_waveTotalBots - future - current, 0, _waveTotalBots),
+                _waveTotalBots);
+        }
+
+        internal static int CountWaveBots(NightWaveDefinition wave, EnemyShipDefinition shipDefinition,
+            int firstFragment = 0)
+        {
+            if (wave?.Fragments == null) return 0;
+            var total = 0;
+            for (var f = Mathf.Max(0, firstFragment); f < wave.Fragments.Length; f++)
+                foreach (var entry in wave.Fragments[f]?.Enemies ?? System.Array.Empty<NightWaveEnemy>())
+                    if (entry != null && entry.EnemyType != null && entry.Count > 0)
+                        total += entry.Count * entry.EnemyType.CountedBotsPerSpawn(shipDefinition);
+            return Mathf.Max(0, total);
+        }
+
+        private void FinishWave()
+        {
+            _waveActive = false;
+            _battery.SetWaveEnemyProgressServer(_waveTotalBots, _waveTotalBots);
+            _battlefield?.EndServer();
+            if (_waveIndex + 1 >= settings.Waves.Length)
+            {
+                _victoryRequested = true;
+                dayNight?.PauseClockServer();
+                _battery.SetVoyageVictoryServer(settings.VictoryDisplayDuration);
+                return;
+            }
+            _waveIndex++;
+            _fragmentIndex = -1;
+            _battery.SetVoyageWaveServer(_waveIndex + 1);
+            dayNight?.ReleaseNightServer();
         }
 
         private void UpdateAnnouncement()
@@ -315,15 +261,5 @@ namespace WaveByWave.Generation
 
         public string Announcement => Time.unscaledTime < _announcementUntil ? _announcement : "";
         public float AnnouncementAlpha => Mathf.Clamp01(_announcementUntil-Time.unscaledTime);
-        public string BoundaryWarning
-        {
-            get
-            {
-                if(_localOutsideSince<0f || settings==null)return "";
-                var grace=Mathf.Max(0f,settings.BoundaryGraceSeconds-(Time.time-_localOutsideSince));
-                return grace>0f?$"ВЕРНИТЕСЬ В ПОЛЕ БОЯ · УРОН ЧЕРЕЗ {Mathf.CeilToInt(grace)} С":
-                    "ВЕРНИТЕСЬ В ПОЛЕ БОЯ · ПОЯВЛЯЮТСЯ ПРОБОИНЫ";
-            }
-        }
     }
 }

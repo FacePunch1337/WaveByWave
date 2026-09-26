@@ -15,11 +15,13 @@ using UnityEngine.SceneManagement;
 using StylizedWater3;
 using WaveByWave.Player;
 using WaveByWave.Enemies;
+using WaveByWave.Generation;
 
 namespace WaveByWave.Items
 {
     public struct LootStressCommand : IRpcCommand
     {
+        public uint Revision;
         public int Count;
         public float3 Center;
         public float Radius;
@@ -29,6 +31,7 @@ namespace WaveByWave.Items
 
     public struct LootStressDeltaCommand : IRpcCommand
     {
+        public uint Revision;
         public int Id;
         public byte Kind;
         public int CatalogIndex;
@@ -117,6 +120,7 @@ namespace WaveByWave.Items
 
         internal static WaveProfile WaterProfile => _waterProfile;
         internal static uint StateRevision => _stateRevision;
+        internal static uint ClientRevision => LootStressPresentation.AppliedRevision;
 
         public static void RegisterCatalog(ItemCatalog catalog, GameObject rarityEffectPrefab = null,
             WaveProfile waterProfile = null)
@@ -146,8 +150,9 @@ namespace WaveByWave.Items
             if (_stateRevision == 0) _stateRevision = 1;
             _latest = new LootStressCommand
             {
+                Revision = _stateRevision,
                 Count = Mathf.Clamp(count, 0, MaximumCount), Center = center,
-                Radius = Mathf.Clamp(radius, 10f, 20f),
+                Radius = Mathf.Clamp(radius, 1f, 30f),
                 Seed = unchecked((uint)Environment.TickCount * 747796405u + (uint)count * 2891336453u),
                 SceneName = new FixedString64Bytes(SceneManager.GetActiveScene().name)
             };
@@ -211,6 +216,35 @@ namespace WaveByWave.Items
                 0.12f, 3f);
             var arcHeight = 0.25f * Mathf.Clamp01(1f - Mathf.Abs(Vector3.Dot(aim, up)) * 2f) +
                             Mathf.Max(0f, verticalVelocity * flightDuration + Vector3.Dot(start - end, up)) * 0.25f;
+            if (TryThrowCollision(start, end, up, arcHeight, out var obstruction, out var fraction))
+            {
+                // Truncate the planned arc at its first solid surface. Only the drop operation
+                // runs these probes; settled DOTS items still have no per-frame physics work.
+                point = obstruction.point;
+                normal = obstruction.normal;
+                if (normal.y < 0.3f)
+                {
+                    var outside = point + normal * 0.2f;
+                    if (!TryResolveSurface(outside, out point, out normal, out onWater, out support, out surfaceId))
+                        return false;
+                }
+                else
+                {
+                    onWater = false;
+                    support = obstruction.collider.GetComponentInParent<NetworkObject>();
+                    if (support != null && !support.IsSpawned) support = null;
+                    var enemyShip = obstruction.collider.GetComponentInParent<EnemyShipView>();
+                    surfaceId = enemyShip != null ? DotsEnemyRuntime.ShipSurfaceKey(enemyShip.ShipId) : 0;
+                }
+                rotationUp = onWater ? Vector3.up : normal;
+                facing = Vector3.ProjectOnPlane(forward, rotationUp).normalized;
+                if (facing.sqrMagnitude < 0.01f) facing = Vector3.Cross(rotationUp, Vector3.right).normalized;
+                baseRotation = Quaternion.LookRotation(facing, rotationUp) * definition.RestingRotation;
+                rotation = onWater ? Quaternion.FromToRotation(Vector3.up, normal) * baseRotation : baseRotation;
+                end = point + (onWater ? Vector3.up : normal) * GetSurfaceClearance(definition, rotation, normal);
+                flightDuration = Mathf.Max(0.05f, flightDuration * fraction);
+                arcHeight *= fraction * fraction;
+            }
             var id = _nextDynamicId--;
             var item = new ServerItem
             {
@@ -224,8 +258,46 @@ namespace WaveByWave.Items
             ServerItems.Add(id, item);
             var delta = BuildAddDelta(id, item, flightDuration);
             Broadcast(delta);
-            LootStressPresentation.ApplyDelta(delta);
             return true;
+        }
+
+        private static bool TryThrowCollision(Vector3 start, Vector3 end, Vector3 up, float arcHeight,
+            out RaycastHit obstruction, out float fraction)
+        {
+            obstruction = default;
+            fraction = 1f;
+            var steps = Mathf.Clamp(Mathf.CeilToInt((Vector3.Distance(start, end) + arcHeight * 2f) / 0.3f), 4, 64);
+            var previous = start;
+            for (var step = 1; step <= steps; step++)
+            {
+                var t = step / (float)steps;
+                var next = Vector3.Lerp(start, end, t) + up * (4f * t * (1f - t) * arcHeight);
+                var direction = next - previous;
+                var distance = direction.magnitude;
+                if (distance < 0.0001f) continue;
+                var count = UnityEngine.Physics.SphereCastNonAlloc(previous, 0.06f, direction / distance,
+                    SurfaceHits, distance, ~0, QueryTriggerInteraction.Ignore);
+                var closest = float.PositiveInfinity;
+                for (var i = 0; i < count; i++)
+                {
+                    var hit = SurfaceHits[i];
+                    if (hit.distance >= closest || hit.collider == null ||
+                        hit.collider.GetComponentInParent<NetworkPlayerController>() != null ||
+                        hit.collider.GetComponentInParent<WorldItem>() != null ||
+                        hit.collider.GetComponentInParent<WaterObject>() != null) continue;
+                    var island = hit.collider.GetComponentInParent<ProceduralIsland>();
+                    if (island != null && island.IsDecorationCollider(hit.collider)) continue;
+                    closest = hit.distance;
+                    obstruction = hit;
+                }
+                if (closest < float.PositiveInfinity)
+                {
+                    fraction = ((step - 1) + closest / distance) / steps;
+                    return true;
+                }
+                previous = next;
+            }
+            return false;
         }
 
         public static bool TryGetServerItem(int id, out ItemDefinition definition, out Vector3 position)
@@ -255,9 +327,9 @@ namespace WaveByWave.Items
 
         public static bool RemoveServerItem(int id)
         {
-            if (!ServerItems.Remove(id) || ClientServerBootstrap.ServerWorld is not { IsCreated: true } world)
+            if (ClientServerBootstrap.ServerWorld is not { IsCreated: true } || !ServerItems.Remove(id))
                 return false;
-            Send(world.EntityManager, new LootStressDeltaCommand { Id = id, Kind = Remove }, Entity.Null);
+            Broadcast(new LootStressDeltaCommand { Id = id, Kind = Remove });
             ServerItemRemoved?.Invoke(id);
             return true;
         }
@@ -366,6 +438,14 @@ namespace WaveByWave.Items
             OpeningChests.Clear();
         }
 
+        public static void ClearSceneItemsServer()
+        {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
+            ServerItems.Clear();
+            OpeningChests.Clear();
+            SetTarget(0, Vector3.zero, 30f);
+        }
+
         internal static bool TryGetLatest(out LootStressCommand command)
         {
             command = _latest;
@@ -429,16 +509,17 @@ namespace WaveByWave.Items
         {
             var scene = SceneManager.GetActiveScene().name;
             if (_hasState && _sceneName == scene) return;
+            _stateRevision++;
+            if (_stateRevision == 0) _stateRevision = 1;
             _latest = new LootStressCommand
             {
+                Revision = _stateRevision,
                 Count = 0, Center = center, Radius = 15f,
                 Seed = unchecked((uint)Environment.TickCount * 747796405u) | 1u,
                 SceneName = new FixedString64Bytes(scene)
             };
             _sceneName = scene;
             _hasState = true;
-            _stateRevision++;
-            if (_stateRevision == 0) _stateRevision = 1;
             if (ClientServerBootstrap.ClientWorld is { IsCreated: true } clientWorld)
                 LootStressPresentation.Apply(clientWorld, _latest);
         }
@@ -448,6 +529,7 @@ namespace WaveByWave.Items
             var start = duration > 0f ? item.FlightStart : item.Position;
             return new LootStressDeltaCommand
             {
+                Revision = _stateRevision,
                 Id = id, Kind = Add, CatalogIndex = item.CatalogIndex,
                 StartPosition = start, Position = item.RestPosition, Rotation = item.Rotation,
                 BaseRotation = item.BaseRotation, ArcUp = item.ArcUp, Duration = duration,
@@ -477,6 +559,7 @@ namespace WaveByWave.Items
                 if (pair.Value.Hook != null)
                     LootStressPresentation.ApplyDelta(new LootStressDeltaCommand
                     {
+                        Revision = _stateRevision,
                         Id = pair.Key, Kind = Tether, HookOwner = pair.Value.Hook.OwnerClientId,
                         HookOffset = pair.Value.HookOffset
                     });
@@ -543,13 +626,22 @@ namespace WaveByWave.Items
             surfaceId = 0;
             var count = UnityEngine.Physics.RaycastNonAlloc(origin + Vector3.up * 0.5f, Vector3.down,
                 SurfaceHits, 512f, ~0, QueryTriggerInteraction.Ignore);
+            var hits = SurfaceHits;
+            if (count == SurfaceHits.Length)
+            {
+                hits = UnityEngine.Physics.RaycastAll(origin + Vector3.up * 0.5f, Vector3.down,
+                    512f, ~0, QueryTriggerInteraction.Ignore);
+                count = hits.Length;
+            }
             var bestY = float.NegativeInfinity;
             for (var i = 0; i < count; i++)
             {
-                var hit = SurfaceHits[i];
+                var hit = hits[i];
                 if (hit.point.y <= bestY || Vector3.Dot(hit.normal, Vector3.up) < 0.3f ||
                     hit.collider.GetComponentInParent<NetworkPlayerController>() != null ||
                     hit.collider.GetComponentInParent<WorldItem>() != null) continue;
+                var island = hit.collider.GetComponentInParent<ProceduralIsland>();
+                if (island != null && island.IsDecorationCollider(hit.collider)) continue;
                 bestY = hit.point.y;
                 point = hit.point;
                 normal = hit.normal;
@@ -557,6 +649,16 @@ namespace WaveByWave.Items
                 if (support != null && !support.IsSpawned) support = null;
                 var ship = hit.collider.GetComponentInParent<EnemyShipView>();
                 surfaceId = ship != null ? DotsEnemyRuntime.ShipSurfaceKey(ship.ShipId) : 0;
+            }
+            if (OceanWorldDirector.Instance != null &&
+                OceanWorldDirector.Instance.TryFindIslandGround(origin, out var islandGround) &&
+                islandGround.point.y > bestY)
+            {
+                point = islandGround.point;
+                normal = islandGround.normal;
+                bestY = point.y;
+                support = null;
+                surfaceId = 0;
             }
             if (_water != null && _water.TrySurface(origin, Vector2.one * 0.45f, out var height, out var waterNormal) &&
                 height <= origin.y + 0.5f && height > bestY + 0.01f)
@@ -674,16 +776,25 @@ namespace WaveByWave.Items
         {
             LootStressPresentation.ClearScene(scene.name);
             if (!_hasState || string.IsNullOrEmpty(_sceneName) || scene.name != _sceneName) return;
-            if (ClientServerBootstrap.ServerWorld is { IsCreated: true } world)
-                Send(world.EntityManager, new LootStressCommand { Count = 0,
-                    SceneName = new FixedString64Bytes(scene.name) }, Entity.Null);
             ClearLocal();
         }
 
         private static void Broadcast(LootStressDeltaCommand delta)
         {
+            delta.Revision = _stateRevision;
             if (ClientServerBootstrap.ServerWorld is { IsCreated: true } world)
                 Send(world.EntityManager, delta, Entity.Null);
+            // The host's client and server worlds share a process but still communicate through
+            // NFE. Apply the authoritative delta locally as well, so a transient local transport
+            // interruption cannot leave a stale pickup that can be selected or duplicated.
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost)
+                LootStressPresentation.QueueDelta(delta);
+        }
+
+        private static void Rpc(EntityCommandBuffer ecb, LootStressDeltaCommand command, Entity target)
+        {
+            command.Revision = _stateRevision;
+            Rpc<LootStressDeltaCommand>(ecb, command, target);
         }
 
         private static void Send<T>(EntityManager manager, T command, Entity target) where T : unmanaged, IRpcCommand
@@ -756,7 +867,8 @@ namespace WaveByWave.Items
             var ecb = new EntityCommandBuffer(Allocator.Temp);
             // The world survives leaving/rejoining sessions. Request readiness belongs to the
             // connection (and loaded scene), never to a once-per-world bool.
-            if (LootStressPresentation.AssetsReady)
+            var localAuthority = NetworkManager.Singleton != null && NetworkManager.Singleton.IsHost;
+            if (!localAuthority && LootStressPresentation.AssetsReady)
             {
                 var scene = new FixedString64Bytes(SceneManager.GetActiveScene().name);
                 foreach (var (_, connection) in SystemAPI.Query<RefRO<NetworkId>>()
@@ -779,7 +891,7 @@ namespace WaveByWave.Items
             foreach (var (command, entity) in SystemAPI.Query<RefRO<LootStressCommand>>()
                          .WithAll<ReceiveRpcCommandRequest>().WithEntityAccess())
             {
-                initial = command.ValueRO;
+                if (!hasInitial || command.ValueRO.Revision >= initial.Revision) initial = command.ValueRO;
                 hasInitial = true;
                 ecb.DestroyEntity(entity);
             }
@@ -794,8 +906,13 @@ namespace WaveByWave.Items
 
             // RenderMeshUtility performs structural changes. Apply presentation only after
             // every SystemAPI query has been fully disposed and its receive entities removed.
-            if (hasInitial) LootStressPresentation.Apply(state.World, initial);
-            for (var i = 0; i < deltas.Length; i++) LootStressPresentation.ApplyDelta(deltas[i]);
+            // The host presents its authoritative queue; delayed loopback snapshots/deltas must
+            // not resurrect removed items or rewind a hook to an earlier state.
+            if (!localAuthority)
+            {
+                if (hasInitial) LootStressPresentation.Apply(state.World, initial);
+                for (var i = 0; i < deltas.Length; i++) LootStressPresentation.ApplyDelta(deltas[i]);
+            }
             deltas.Dispose();
             LootStressPresentation.ApplyPending(state.World);
         }
@@ -806,6 +923,8 @@ namespace WaveByWave.Items
     {
         private void LateUpdate()
         {
+            if (ClientServerBootstrap.ClientWorld is { IsCreated: true } world)
+                LootStressPresentation.ApplyPending(world);
             LootStressPresentation.UpdateDynamicItems();
         }
         private void OnDestroy() => LootStressPresentation.DriverDestroyed(this);
@@ -873,6 +992,7 @@ namespace WaveByWave.Items
         private static readonly Dictionary<int, ClientItem> Items = new(LootStressTest.MaximumCount);
         private static readonly List<ClientItem> WaterItems = new(LootStressTest.MaximumCount);
         private static readonly List<LootStressDeltaCommand> PendingDeltas = new();
+        private static readonly HashSet<int> RemovedItems = new();
         private static ItemCatalog _catalog;
         private static GameObject _effectPrefab;
         private static EquipmentWaterQuery _water;
@@ -881,6 +1001,8 @@ namespace WaveByWave.Items
         private static int _waterCursor;
         private static string _activeScene;
         private static uint _appliedSeed;
+        private static uint _appliedRevision;
+        internal static uint AppliedRevision => _appliedRevision;
         private static int _appliedCount;
         private static string _appliedScene;
         private static World _appliedWorld;
@@ -917,6 +1039,8 @@ namespace WaveByWave.Items
 
         internal static void Apply(World world, LootStressCommand command)
         {
+            if (command.Revision < _appliedRevision ||
+                _pending.HasValue && command.Revision < _pending.Value.Revision) return;
             var sceneName = command.SceneName.ToString();
             if (_catalog == null || world == null || !world.IsCreated ||
                 sceneName != SceneManager.GetActiveScene().name)
@@ -925,7 +1049,7 @@ namespace WaveByWave.Items
                 return;
             }
             _pending = null;
-            if (command.Seed != 0 && command.Seed == _appliedSeed && command.Count == _appliedCount &&
+            if (command.Revision == _appliedRevision && command.Seed != 0 && command.Seed == _appliedSeed && command.Count == _appliedCount &&
                 sceneName == _appliedScene && ReferenceEquals(world, _appliedWorld))
             {
                 _hasInitialState = true;
@@ -933,6 +1057,8 @@ namespace WaveByWave.Items
                 return;
             }
             ClearContent(false);
+            RemovedItems.Clear();
+            _appliedRevision = command.Revision;
             _appliedSeed = command.Seed;
             _appliedCount = command.Count;
             _appliedScene = sceneName;
@@ -1006,11 +1132,16 @@ namespace WaveByWave.Items
 
         internal static void ApplyDelta(LootStressDeltaCommand delta)
         {
+            if (delta.Revision < _appliedRevision) return;
             if (_pending.HasValue || _catalog == null || _world == null || !_world.IsCreated || !_hasInitialState)
             {
                 QueueDelta(delta);
                 return;
             }
+            if (delta.Revision > _appliedRevision) { QueueDelta(delta); return; }
+            if (delta.Kind == LootStressTest.Remove || delta.Kind == LootStressTest.ChestBurst)
+                RemovedItems.Add(delta.Id);
+            else if (RemovedItems.Contains(delta.Id)) return;
             if (!Items.TryGetValue(delta.Id, out var item))
             {
                 if (delta.Kind != LootStressTest.Add)
@@ -1081,7 +1212,7 @@ namespace WaveByWave.Items
             SetPose(item);
         }
 
-        private static void QueueDelta(LootStressDeltaCommand delta)
+        internal static void QueueDelta(LootStressDeltaCommand delta)
         {
             // A reliable NFE Add may arrive before the initial snapshot/client presentation world.
             // Retain it until scene/catalog readiness; session shutdown clears the queue.
@@ -1095,13 +1226,22 @@ namespace WaveByWave.Items
             _flushingDeltas = true;
             var pending = PendingDeltas.ToArray();
             PendingDeltas.Clear();
-            // Snapshot Add commands establish identity. Apply them before any queued tether/place/remove
-            // commands in case separate NFE receive batches crossed client-world initialization.
-            for (var i = 0; i < pending.Length; i++)
-                if (pending[i].Kind == LootStressTest.Add) ApplyDelta(pending[i]);
-            for (var i = 0; i < pending.Length; i++)
-                if (pending[i].Kind != LootStressTest.Add) ApplyDelta(pending[i]);
-            _flushingDeltas = false;
+            try
+            {
+                // Snapshot Add commands establish identity before queued tether/place/remove commands.
+                for (var pass = 0; pass < 2; pass++)
+                for (var i = 0; i < pending.Length; i++)
+                {
+                    if ((pending[i].Kind == LootStressTest.Add) != (pass == 0)) continue;
+                    try { ApplyDelta(pending[i]); }
+                    catch (Exception exception) { Debug.LogException(exception); }
+                }
+            }
+            finally
+            {
+                // A failed visual must not latch the entire item's replication queue forever.
+                _flushingDeltas = false;
+            }
         }
 
         internal static void UpdateDynamicItems()
@@ -1216,6 +1356,9 @@ namespace WaveByWave.Items
             PendingDeltas.Clear();
             _pending = null;
             _hasInitialState = false;
+            _flushingDeltas = false;
+            RemovedItems.Clear();
+            _appliedRevision = 0;
             _appliedSeed = 0;
             _appliedCount = 0;
             _appliedScene = null;

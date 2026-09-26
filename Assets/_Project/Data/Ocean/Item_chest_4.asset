@@ -48,3 +48,4 @@ MonoBehaviour:
     enabled: 1
     localPosition: {x: -0.45, y: 0, z: -0.13}
     localEulerAngles: {x: 70, y: 190, z: 125.6}
+  heldAndIkProfile: {fileID: 11400000, guid: c393e52b7f7ac3a419c24f19a3f22cf2, type: 2}

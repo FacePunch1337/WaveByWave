@@ -11,6 +11,25 @@ namespace WaveByWave.Generation
     public enum IslandSize : byte { Small, Medium, Large }
 
     [Serializable]
+    public sealed class IslandEnemyDayRule
+    {
+        [Min(1), Tooltip("Applies from this voyage day until the next rule. Day numbers match the voyage HUD.")]
+        public int FromDay = 1;
+        public bool Skeleton = true;
+        public bool Troll;
+        public bool Shark;
+        public bool Amphibian;
+        [Tooltip("On: choose one enabled species per spawn point. Off: spawn a group of every enabled species. No enabled species means no enemies.")]
+        public bool Random = true;
+
+        public bool Allows(EnemyKind kind) => kind switch
+        {
+            EnemyKind.Skeleton => Skeleton, EnemyKind.Troll => Troll,
+            EnemyKind.Shark => Shark, EnemyKind.Amphibian => Amphibian, _ => false
+        };
+    }
+
+    [Serializable]
     public sealed class IslandDecoration
     {
         public GameObject Prefab;
@@ -84,7 +103,9 @@ namespace WaveByWave.Generation
         public float DecorationBudgetMilliseconds = 1f;
         public List<IslandDecoration> Decorations = new();
 
-        [Header("Точки появления скелетов на островах")]
+        [Header("Island enemies")]
+        [Tooltip("Empty keeps the existing prefab pool. Rules are evaluated when players activate a spawn point, so preloaded islands use the current day. Spawned enemies are not rerolled when the day changes.")]
+        public List<IslandEnemyDayRule> EnemySpawnDays = new();
         public bool GenerateEnemySpawnPoints = true;
         [Tooltip("Пул префабов с EnemySpawnPoint, например SkeletonSpawn_OnPlayerRadius. Выбирается случайный вариант; активация всегда по входу игрока в радиус.")]
         public List<EnemySpawnPoint> EnemySpawnPointPrefabs = new();
@@ -121,5 +142,15 @@ namespace WaveByWave.Generation
 
         public Vector2Int EnemySpawnPointCount(IslandSize size) => size switch
         { IslandSize.Small => EnemySpawnPointCountSmall, IslandSize.Medium => EnemySpawnPointCountMedium, _ => EnemySpawnPointCountLarge };
+
+        public IslandEnemyDayRule EnemyRuleForDay(int day)
+        {
+            IslandEnemyDayRule result = null;
+            if (EnemySpawnDays == null) return null;
+            foreach (var rule in EnemySpawnDays)
+                if (rule != null && rule.FromDay <= Mathf.Max(1, day) &&
+                    (result == null || rule.FromDay > result.FromDay)) result = rule;
+            return result;
+        }
     }
 }

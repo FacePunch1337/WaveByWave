@@ -47,7 +47,7 @@ namespace WaveByWave.Items
             if (publish)
             {
                 var delta = BuildAddDelta(id, item, 0f);
-                Broadcast(delta); LootStressPresentation.ApplyDelta(delta);
+                Broadcast(delta);
             }
             return id;
         }
@@ -60,7 +60,7 @@ namespace WaveByWave.Items
             item.OpeningAt = NetworkManager.Singleton.ServerTime.Time + definition.ChestLoot.ShakeDuration;
             OpeningChests.Add(id);
             var delta = new LootStressDeltaCommand { Id = id, Kind = ChestOpening, OpeningAt = item.OpeningAt };
-            Broadcast(delta); LootStressPresentation.ApplyDelta(delta);
+            Broadcast(delta);
             return true;
         }
 
@@ -103,7 +103,7 @@ namespace WaveByWave.Items
                     }
                 }
                 var burst = new LootStressDeltaCommand { Id = id, Kind = ChestBurst, Position = item.Position };
-                Broadcast(burst); LootStressPresentation.ApplyDelta(burst);
+                Broadcast(burst);
                 ServerItems.Remove(id); ServerItemRemoved?.Invoke(id); OpeningChests.RemoveAt(i);
             }
         }
@@ -126,7 +126,7 @@ namespace WaveByWave.Items
             // Identity and launch arrive together: no one-frame pop at the landing point,
             // and no dependency on the receive order of two separate RPC entities.
             var delta = BuildAddDelta(id, item, item.FlightDuration);
-            Broadcast(delta); LootStressPresentation.ApplyDelta(delta);
+            Broadcast(delta);
         }
     }
 

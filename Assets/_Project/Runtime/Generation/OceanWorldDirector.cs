@@ -648,6 +648,25 @@ namespace WaveByWave.Generation
                     if (marker != null) marker.SetActive(visible);
             }
         }
+        internal bool TryFindIslandGround(Vector3 position, out RaycastHit ground)
+        {
+            ground = default;
+            var found = false;
+            foreach (var record in _islands.Values)
+            {
+                var island = record.Island;
+                if (island == null || !island.ShipCollisionActive || !island.ContainsHorizontal(position, 2f)) continue;
+                var local = island.transform.InverseTransformPoint(position);
+                // Start at the island's own top, even if the thrown item's destination is inside
+                // a rising slope. The old short ray then started inside its collider and missed it.
+                if (!island.TryMeshSurface(local.x, local.z, out var hit) ||
+                    hit.normal.y < 0.3f || found && hit.point.y <= ground.point.y) continue;
+                ground = hit;
+                found = true;
+            }
+            return found;
+        }
+
         private bool NearAnyPlayerOrShip(Vector3 point, float radius)
         {
             var squared = radius * radius;

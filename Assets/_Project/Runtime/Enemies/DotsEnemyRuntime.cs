@@ -12,6 +12,7 @@ using WaveByWave.Combat;
 using WaveByWave.Generation;
 using WaveByWave.Items;
 using WaveByWave.Player;
+using WaveByWave.Ships;
 using Object = UnityEngine.Object;
 using Random = Unity.Mathematics.Random;
 
@@ -22,6 +23,9 @@ namespace WaveByWave.Enemies
     {
         public static DotsEnemyRuntime Instance { get; private set; }
         public DotsEnemyCatalog Catalog { get; private set; }
+        private readonly DotsEnemyCatalog[] _species = new DotsEnemyCatalog[4];
+        public DotsEnemyCatalog GetCatalog(EnemyKind kind) => kind == EnemyKind.Skeleton ? Catalog :
+            (uint)kind < _species.Length ? _species[(int)kind] : null;
         public bool CanSimulate => Catalog != null && NetworkManager.Singleton != null &&
                                    NetworkManager.Singleton.IsServer;
         public const int MaximumStressCount = 3000;
@@ -30,16 +34,21 @@ namespace WaveByWave.Enemies
             public EnemySpawnPoint Point;
             public NetworkPlayerController FollowPlayer;
             public Vector3 Center;
-            public float Radius;
+            public float Radius, MinimumRadius;
             public int Remaining, Group, Attempts;
             public EnemyCombatType Type;
+            public EnemyKind Kind;
+            public EnemyHealthBarMode HealthBar;
             public Random Random;
+            public bool AutomaticShark;
+            public bool UseFixedCenter;
         }
         private struct PlayerTarget
         {
             public NetworkPlayerController Player;
             public PlayerEquipment Equipment;
             public NetworkHealth Health;
+            public ulong ClientId;
         }
         private struct Probe
         {
@@ -53,7 +62,14 @@ namespace WaveByWave.Enemies
         private readonly HashSet<EnemySpawnPoint> _activated = new();
         private readonly List<SpawnRequest> _spawns = new();
         private readonly List<PlayerTarget> _players = new();
+        private readonly List<ulong> _oceanPlayerIds = new();
+        private readonly List<byte> _oceanPlayerStates = new();
+        private readonly HashSet<ulong> _playersInOcean = new();
+        private readonly HashSet<ulong> _playersInOceanNow = new();
         private readonly Dictionary<int, Entity> _byId = new();
+        // Wave membership is independent from SpawnGroup: boarding crew may leave
+        // their original ship group, but still blocks the next wave fragment.
+        private readonly Dictionary<int, int> _waveGroupByEnemy = new();
         private readonly Dictionary<int2, List<ProjectileTarget>> _projectileGrid = new();
         private readonly Stack<List<ProjectileTarget>> _projectileGridPool = new();
         private int _projectileGridFrame = -1;
@@ -62,8 +78,10 @@ namespace WaveByWave.Enemies
         private struct ProjectileTarget
         {
             public int Id;
-            public Vector3 Position;
+            public Vector3 Bottom, Top;
+            public float Radius;
         }
+        private float _projectileGridPadding;
         private readonly Dictionary<ulong, Transform> _surfaces = new();
         private readonly HashSet<int> _crewGroups = new();
         private readonly Dictionary<int, int> _livingCrew = new();
@@ -74,6 +92,13 @@ namespace WaveByWave.Enemies
         private EntityQuery _enemies;
         private EquipmentWaterQuery _water;
         private int _scene, _nextId = 1, _nextGroup = 1, _surfaceCursor, _lastFrame = -1;
+        private readonly HashSet<int> _automaticSharkIds = new();
+        private readonly List<int> _deadAutomaticSharks = new();
+        private int _automaticSharkWaveSize = 1, _automaticSharkWaveSpawned;
+        private float _nextAutomaticSharkCheck, _automaticSharkRetryAt;
+        private bool _automaticSharkPending;
+        private const int AutomaticSharkGroup = -1000;
+        internal const ulong NoOceanEntrant = ulong.MaxValue;
         private float _nextPlayerRefresh, _nextSurfaceRefresh;
         private bool _wasServer;
         private NativeArray<RaycastCommand> _groundCommands;
@@ -101,6 +126,9 @@ namespace WaveByWave.Enemies
             Instance = this;
             DontDestroyOnLoad(gameObject);
             Catalog = Resources.Load<DotsEnemyCatalog>("SkeletonEnemyCatalog");
+            _species[1] = Resources.Load<DotsEnemyCatalog>("Enemies/TrollEnemyCatalog");
+            _species[2] = Resources.Load<DotsEnemyCatalog>("Enemies/SharkEnemyCatalog");
+            _species[3] = Resources.Load<DotsEnemyCatalog>("Enemies/AmphibianEnemyCatalog");
             _water = new EquipmentWaterQuery(Catalog != null ? Catalog.WaterProfile : null);
             _scene = SceneKey(SceneManager.GetActiveScene().name);
         }
@@ -127,6 +155,7 @@ namespace WaveByWave.Enemies
                     if (manager.GetComponentData<DotsEnemyBrain>(entity).SpawnGroup != point.SpawnGroup) continue;
                     var id = manager.GetComponentData<DotsEnemyState>(entity).Id;
                     _byId.Remove(id);
+                    _waveGroupByEnemy.Remove(id);
                     _surfaceTransfers.Remove(id);
                     RemoveMovementCrowdBody(id);
                     manager.DestroyEntity(entity);
@@ -161,6 +190,7 @@ namespace WaveByWave.Enemies
                 _serverWorld = world;
                 _enemies = world.EntityManager.CreateEntityQuery(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
                 _byId.Clear();
+                _waveGroupByEnemy.Clear();
                 _crewGroups.Clear();
                 _livingCrew.Clear();
             }
@@ -178,7 +208,13 @@ namespace WaveByWave.Enemies
             var targets = new NativeArray<EnemyTarget>(_players.Count, Allocator.TempJob);
             using var targetLifetime = targets;
             for (var i = 0; i < _players.Count; i++)
-                targets[i] = new EnemyTarget { Position = Feet(_players[i].Player), Index = i };
+            {
+                var feet = Feet(_players[i].Player);
+                targets[i] = new EnemyTarget { Position = feet, Index = i,
+                    InWater = IsInOcean(feet)
+                        ? (byte)1 : (byte)0 };
+            }
+            QueueAutomaticShark(targets);
             ActivatePoints(targets);
             SpawnBatch();
             var manager = _serverWorld.EntityManager;
@@ -214,6 +250,7 @@ namespace WaveByWave.Enemies
                 {
                     var id = manager.GetComponentData<DotsEnemyState>(entity).Id;
                     _byId.Remove(id);
+                    _waveGroupByEnemy.Remove(id);
                     _surfaceTransfers.Remove(id);
                     RemoveMovementCrowdBody(id);
                     manager.DestroyEntity(entity);
@@ -231,8 +268,95 @@ namespace WaveByWave.Enemies
                 if (obj == null || !obj.TryGetComponent<NetworkPlayerController>(out var player)) continue;
                 var health = obj.GetComponent<NetworkHealth>();
                 if (health == null || health.IsDead) continue;
-                _players.Add(new PlayerTarget { Player = player, Health = health, Equipment = obj.GetComponent<PlayerEquipment>() });
+                _players.Add(new PlayerTarget { Player = player, Health = health,
+                    Equipment = obj.GetComponent<PlayerEquipment>(), ClientId = client.ClientId });
             }
+        }
+
+        private bool IsInOcean(Vector3 feet)
+        {
+            if (ShipFlooding.CompartmentAt(feet) != null) return false;
+            return _water.TrySurface(feet, Vector2.one * 0.25f, out var height, out _) &&
+                   feet.y < height - 0.15f;
+        }
+
+        private void QueueAutomaticShark(NativeArray<EnemyTarget> targets)
+        {
+            if (Now < _nextAutomaticSharkCheck) return;
+            _nextAutomaticSharkCheck = Now + 0.25f;
+            var shark = GetCatalog(EnemyKind.Shark);
+            if (shark == null) return;
+            RefreshAutomaticSharkState(shark);
+            _oceanPlayerIds.Clear();
+            _oceanPlayerStates.Clear();
+            for (var i = 0; i < _players.Count; i++)
+            {
+                _oceanPlayerIds.Add(_players[i].ClientId);
+                _oceanPlayerStates.Add(targets[i].InWater);
+            }
+            var entrant = UpdateOceanEntries(_oceanPlayerIds, _oceanPlayerStates,
+                _playersInOcean, _playersInOceanNow, false);
+            if (entrant == NoOceanEntrant || !shark.SpawnWhenPlayerEntersOcean)
+            {
+                _spawns.RemoveAll(request => request.AutomaticShark);
+                _automaticSharkPending = false;
+                return;
+            }
+            var desired = Mathf.Clamp(_automaticSharkWaveSize, 1, Mathf.Max(1, shark.OceanEncounterMaximumSharks));
+            if (_automaticSharkPending || _automaticSharkWaveSpawned >= desired ||
+                Now < _automaticSharkRetryAt || !shark.IsBaked ||
+                !shark.CanSpawnType(EnemyCombatType.Random) || _byId.Count >= Catalog.MaximumEnemies) return;
+            for (var i = 0; i < _players.Count; i++)
+            {
+                if (_players[i].ClientId != entrant) continue;
+                var minimum = Mathf.Max(0f, shark.OceanEncounterMinimumDistance);
+                var maximum = Mathf.Max(minimum + 0.1f, shark.OceanEncounterMaximumDistance);
+                _spawns.Add(new SpawnRequest
+                {
+                    Center = Feet(_players[i].Player), FollowPlayer = _players[i].Player,
+                    MinimumRadius = minimum, Radius = maximum,
+                    Remaining = desired - _automaticSharkWaveSpawned, Group = AutomaticSharkGroup, Type = EnemyCombatType.Random,
+                    Kind = EnemyKind.Shark, HealthBar = EnemyHealthBarMode.Profile, AutomaticShark = true,
+                    Random = new Random(unchecked((uint)(Environment.TickCount ^ (int)entrant)) | 1u)
+                });
+                _automaticSharkPending = true;
+                return;
+            }
+        }
+
+        private void RefreshAutomaticSharkState(DotsEnemyCatalog shark)
+        {
+            _deadAutomaticSharks.Clear();
+            foreach (var id in _automaticSharkIds)
+                if (!_byId.TryGetValue(id, out var entity) || !_serverWorld.EntityManager.Exists(entity) ||
+                    _serverWorld.EntityManager.GetComponentData<DotsEnemyState>(entity).Health <= 0)
+                    _deadAutomaticSharks.Add(id);
+            foreach (var id in _deadAutomaticSharks) _automaticSharkIds.Remove(id);
+            if (_automaticSharkPending || _automaticSharkIds.Count > 0 || _automaticSharkWaveSpawned == 0) return;
+            _automaticSharkWaveSize = Mathf.Min(_automaticSharkWaveSize + 1,
+                Mathf.Max(1, shark.OceanEncounterMaximumSharks));
+            _automaticSharkWaveSpawned = 0;
+            _automaticSharkRetryAt = Now + Mathf.Max(0f, shark.OceanEncounterRespawnDelay);
+        }
+
+        internal static ulong UpdateOceanEntries(IReadOnlyList<ulong> ids, IReadOnlyList<byte> inOcean,
+            HashSet<ulong> previous, HashSet<ulong> current, bool encounterOccupied)
+        {
+            current.Clear();
+            var entrant = NoOceanEntrant;
+            var count = Mathf.Min(ids.Count, inOcean.Count);
+            for (var i = 0; i < count; i++)
+            {
+                if (inOcean[i] == 0) continue;
+                current.Add(ids[i]);
+                // Eligibility is continuous: a failed spawn or defeated group must be able
+                // to retry even when nobody left and re-entered the ocean.
+                if (!encounterOccupied && entrant == NoOceanEntrant)
+                    entrant = ids[i];
+            }
+            previous.Clear();
+            foreach (var id in current) previous.Add(id);
+            return entrant;
         }
         public static Vector3 Feet(NetworkPlayerController player)
         {
@@ -259,10 +383,54 @@ namespace WaveByWave.Enemies
                 _activated.Add(point);
                 var seed = point.Seed != 0 ? (uint)point.Seed : (uint)Environment.TickCount;
                 point.SpawnGroup = _nextGroup++;
-                _spawns.Add(new SpawnRequest { Point = point, Center = point.transform.position,
-                    Radius = point.SpawnRadius, Remaining = point.Count, Type = point.CombatType,
-                    Group = point.SpawnGroup, Random = new Random(seed | 1u) });
+                var random = new Random(seed | 1u);
+                var settings = point.IsIslandPoint && point.OwnerIsland != null ? point.OwnerIsland.Settings : null;
+                var rule = settings != null ? settings.EnemyRuleForDay(NightWaveController.Active?.CurrentDay ?? 1) : null;
+                if (rule == null)
+                {
+                    QueueIslandPoint(point, point, point.Kind, ref random);
+                    continue;
+                }
+                // Reservoir selection avoids allocating a temporary species list per point.
+                var choices = 0;
+                var selected = EnemyKind.Skeleton;
+                for (var species = 0; species < _species.Length; species++)
+                {
+                    var kind = (EnemyKind)species;
+                    var catalog = GetCatalog(kind);
+                    if (!rule.Allows(kind) || catalog == null || !catalog.IsBaked ||
+                        !catalog.CanSpawnType(EnemyCombatType.Random)) continue;
+                    if (!rule.Random) QueueIslandPoint(point, IslandPointTemplate(settings, point, kind), kind, ref random);
+                    else if (random.NextInt(++choices) == 0) selected = kind;
+                }
+                if (rule.Random && choices > 0)
+                    QueueIslandPoint(point, IslandPointTemplate(settings, point, selected), selected, ref random);
             }
+        }
+
+        private static EnemySpawnPoint IslandPointTemplate(OceanGenerationSettings settings, EnemySpawnPoint fallback,
+            EnemyKind kind)
+        {
+            if (settings.EnemySpawnPointPrefabs == null) return fallback;
+            foreach (var prefab in settings.EnemySpawnPointPrefabs)
+                if (prefab != null && prefab.Kind == kind) return prefab;
+            return fallback;
+        }
+
+        private void QueueIslandPoint(EnemySpawnPoint point, EnemySpawnPoint template, EnemyKind kind, ref Random random)
+        {
+            var catalog = GetCatalog(kind);
+            // Aquatic groups start outside the dry island; normal spawn probes still reject
+            // shallow water, terrain and hulls. Land/amphibious groups start at the authored point.
+            var water = point.IsIslandPoint && catalog != null && catalog.Habitat == EnemyHabitat.Water;
+            var radius = water ? point.OwnerIsland.Diameter * 0.5f + 8f : template.SpawnRadius;
+            _spawns.Add(new SpawnRequest { Point = point,
+                Center = water ? point.OwnerIsland.transform.position : point.transform.position,
+                UseFixedCenter = water, MinimumRadius = water ? point.OwnerIsland.Diameter * 0.5f + 2f : 0f,
+                Radius = radius, Remaining = template.Count,
+                Type = template.Kind == kind ? template.CombatType : EnemyCombatType.Random,
+                Kind = kind, HealthBar = template.HealthBar, Group = point.SpawnGroup,
+                Random = new Random(random.NextUInt() | 1u) });
         }
         public bool SetStressTarget(int count, Vector3 center, float radius)
         {
@@ -278,6 +446,7 @@ namespace WaveByWave.Enemies
                 if (state.Health <= 0) continue;
                 if (found++ < count) continue;
                 _byId.Remove(state.Id);
+                _waveGroupByEnemy.Remove(state.Id);
                 _surfaceTransfers.Remove(state.Id);
                 RemoveMovementCrowdBody(state.Id);
                 _serverWorld.EntityManager.DestroyEntity(entity);
@@ -292,13 +461,16 @@ namespace WaveByWave.Enemies
             return true;
         }
 
-        public bool QueueNightWave(Vector3 center, int count, float radius,
-            EnemyCombatType type, int group)
+        public bool QueueNightWave(Vector3 center, int count, float minimumRadius, float maximumRadius,
+            EnemyCombatType type, EnemyKind kind, int group)
         {
+            var catalog = GetCatalog(kind);
             if (count <= 0 || !CanSimulate || !AttachServer() || Catalog == null ||
-                !Catalog.IsBaked || !Catalog.CanSpawnType(type)) return false;
-            _spawns.Add(new SpawnRequest { Center = center, Radius = Mathf.Max(1f, radius),
-                Remaining = count, Group = group, Type = type,
+                catalog == null || !catalog.IsBaked || !catalog.CanSpawnType(type)) return false;
+            minimumRadius = Mathf.Max(1f, minimumRadius);
+            _spawns.Add(new SpawnRequest { Center = center, MinimumRadius = minimumRadius,
+                Radius = Mathf.Max(minimumRadius + 1f, maximumRadius),
+                Remaining = count, Group = group, Type = type, Kind = kind,
                 Random = new Random(unchecked((uint)(group * 2654435761L + count)) | 1u) });
             return true;
         }
@@ -310,8 +482,12 @@ namespace WaveByWave.Enemies
             foreach (var request in _spawns) if (request.Group == group) count += request.Remaining;
             var manager = _serverWorld.EntityManager;
             foreach (var entity in _byId.Values)
-                if (manager.Exists(entity) && manager.GetComponentData<DotsEnemyBrain>(entity).SpawnGroup == group &&
-                    manager.GetComponentData<DotsEnemyState>(entity).Health > 0) count++;
+            {
+                if (!manager.Exists(entity)) continue;
+                var state = manager.GetComponentData<DotsEnemyState>(entity);
+                if (_waveGroupByEnemy.TryGetValue(state.Id, out var waveGroup) &&
+                    waveGroup == group && state.Health > 0) count++;
+            }
             return count;
         }
         private void SpawnBatch()
@@ -326,34 +502,49 @@ namespace WaveByWave.Enemies
             {
                 var request = _spawns[0];
                 // Disabled requests must not block the queue or waste ground probes.
-                if (!Catalog.CanSpawnType(request.Type))
+                var catalog = GetCatalog(request.Kind);
+                if (catalog == null || !catalog.IsBaked || !catalog.CanSpawnType(request.Type))
                 {
+                    if (request.AutomaticShark) _automaticSharkPending = false;
                     _spawns.RemoveAt(0);
                     continue;
                 }
-                var center = request.Point != null ? request.Point.transform.position :
+                var center = request.UseFixedCenter ? request.Center : request.Point != null ? request.Point.transform.position :
                     request.FollowPlayer != null ? Feet(request.FollowPlayer) : request.Center;
                 var angle = request.Random.NextFloat(0, math.PI * 2);
-                var distance = math.sqrt(request.Random.NextFloat()) * request.Radius;
+                var minimumRadius = Mathf.Clamp(request.MinimumRadius, 0f, request.Radius);
+                var distance = math.sqrt(math.lerp(minimumRadius * minimumRadius,
+                    request.Radius * request.Radius, request.Random.NextFloat()));
                 var candidate = center + new Vector3(math.cos(angle), 0, math.sin(angle)) * distance;
                 request.Attempts++;
-                if (TryGround(candidate + Vector3.up * 0.6f, 100f, out var hit) &&
-                    Catalog.TrySelectSpawnType(request.Type, ref request.Random, out var type))
+                if (TrySpawnPosition(candidate, catalog, out var spawnPosition, out var hit, out var swimming) &&
+                    catalog.TrySelectSpawnType(request.Type, ref request.Random, out var type))
                 {
                     var state = new DotsEnemyState
                     {
                         Id = _nextId++, Seed = request.Random.NextUInt() | 1u, Scene = _scene, CombatType = type,
-                        Health = Catalog.MaximumHealth, Position = hit.point,
+                        Kind = request.Kind, HealthBar = request.HealthBar == EnemyHealthBarMode.Profile
+                            ? _healthBarOverrides[(int)request.Kind] : request.HealthBar, Swimming = swimming,
+                        Health = catalog.MaximumHealth, Position = spawnPosition,
                         Rotation = quaternion.RotateY(request.Random.NextFloat(0, math.PI * 2)),
                         Animation = EnemyAnimationState.Idle, AnimationStarted = Now,
-                        AnimationDuration = Catalog.Duration(EnemyAnimationState.Idle)
+                        AnimationDuration = catalog.Duration(EnemyAnimationState.Idle)
                     };
-                    AttachSurface(ref state, hit.collider);
+                    if (hit.collider != null) AttachSurface(ref state, hit.collider);
+                    else UpdateLocal(ref state);
                     var entity = manager.Instantiate(prefab);
                     manager.SetComponentData(entity, state);
                     manager.SetComponentData(entity, new DotsEnemyBrain { Target = -1, SpawnGroup = request.Group,
+                        SpeciesSpeed = swimming != 0 ? catalog.SwimSpeed : catalog.MoveSpeed,
+                        SpeciesStoppingDistance = catalog.MeleeRange * 0.82f, SpeciesSpacing = catalog.BodyRadius * 2 + .04f,
                         LastSurfaceTime = Now, NextAttack = Now + request.Random.NextFloat(0.5f, 1.5f) });
                     _byId.Add(state.Id, entity);
+                    if (request.Group != 0) _waveGroupByEnemy[state.Id] = request.Group;
+                    if (request.AutomaticShark)
+                    {
+                        _automaticSharkIds.Add(state.Id);
+                        _automaticSharkWaveSpawned++;
+                    }
                     UpdateCrowdSnapshot(in state);
                     request.Remaining--;
                     request.Attempts = 0;
@@ -361,13 +552,22 @@ namespace WaveByWave.Enemies
                 if (request.Remaining <= 0 || request.Attempts > 256)
                 {
                     if (request.Remaining > 0)
-                        Debug.LogWarning($"[Enemies] Spawn area has insufficient dry, walkable ground; {request.Remaining} spawns skipped.");
+                        Debug.LogWarning($"[Enemies] {catalog.DisplayName}: no suitable {catalog.Habitat} surface in this area; {request.Remaining} spawns skipped.");
+                    if (request.AutomaticShark)
+                    {
+                        _automaticSharkPending = false;
+                        if (request.Remaining > 0) _automaticSharkRetryAt = Now + 2f;
+                    }
                     _spawns.RemoveAt(0);
                 }
             }
         }
         private void TickCombat(ref DotsEnemyState state, ref DotsEnemyBrain brain, float now)
         {
+            var catalog = GetCatalog(state.Kind) ?? Catalog;
+            brain.SpeciesSpeed = state.Swimming != 0 ? catalog.SwimSpeed : catalog.MoveSpeed;
+            brain.SpeciesStoppingDistance = catalog.MeleeRange * 0.82f;
+            brain.SpeciesSpacing = catalog.BodyRadius * 2 + .04f;
             if (_surfaceTransfers.ContainsKey(state.Id)) return;
             if (state.StunUntil > now)
             {
@@ -376,7 +576,7 @@ namespace WaveByWave.Enemies
                 return;
             }
             if (state.Animation == EnemyAnimationState.Stunned) SetAnimation(ref state, EnemyAnimationState.Idle);
-            if (!Catalog.EnableCombat)
+            if (!catalog.EnableCombat)
             {
                 if (brain.Attacking != 0)
                 {
@@ -399,45 +599,47 @@ namespace WaveByWave.Enemies
                 SetAnimation(ref state, EnemyAnimationState.Idle);
             }
             if (brain.Target < 0 || brain.Target >= _players.Count || now < brain.NextAttack) return;
-            var range = state.CombatType == EnemyCombatType.Melee ? Catalog.MeleeRange : Catalog.RangedMaximumRange;
-            if (brain.TargetDistance > range || !CanSee(state.Position, Feet(_players[brain.Target].Player))) return;
+            var range = state.CombatType == EnemyCombatType.Melee ? catalog.MeleeRange : catalog.RangedMaximumRange;
+            if (brain.TargetDistance > range || !CanSee(state, Feet(_players[brain.Target].Player), catalog)) return;
             var attackUp = TryGetSurfaceFrame(state.SupportId, true, out var attackFrame)
                 ? (float3)(attackFrame.rotation * Vector3.up) : math.up();
             state.Rotation = quaternion.LookRotationSafe(
                 brain.Direction - attackUp * math.dot(brain.Direction, attackUp), attackUp);
             UpdateLocal(ref state);
-            SetAnimation(ref state, Catalog.AttackAnimation(state.CombatType), Catalog.Duration(Catalog.AttackAnimation(state.CombatType)));
+            SetAnimation(ref state, catalog.AttackAnimation(state.CombatType), catalog.Duration(catalog.AttackAnimation(state.CombatType)));
             brain.Attacking = 1;
-            brain.StrikeAt = now + state.AnimationDuration * Catalog.AttackHitTime(state.CombatType);
-            brain.NextAttack = now + Mathf.Max(state.AnimationDuration, Catalog.AttackCooldown(state.CombatType));
+            brain.StrikeAt = now + state.AnimationDuration * catalog.AttackHitTime(state.CombatType);
+            brain.NextAttack = now + Mathf.Max(state.AnimationDuration, catalog.AttackCooldown(state.CombatType));
         }
         private void Strike(ref DotsEnemyState state, ref DotsEnemyBrain brain)
         {
+            var catalog = GetCatalog(state.Kind) ?? Catalog;
             if (brain.Target < 0 || brain.Target >= _players.Count) return;
             var target = _players[brain.Target];
             if (target.Player == null || target.Health == null || target.Health.IsDead) return;
             var feet = Feet(target.Player);
-            var range = state.CombatType == EnemyCombatType.Melee ? Catalog.MeleeRange + 0.3f : Catalog.RangedMaximumRange;
-            if (Vector3.Distance(state.Position, feet) > range || !CanSee(state.Position, feet)) return;
-            var damage = Catalog.AttackDamage(state.CombatType);
+            var range = state.CombatType == EnemyCombatType.Melee ? catalog.MeleeRange + 0.3f : catalog.RangedMaximumRange;
+            if (Vector3.Distance(state.Position, feet) > range || !CanSee(state, feet, catalog)) return;
+            var damage = catalog.AttackDamage(state.CombatType);
             if (state.CombatType == EnemyCombatType.Melee && target.Equipment != null &&
                 target.Equipment.TryBlockHitServer(damage, state.Position))
             {
-                state.StunUntil = Now + Catalog.ParryStunDuration;
-                brain.Knockback = math.normalizesafe(state.Position - (float3)feet) * Catalog.ParryKnockback;
+                state.StunUntil = Now + catalog.ParryStunDuration;
+                brain.Knockback = math.normalizesafe(state.Position - (float3)feet) * catalog.ParryKnockback;
                 brain.Attacking = 0;
                 brain.NextAttack = state.StunUntil + 0.3f;
-                SetAnimation(ref state, EnemyAnimationState.Stunned, Catalog.ParryStunDuration);
+                SetAnimation(ref state, EnemyAnimationState.Stunned, catalog.ParryStunDuration);
                 return;
             }
             target.Health.ApplyDamageServer(damage, state.Position);
         }
         private void SetAnimation(ref DotsEnemyState state, EnemyAnimationState animation, float duration = 0)
         {
+            var catalog = GetCatalog(state.Kind) ?? Catalog;
             if (state.Animation == animation) return;
             state.Animation = animation;
             state.AnimationStarted = Now;
-            state.AnimationDuration = duration > 0 ? duration : Catalog.Duration(animation);
+            state.AnimationDuration = duration > 0 ? duration : catalog.Duration(animation);
         }
         private void EnsureProbeCapacity(int capacity)
         {
@@ -475,8 +677,9 @@ namespace WaveByWave.Enemies
                     manager.SetComponentData(entity, brain);
                     continue;
                 }
+                var catalog = GetCatalog(state.Kind) ?? Catalog;
                 var direction = Catalog.EnableCrowdAvoidance ? brain.CrowdDirection : brain.MoveDirection;
-                var stoppingDistance = Catalog.MeleeRange * 0.82f;
+                var stoppingDistance = catalog.MeleeRange * 0.82f;
                 if (brain.Attacking != 0 || !Catalog.EnableTargetSlots && brain.TargetDistance <= stoppingDistance)
                     direction = float3.zero;
                 var separation = brain.Separation;
@@ -490,19 +693,35 @@ namespace WaveByWave.Enemies
                         (math.max(0.25f, separationAmount) * Catalog.CrowdSeparationStrength));
                 }
                 if (state.StunUntil > now) { direction = float3.zero; separation = float3.zero; }
-                var movement = direction * Catalog.MoveSpeed;
+                var speed = state.Swimming != 0 ? catalog.SwimSpeed : catalog.MoveSpeed;
+                var movement = direction * speed;
                 var movementLength = math.length(movement);
-                if (movementLength > Catalog.MoveSpeed) movement *= Catalog.MoveSpeed / movementLength;
+                if (movementLength > speed) movement *= speed / movementLength;
                 var displacement = (movement + brain.Knockback) * dt;
                 var wantsToMove = math.lengthsq(movement) > 0.0001f;
                 displacement = SteerCrowdStep(in state, ref brain, displacement, dt);
                 brain.Knockback *= math.exp(-7f * dt);
                 manager.SetComponentData(entity, brain);
+                if (TryBoardPlayerShip(ref state, ref brain, displacement, dt, wantsToMove, now, catalog))
+                {
+                    UpdateCrowdSnapshot(in state);
+                    manager.SetComponentData(entity, state);
+                    manager.SetComponentData(entity, brain);
+                    continue;
+                }
                 // Idle passengers already have an exact local pose. Re-projecting them onto
                 // last frame's rendered collider introduces drift and wastes surface probes.
                 if (state.SupportId != 0 && math.lengthsq(displacement) < 0.000001f)
                 {
                     UpdateLocomotion(ref state, ref brain, 0, dt, true, wantsToMove, now);
+                    manager.SetComponentData(entity, state);
+                    manager.SetComponentData(entity, brain);
+                    continue;
+                }
+                if (catalog.Habitat != EnemyHabitat.Land &&
+                    MoveInWater(ref state, ref brain, displacement, dt, wantsToMove, now, catalog))
+                {
+                    UpdateCrowdSnapshot(in state);
                     manager.SetComponentData(entity, state);
                     manager.SetComponentData(entity, brain);
                     continue;
@@ -651,8 +870,9 @@ namespace WaveByWave.Enemies
             collider.GetComponentInParent<WaterObject>() == null &&
             collider.GetComponentInParent<NetworkPlayerController>() == null &&
             collider.GetComponentInParent<WorldItem>() == null;
-        private bool IsMinorObstacle(Collider collider)
+        private bool IsMinorObstacle(Collider collider, DotsEnemyCatalog navigation = null)
         {
+            navigation ??= Catalog;
             // Generated/baked island decorations are known explicitly. Never classify an
             // island terrain chunk by its bounds: digging can make a chunk arbitrarily small.
             if (IsIslandDecoration(collider)) return true;
@@ -660,43 +880,59 @@ namespace WaveByWave.Enemies
                 collider.GetComponentInParent<MovingPlatform>() != null ||
                 collider.GetComponentInParent<EnemySurfaceAnchor>() != null) return false;
             var size = collider.bounds.size;
-            return Catalog.IgnoredObstacleWidth > 0 && Mathf.Max(size.x, size.z) <= Catalog.IgnoredObstacleWidth;
+            return navigation.IgnoredObstacleWidth > 0 &&
+                Mathf.Max(size.x, size.z) <= navigation.IgnoredObstacleWidth;
         }
         private static bool IsIslandDecoration(Collider collider)
         {
             var island = collider.GetComponentInParent<ProceduralIsland>();
             return island != null && island.IsDecorationCollider(collider);
         }
-        private bool Walkable(RaycastHit hit)
+        private bool Walkable(RaycastHit hit, DotsEnemyCatalog navigation = null)
         {
-            if (hit.collider == null || hit.normal.y < Mathf.Cos(Catalog.MaximumSlope * Mathf.Deg2Rad)) return false;
+            navigation ??= Catalog;
+            if (hit.collider == null ||
+                hit.normal.y < Mathf.Cos(navigation.MaximumSlope * Mathf.Deg2Rad)) return false;
             if (_water.TryWaterLevel(hit.point, out var level) && hit.point.y < level - 0.05f) return false;
             return true;
         }
         private bool TryGround(Vector3 origin, float distance, out RaycastHit result)
+            => TryGround(origin, distance, Catalog, out result);
+
+        private bool TryGround(Vector3 origin, float distance, DotsEnemyCatalog navigation,
+            out RaycastHit result)
         {
+            navigation ??= Catalog;
             result = default;
             var count = Physics.RaycastNonAlloc(origin, Vector3.down, _hits, distance,
-                Catalog.SurfaceLayers, QueryTriggerInteraction.Ignore);
+                navigation.SurfaceLayers, QueryTriggerInteraction.Ignore);
             for (var i = 0; i < count; i++)
                 if ((result.collider == null || _hits[i].distance < result.distance) &&
-                    ValidSolid(_hits[i].collider) && !IsMinorObstacle(_hits[i].collider) && Walkable(_hits[i]))
+                    ValidSolid(_hits[i].collider) && !IsMinorObstacle(_hits[i].collider, navigation) &&
+                    Walkable(_hits[i], navigation))
                     result = _hits[i];
             return result.collider != null;
         }
-        private bool CanSee(Vector3 fromFeet, Vector3 toFeet) =>
-            !SolidBetween(fromFeet + Vector3.up * (Catalog.BodyHeight * 0.7f), toFeet + Vector3.up * 0.9f, true);
         // Player melee keeps its physical occlusion rules; only enemy perception ignores props.
         public bool SolidBetween(Vector3 from, Vector3 to) => SolidBetween(from, to, false);
-        private bool SolidBetween(Vector3 from, Vector3 to, bool ignoreMinorObstacles)
+        private bool SolidBetween(Vector3 from, Vector3 to, bool ignoreMinorObstacles,
+            Collider ignoredCollider = null, Transform ignoredRoot = null,
+            DotsEnemyCatalog navigation = null)
         {
+            navigation ??= Catalog;
             var delta = to - from;
             if (delta.sqrMagnitude < 0.00001f) return false;
             var count = Physics.RaycastNonAlloc(from, delta.normalized, _hits, delta.magnitude,
-                Catalog.SurfaceLayers, QueryTriggerInteraction.Ignore);
+                navigation.SurfaceLayers, QueryTriggerInteraction.Ignore);
             for (var i = 0; i < count; i++)
-                if (ValidSolid(_hits[i].collider) && (!ignoreMinorObstacles || !IsMinorObstacle(_hits[i].collider)))
+            {
+                var collider = _hits[i].collider;
+                var belongsToIgnoredRoot = ignoredRoot != null && collider != null &&
+                    (collider.transform == ignoredRoot || collider.transform.IsChildOf(ignoredRoot));
+                if (collider != ignoredCollider && !belongsToIgnoredRoot && ValidSolid(collider) &&
+                    (!ignoreMinorObstacles || !IsMinorObstacle(collider, navigation)))
                     return true;
+            }
             return false;
         }
         private void AttachSurface(ref DotsEnemyState state, Collider collider)
@@ -762,7 +998,7 @@ namespace WaveByWave.Enemies
         public static int CrewGroupForShip(int shipId) => -1000000 - Mathf.Max(0, shipId);
 
         public bool SpawnCrewOnShip(int shipId, IReadOnlyList<Vector3> localPositions,
-            EnemyCombatType combatType, uint seed)
+            EnemyCombatType combatType, uint seed, int waveGroup = 0)
         {
             if (!CanSimulate || localPositions == null || localPositions.Count == 0 ||
                 !AttachServer() || Catalog == null || !Catalog.IsBaked) return false;
@@ -794,7 +1030,7 @@ namespace WaveByWave.Enemies
                     Seed = random.NextUInt() | 1u,
                     Scene = _scene,
                     CombatType = type,
-                    Health = Catalog.MaximumHealth,
+                    Health = Catalog.MaximumHealth, HealthBar = _healthBarOverrides[0],
                     Position = frame.MultiplyPoint3x4(localPosition),
                     Rotation = frame.rotation * localRotation,
                     Animation = EnemyAnimationState.Idle,
@@ -815,6 +1051,7 @@ namespace WaveByWave.Enemies
                     NextAttack = now + random.NextFloat(0.5f, 1.5f)
                 });
                 _byId.Add(state.Id, entity);
+                if (waveGroup != 0) _waveGroupByEnemy[state.Id] = waveGroup;
                 RegisterCrewMember(shipId);
                 UpdateCrowdSnapshot(in state);
             }
@@ -846,15 +1083,19 @@ namespace WaveByWave.Enemies
         {
             _crewGroups.Remove(group);
             if (group <= -1000000) _livingCrew.Remove(-1000000 - group);
+            _spawns.RemoveAll(request => request.Group == group);
             if (!AttachServer()) return;
             var manager = _serverWorld.EntityManager;
             using var entities = _enemies.ToEntityArray(Allocator.Temp);
             foreach (var entity in entities)
             {
-                if (!manager.Exists(entity) || manager.GetComponentData<DotsEnemyBrain>(entity).SpawnGroup != group)
-                    continue;
+                if (!manager.Exists(entity)) continue;
+                var brain = manager.GetComponentData<DotsEnemyBrain>(entity);
                 var id = manager.GetComponentData<DotsEnemyState>(entity).Id;
+                var belongsToWave = _waveGroupByEnemy.TryGetValue(id, out var waveGroup) && waveGroup == group;
+                if (brain.SpawnGroup != group && !belongsToWave) continue;
                 _byId.Remove(id);
+                _waveGroupByEnemy.Remove(id);
                 _surfaceTransfers.Remove(id);
                 RemoveMovementCrowdBody(id);
                 manager.DestroyEntity(entity);
@@ -918,22 +1159,23 @@ namespace WaveByWave.Enemies
             var manager = _serverWorld.EntityManager;
             var state = manager.GetComponentData<DotsEnemyState>(entity);
             if (state.Health <= 0) return false;
+            var catalog = GetCatalog(state.Kind) ?? Catalog;
             Carry(ref state);
             var brain = manager.GetComponentData<DotsEnemyBrain>(entity);
-            WaveByWave.Combat.DotsDamagePopups.ReportServer(impactPoint ?? (Vector3)state.Position + Vector3.up * Catalog.BodyHeight * .5f, damage);
+            WaveByWave.Combat.DotsDamagePopups.ReportServer(impactPoint ?? (Vector3)state.Position + Vector3.up * catalog.BodyHeight * .5f, damage);
             state.Health = Mathf.Max(0, state.Health - damage);
             state.HitRevision++;
-            brain.Knockback = math.normalizesafe(state.Position - (float3)attacker) * Catalog.DamageKnockback;
+            brain.Knockback = math.normalizesafe(state.Position - (float3)attacker) * catalog.DamageKnockback;
             var defeatedCrewShip = 0;
             if (state.Health <= 0)
             {
                 state.DeathAt = Now;
                 brain.Attacking = 0;
                 defeatedCrewShip = RecordCrewDeath(ref brain);
-                if (Catalog.LootDrops != null && Catalog.LootDrops.Length > 0)
+                if (catalog.LootDrops != null && catalog.LootDrops.Length > 0)
                 {
                     var random = new Random(state.Seed | 1u);
-                    var drop = Catalog.LootDrops[random.NextInt(0, Catalog.LootDrops.Length)];
+                    var drop = catalog.LootDrops[random.NextInt(0, catalog.LootDrops.Length)];
                     if (drop != null)
                     {
                         var support = ResolveSurface(state.SupportId);
@@ -959,9 +1201,14 @@ namespace WaveByWave.Enemies
                 if (snapshot.Health <= 0 || snapshot.Scene != _scene) continue;
                 var state = snapshot;
                 Carry(ref state);
-                Vector3 center = (Vector3)state.Position + Vector3.up * Catalog.BodyHeight * 0.5f;
+                var catalog = GetCatalog(state.Kind) ?? Catalog;
+                HitCapsule(state, catalog, out var bottom, out var top, out var hitRadius);
+                var center = Vector3.Lerp(bottom, top, 0.5f);
                 var toward = center - origin;
-                if (toward.magnitude > range + Catalog.BodyRadius ||
+                var axis = top - bottom;
+                var closest = Vector3.Lerp(bottom, top,
+                    Mathf.Clamp01(Vector3.Dot(origin - bottom, axis) / Mathf.Max(0.0001f, axis.sqrMagnitude)));
+                if (Vector3.Distance(origin, closest) > range + hitRadius ||
                     Vector3.Dot(toward.normalized, direction) < 0.35f || SolidBetween(origin, center)) continue;
                 Damage(state.Id, damage, origin);
             }
@@ -971,8 +1218,7 @@ namespace WaveByWave.Enemies
             id = 0; fraction = 1;
             if (!CanSimulate || !AttachServer()) return false;
             PrepareProjectileGrid();
-            var targetRadius = Mathf.Min(Catalog.ProjectileHitRadius, Catalog.BodyHeight * 0.5f);
-            var clearance = targetRadius + radius;
+            var clearance = _projectileGridPadding + radius;
             var min = (int2)math.floor((new float2(math.min(from.x, to.x), math.min(from.z, to.z)) - clearance) /
                 ProjectileCellSize);
             var max = (int2)math.floor((new float2(math.max(from.x, to.x), math.max(from.z, to.z)) + clearance) /
@@ -986,10 +1232,8 @@ namespace WaveByWave.Enemies
                     if (!_byId.TryGetValue(target.Id, out var entity) ||
                         !_serverWorld.EntityManager.Exists(entity) ||
                         _serverWorld.EntityManager.GetComponentData<DotsEnemyState>(entity).Health <= 0) continue;
-                    var bottom = target.Position + Vector3.up * targetRadius;
-                    var top = target.Position + Vector3.up * (Catalog.BodyHeight - targetRadius);
-                    if (EnemyHitGeometry.SegmentCapsule(from, to, bottom, top,
-                            clearance, out var hit) && hit < fraction)
+                    if (EnemyHitGeometry.SegmentCapsule(from, to, target.Bottom, target.Top,
+                            target.Radius + radius, out var hit) && hit < fraction)
                     { fraction = hit; id = target.Id; }
                 }
             }
@@ -1001,6 +1245,7 @@ namespace WaveByWave.Enemies
             if (_projectileGridFrame == Time.frameCount) return;
             foreach (var list in _projectileGrid.Values) { list.Clear(); _projectileGridPool.Push(list); }
             _projectileGrid.Clear();
+            _projectileGridPadding = 0;
             _projectileGridFrame = Time.frameCount;
             using var states = _enemies.ToComponentDataArray<DotsEnemyState>(Allocator.Temp);
             foreach (var snapshot in states)
@@ -1014,7 +1259,11 @@ namespace WaveByWave.Enemies
                     list = _projectileGridPool.Count > 0 ? _projectileGridPool.Pop() : new List<ProjectileTarget>(8);
                     _projectileGrid.Add(key, list);
                 }
-                list.Add(new ProjectileTarget { Id = state.Id, Position = state.Position });
+                HitCapsule(state, GetCatalog(state.Kind) ?? Catalog, out var bottom, out var top, out var radius);
+                _projectileGridPadding = Mathf.Max(_projectileGridPadding, radius + Mathf.Max(
+                    math.distance(state.Position.xz, new float2(bottom.x, bottom.z)),
+                    math.distance(state.Position.xz, new float2(top.x, top.z))));
+                list.Add(new ProjectileTarget { Id = state.Id, Bottom = bottom, Top = top, Radius = radius });
             }
         }
         public EntityQuery ServerQuery => _enemies;
@@ -1023,6 +1272,12 @@ namespace WaveByWave.Enemies
         {
             if (_serverWorld != null && _serverWorld.IsCreated) _serverWorld.EntityManager.DestroyEntity(_enemies);
             _byId.Clear(); _crewGroups.Clear(); _spawns.Clear(); _surfaceTransfers.Clear();
+            _waveGroupByEnemy.Clear();
+            _oceanPlayerIds.Clear(); _oceanPlayerStates.Clear();
+            _playersInOcean.Clear(); _playersInOceanNow.Clear();
+            _automaticSharkIds.Clear(); _deadAutomaticSharks.Clear(); _automaticSharkPending = false;
+            _automaticSharkWaveSize = 1; _automaticSharkWaveSpawned = 0;
+            _nextAutomaticSharkCheck = _automaticSharkRetryAt = 0f;
             _livingCrew.Clear();
             foreach (var list in _projectileGrid.Values) { list.Clear(); _projectileGridPool.Push(list); }
             _projectileGrid.Clear(); _projectileGridFrame = -1;

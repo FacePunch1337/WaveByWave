@@ -129,3 +129,56 @@ Assets/BOXOPHOBIC/**/*.pdf -filter -diff -merge -text
 
 # Small generated breach mask: keep the complete image available without LFS.
 Assets/_Project/Generated/ShipDamage/HullBreach.png -filter -diff -merge -text
+
+# Small source assets in the September 26 project snapshot use regular Git.
+# Keep actual file contents available without requiring new LFS uploads.
+"Assets/Alstra Infinite/Fish - PolyPack/Models/FishV1.fbx" -filter -diff -merge -text
+"Assets/Alstra Infinite/Fish - PolyPack/Models/FishV2.fbx" -filter -diff -merge -text
+"Assets/Alstra Infinite/Fish - PolyPack/Models/FishV3.fbx" -filter -diff -merge -text
+"Assets/Alstra Infinite/Fish - PolyPack/Models/FishV4.fbx" -filter -diff -merge -text
+"Assets/Alstra Infinite/Fish - PolyPack/Models/SharkV1.fbx" -filter -diff -merge -text
+"Assets/Alstra Infinite/Fish - PolyPack/Texture/PolyPackFish.png" -filter -diff -merge -text
+"Assets/Island/Meshes/Branch.fbx" -filter -diff -merge -text
+"Assets/Island/Meshes/Chest.fbx" -filter -diff -merge -text
+"Assets/Island/Meshes/Circle.fbx" -filter -diff -merge -text
+"Assets/Island/Meshes/Coconut.fbx" -filter -diff -merge -text
+"Assets/Island/Meshes/Dock.fbx" -filter -diff -merge -text
+"Assets/Island/Prefabs/Tree_a_Textures/diffuse.png" -filter -diff -merge -text
+"Assets/Island/Prefabs/Tree_a_Textures/normal_specular.png" -filter -diff -merge -text
+"Assets/Island/Prefabs/Tree_a_Textures/shadow.png" -filter -diff -merge -text
+"Assets/Island/Prefabs/Tree_a_Textures/translucency_gloss.png" -filter -diff -merge -text
+"Assets/Island/Prefabs/Tree_b_Textures/diffuse.png" -filter -diff -merge -text
+"Assets/Island/Prefabs/Tree_b_Textures/normal_specular.png" -filter -diff -merge -text
+"Assets/Island/Prefabs/Tree_b_Textures/shadow.png" -filter -diff -merge -text
+"Assets/Island/Prefabs/Tree_b_Textures/translucency_gloss.png" -filter -diff -merge -text
+"Assets/Island/Textures/Bark.tga" -filter -diff -merge -text
+"Assets/Island/Textures/Chest.tga" -filter -diff -merge -text
+"Assets/Island/Textures/Coconut.tga" -filter -diff -merge -text
+"Assets/Island/Textures/Dock.tga" -filter -diff -merge -text
+"Assets/Island/Textures/Grass.tga" -filter -diff -merge -text
+"Assets/Island/Textures/Grass_detail.png" -filter -diff -merge -text
+"Assets/Island/Textures/Leaves.tga" -filter -diff -merge -text
+"Assets/Island/Textures/Sand.tga" -filter -diff -merge -text
+"Assets/Island/Textures/Sand2.tga" -filter -diff -merge -text
+"Assets/Island/Textures/Water.tga" -filter -diff -merge -text
+"Assets/Island/Textures/Waves.png" -filter -diff -merge -text
+"Assets/StylizedWoodenBarrelPack/Materials/Textures/barrel.png" -filter -diff -merge -text
+"Assets/StylizedWoodenBarrelPack/Materials/Textures/barrel_nm.png" -filter -diff -merge -text
+"Assets/StylizedWoodenBarrelPack/Mesh/barrel_open_b_rolling.fbx" -filter -diff -merge -text
+"Assets/StylizedWoodenBarrelPack/Mesh/barrel_open_b_standing.fbx" -filter -diff -merge -text
+"Assets/StylizedWoodenBarrelPack/Mesh/barrel_open_gold_standing.fbx" -filter -diff -merge -text
+"Assets/StylizedWoodenBarrelPack/Mesh/barrel_open_powder_standing.fbx" -filter -diff -merge -text
+"Assets/StylizedWoodenBarrelPack/Mesh/barrel_open_rolling.fbx" -filter -diff -merge -text
+"Assets/StylizedWoodenBarrelPack/Mesh/barrel_open_standing.fbx" -filter -diff -merge -text
+"Assets/StylizedWoodenBarrelPack/Mesh/barrel_open_water_standing.fbx" -filter -diff -merge -text
+"Assets/StylizedWoodenBarrelPack/Mesh/barrel_standing.fbx" -filter -diff -merge -text
+"Assets/Troll_Сannibal/Fbx/Troll_cannibal.fbx" -filter -diff -merge -text
+"Assets/Troll_Сannibal/Textures/Cannibal/AO_Cannibal.png" -filter -diff -merge -text
+"Assets/Troll_Сannibal/Textures/Cannibal/N_Cannibal.png" -filter -diff -merge -text
+"Assets/Troll_Сannibal/Textures/Cannibal/С1_Albedo_Cannibal.png" -filter -diff -merge -text
+"Assets/Troll_Сannibal/Textures/Weapon/Albedo_Weapon.png" -filter -diff -merge -text
+"Assets/Troll_Сannibal/Textures/Weapon/Weapon_AO.png" -filter -diff -merge -text
+"Assets/Troll_Сannibal/Textures/Weapon/Weapon_N.png" -filter -diff -merge -text
+"Assets/Troll_Сannibal/Textures/grid.png" -filter -diff -merge -text
+"Assets/TutorialInfo/Icons/Help_Icon.png" -filter -diff -merge -text
+"Assets/TutorialInfo/Icons/UniversalIcon.png" -filter -diff -merge -text

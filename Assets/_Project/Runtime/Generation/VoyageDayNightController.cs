@@ -22,7 +22,7 @@ namespace WaveByWave.Generation
         private float _elapsed, _hour = 10f, _sunriseFromHour = 6f, _nextNetworkUpdate;
         private float _displayHour = 10f;
         private bool _displayInitialized;
-        private bool _started, _advanceWhenManualEnds, _wasOverridden, _clockPaused;
+        private bool _started, _advanceWhenManualEnds, _wasOverridden, _clockPaused, _adminForcedNight;
 
         private Material _runtimeSkybox, _skyboxSource;
         private Shader _celestialShaderSource;
@@ -165,7 +165,7 @@ namespace WaveByWave.Generation
                 SetPhase(VoyagePhase.Day);
             }
             if (_clockPaused) return;
-            if (settings.OverrideTime)
+            if (settings.OverrideTime && !_adminForcedNight)
             {
                 _wasOverridden = true;
                 ScrubServer(settings.TimeOfDay);
@@ -266,8 +266,37 @@ namespace WaveByWave.Generation
         {
             if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
             if (_phase != VoyagePhase.Night) return;
+            if (_adminForcedNight)
+            {
+                _adminForcedNight = false;
+                _advanceWhenManualEnds = false;
+                _wasOverridden = false;
+                SetPhase(VoyagePhase.Sunrise);
+                return;
+            }
             if (settings.OverrideTime) _advanceWhenManualEnds = true;
             else SetPhase(VoyagePhase.Sunrise);
+        }
+
+        public bool ForceNightServer()
+        {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return false;
+            _started = true;
+            _clockPaused = false;
+            _adminForcedNight = true;
+            _advanceWhenManualEnds = false;
+            _wasOverridden = false;
+            if (_phase != VoyagePhase.Night)
+            {
+                SetPhase(VoyagePhase.Night);
+                return true;
+            }
+            _elapsed = 0f;
+            _hour = 20f;
+            _nextNetworkUpdate = 0f;
+            PublishClockServer();
+            NightStartedServer?.Invoke();
+            return true;
         }
 
         public void PauseClockServer()

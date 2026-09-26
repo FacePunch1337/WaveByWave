@@ -29,7 +29,7 @@ namespace WaveByWave.Enemies
         {
             public EnemyShipSpawnPoint Point;
             public Vector3 Center;
-            public float Radius;
+            public float Radius, MinimumRadius;
             public int Remaining;
             public int Attempts;
             public int WaveGroup;
@@ -105,7 +105,7 @@ namespace WaveByWave.Enemies
 
         private void LoadDefinition()
         {
-            Definition = Resources.Load<EnemyShipDefinition>("EnemyShipDefinition");
+            Definition = EnemyShipDefinition.Load();
             _water?.Dispose();
             _water = new EquipmentWaterQuery(Definition != null ? Definition.WaterProfile : null);
             _crewPositions = null;
@@ -235,7 +235,7 @@ namespace WaveByWave.Enemies
                     var brain = manager.GetComponentData<DotsEnemyShipBrain>(entity);
                     if (state.Scene != _scene) { _remove.Add(entity); continue; }
                     if (!SimulationDue(state, brain, now)) continue;
-                    if (state.Health > 0 && brain.CrewSpawned == 0 && EnsureCrew(state.Id, state.Seed))
+                    if (state.Health > 0 && brain.CrewSpawned == 0 && EnsureCrew(state.Id, state.Seed, brain.WaveGroup))
                         brain.CrewSpawned = 1;
                     Simulate(entity, ref state, ref brain, now);
                     simulated++;
@@ -306,12 +306,14 @@ namespace WaveByWave.Enemies
         }
 
         public bool SpawnAt(Vector3 center, int count = 1, float radius = 5f, uint seed = 0,
-            int waveGroup = 0)
+            int waveGroup = 0, float minimumRadius = 0f)
         {
             if (!CanSimulate || !AttachServer()) return false;
             count = Mathf.Min(count, Definition.MaximumShips - AliveCount);
             if (count <= 0) return false;
-            _spawns.Add(new SpawnRequest { Center = center, Radius = Mathf.Max(1f, radius),
+            var maximumRadius = Mathf.Max(1f, radius);
+            _spawns.Add(new SpawnRequest { Center = center, Radius = maximumRadius,
+                MinimumRadius = Mathf.Clamp(minimumRadius, 0f, maximumRadius),
                 Remaining = count, WaveGroup = waveGroup,
                 Random = new Random((seed != 0 ? seed : (uint)Environment.TickCount) | 1u) });
             return true;
@@ -329,6 +331,47 @@ namespace WaveByWave.Enemies
             return count;
         }
 
+        public int NightWavePendingCrew(int group)
+        {
+            if (!CanSimulate || Definition == null || Definition.CrewCount <= 0 ||
+                _serverWorld == null || !_serverWorld.IsCreated) return 0;
+            var count = 0;
+            foreach (var request in _spawns)
+                if (request.WaveGroup == group) count += request.Remaining * Definition.CrewCount;
+            var manager = _serverWorld.EntityManager;
+            foreach (var entity in _byId.Values)
+            {
+                if (!manager.Exists(entity)) continue;
+                var state = manager.GetComponentData<DotsEnemyShipState>(entity);
+                var brain = manager.GetComponentData<DotsEnemyShipBrain>(entity);
+                if (state.Health > 0f && brain.WaveGroup == group && brain.CrewSpawned == 0)
+                    count += Definition.CrewCount;
+            }
+            return count;
+        }
+
+        public void DespawnGroup(int group)
+        {
+            _spawns.RemoveAll(request => request.WaveGroup == group);
+            if (!CanSimulate || !AttachServer()) return;
+            var manager = _serverWorld.EntityManager;
+            using var entities = _ships.ToEntityArray(Allocator.Temp);
+            foreach (var entity in entities)
+            {
+                if (!manager.Exists(entity) ||
+                    manager.GetComponentData<DotsEnemyShipBrain>(entity).WaveGroup != group) continue;
+                var state = manager.GetComponentData<DotsEnemyShipState>(entity);
+                _byId.Remove(state.Id);
+                _fleet.Remove(state.Id);
+                _physicsFrames.Remove(state.Id);
+                _collisionPoses.Remove(state.Id);
+                _shipWater.Remove(state.Id);
+                DotsEnemyRuntime.Instance?.DespawnGroup(DotsEnemyRuntime.CrewGroupForShip(state.Id));
+                manager.DestroyEntity(entity);
+            }
+            CollisionRevision++;
+        }
+
         private void SpawnBatch()
         {
             if (_spawns.Count == 0 || _byId.Count >= Definition.MaximumShips) return;
@@ -341,7 +384,9 @@ namespace WaveByWave.Enemies
             {
                 var request = _spawns[0];
                 var angle = request.Random.NextFloat(0, math.PI * 2);
-                var distance = math.sqrt(request.Random.NextFloat()) * request.Radius;
+                var minimumRadius = Mathf.Clamp(request.MinimumRadius, 0f, request.Radius);
+                var distance = math.sqrt(math.lerp(minimumRadius * minimumRadius,
+                    request.Radius * request.Radius, request.Random.NextFloat()));
                 var candidate = request.Center + new Vector3(math.cos(angle), 0, math.sin(angle)) * distance;
                 request.Attempts++;
                 if (_water.TryHeight(candidate, out var height))
@@ -693,13 +738,13 @@ namespace WaveByWave.Enemies
             manager.SetComponentData(entity, brain);
         }
 
-        private bool EnsureCrew(int id, uint seed)
+        private bool EnsureCrew(int id, uint seed, int waveGroup)
         {
             if (Definition.CrewCount == 0) return true;
             var skeletons = DotsEnemyRuntime.EnsureInstance();
             if (skeletons == null || skeletons.Catalog == null || !EnsureCrewPositions(skeletons.Catalog)) return false;
             return skeletons.SpawnCrewOnShip(id, _crewPositions,
-                Definition.CrewCombatType, seed);
+                Definition.CrewCombatType, seed, waveGroup);
         }
 
         internal float DistanceToObserversSquared(Vector3 position)

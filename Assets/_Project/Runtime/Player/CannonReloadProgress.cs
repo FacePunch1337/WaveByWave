@@ -121,9 +121,9 @@ namespace WaveByWave.Player
             var center = (RectTransform)_indicator.transform.parent;
             center.anchorMin = center.anchorMax = viewport.position + Vector2.Scale(viewport.size, AimViewportPoint);
             var cannon = _player.ActiveCannon;
-            var battery = cannon != null ? cannon.Battery : null;
-            var loading = battery != null && battery.IsSpawned;
-            var state = loading ? battery.GetState(battery.GetCannonIndex(cannon)) : default;
+            var controller = cannon != null ? cannon.Controller : null;
+            var loading = controller != null && controller.IsSpawned;
+            var state = loading ? controller.GetState(controller.GetCannonIndex(cannon)) : default;
             loading = loading && state.Operator == _player.OwnerClientId && state.ReloadEnd > 0d;
             var equipment = _player.GetComponent<PlayerEquipment>();
             var handheld = equipment != null && !_player.IsAtControlStation &&
@@ -139,7 +139,7 @@ namespace WaveByWave.Player
                 return;
             }
             // Use authoritative reload time, independently of delayed ship presentation.
-            var remaining = state.ReloadEnd - battery.NetworkManager.ServerTime.Time;
+            var remaining = state.ReloadEnd - controller.NetworkManager.ServerTime.Time;
             _fill.fillAmount = Mathf.Clamp01(1f - (float)remaining / Mathf.Max(0.01f, state.ReloadDuration));
         }
 

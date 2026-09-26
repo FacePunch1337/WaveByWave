@@ -144,9 +144,13 @@ namespace WaveByWave.Player
         public float MaximumStamina => maximumStamina +
             (_player != null ? _player.RingValue(PlayerRingStat.Stamina) : 0f);
         public void ApplyRingStaminaBonusServer(float bonus)
+            => ApplyRingStaminaChangeServer(bonus);
+
+        public void ApplyRingStaminaChangeServer(float difference)
         {
-            if (IsServer && bonus > 0f)
-                _stamina.Value = Mathf.Min(MaximumStamina, _stamina.Value + bonus);
+            if (!IsServer) return;
+            _stamina.Value = Mathf.Min(MaximumStamina,
+                difference > 0f ? _stamina.Value + difference : _stamina.Value);
         }
         public bool CanJump => true;
         public bool IsBlocking => _blocking.Value;
@@ -212,6 +216,7 @@ namespace WaveByWave.Player
             public Vector3 Origin, Velocity;
             public double Started, Simulated;
             public float Damage;
+            public bool EnteredWater;
             public Vector3 Evaluate(double at, float gravity)
             { var t = (float)(at - Started); return Origin + Velocity * t + Vector3.down * (0.5f * gravity * t * t); }
         }
@@ -854,11 +859,20 @@ namespace WaveByWave.Player
                     var next = b.Simulated + step;
                     var from = b.Evaluate(b.Simulated, bulletGravity); var to = b.Evaluate(next, bulletGravity);
                     var solid = SegmentHit(from, to, bulletRadius, null, out var hit, out var solidFraction, true);
-                    var water = _water.Crossing(from, to, out var waterPoint, out var waterFraction);
+                    var waterPoint = default(Vector3);
+                    var waterFraction = 1f;
+                    var entersWater = !b.EnteredWater &&
+                        _water.Crossing(from, to, out waterPoint, out waterFraction);
                     var enemies = WaveByWave.Enemies.DotsEnemyRuntime.Instance;
                     if (enemies != null && enemies.RayHit(from, to, bulletRadius, out var enemyId, out var enemyFraction) &&
-                        (!solid || enemyFraction < solidFraction) && (!water || enemyFraction < waterFraction))
+                        (!solid || enemyFraction < solidFraction))
                     {
+                        if (entersWater && waterFraction < enemyFraction)
+                        {
+                            b.EnteredWater = true;
+                            BulletWaterEntryClientRpc(b.Id, waterPoint,
+                                b.Simulated + step * waterFraction);
+                        }
                         var enemyPoint = Vector3.Lerp(from, to, enemyFraction);
                         enemies.Damage(enemyId, b.Damage, b.Origin, enemyPoint);
                         BulletImpactClientRpc(b.Id, enemyPoint, (from - to).normalized, false, true,
@@ -866,15 +880,20 @@ namespace WaveByWave.Player
                         finished = true;
                         break;
                     }
-                    if (solid || water || next - b.Started >= bulletLifetime)
+                    if (entersWater && (!solid || waterFraction < solidFraction))
                     {
-                        water = water && (!solid || waterFraction < solidFraction);
-                        var point = water ? waterPoint : solid ? hit.point : to;
-                        if (solid && !water)
+                        b.EnteredWater = true;
+                        BulletWaterEntryClientRpc(b.Id, waterPoint,
+                            b.Simulated + step * waterFraction);
+                    }
+                    if (solid || next - b.Started >= bulletLifetime)
+                    {
+                        var point = solid ? hit.point : to;
+                        if (solid)
                             if (EquipmentDamageReceiverUtility.TryGet(hit.collider, out var receiver, out _))
                                 receiver.ReceiveEquipmentHitServer(b.Damage, b.Origin, false, hit.point);
-                        BulletImpactClientRpc(b.Id, point, water ? Vector3.up : solid ? hit.normal : Vector3.up,
-                            water, solid || water, b.Simulated + step * (water ? waterFraction : solid ? solidFraction : 1f));
+                        BulletImpactClientRpc(b.Id, point, solid ? hit.normal : Vector3.up,
+                            false, solid, b.Simulated + step * (solid ? solidFraction : 1f));
                         finished = true; break;
                     }
                     b.Simulated = next;
@@ -1247,6 +1266,12 @@ namespace WaveByWave.Player
             if (!_bulletVisuals.TryGetValue(id, out var visual)) return;
             if (visual != null) visual.SetImpact(point, normal, water, show, at, waterSplashPrefab, weaponImpactEffectPrefab);
             _bulletVisuals.Remove(id);
+        }
+        [ClientRpc]
+        private void BulletWaterEntryClientRpc(int id, Vector3 point, double at)
+        {
+            if (_bulletVisuals.TryGetValue(id, out var visual) && visual != null)
+                visual.SetWaterEntry(point, at, waterSplashPrefab);
         }
         [ClientRpc]
         private void ToolEffectClientRpc(Vector3 position, bool water)

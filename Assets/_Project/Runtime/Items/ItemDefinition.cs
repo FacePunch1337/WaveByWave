@@ -41,7 +41,7 @@ namespace WaveByWave.Items
     }
 
     [CreateAssetMenu(menuName = "Wave by Wave/Items/Item Definition", fileName = "Item_")]
-    public sealed class ItemDefinition : ScriptableObject
+    public sealed partial class ItemDefinition : ScriptableObject
     {
         [SerializeField] private string id;
         [SerializeField] private string displayName;
@@ -52,6 +52,8 @@ namespace WaveByWave.Items
         [SerializeField, Min(1)] private int maximumStack = 1;
         [SerializeField] private SupplyKind supplyKind;
         [SerializeField, Min(0f)] private float potency = 40f;
+        [SerializeField, Min(0f), Tooltip("Дополнительный плоский урон этого ядра. Используется только для Supply Kind = Cannonball.")]
+        private float cannonDamageModifier;
         [SerializeField, Min(0)] private int treasureExperience = 25;
         [SerializeField, Tooltip("Luck increases this reward's coin amount when it drops from a chest.")]
         private bool coinReward;
@@ -85,7 +87,8 @@ namespace WaveByWave.Items
             id != null && id.StartsWith("musket", System.StringComparison.Ordinal) ? ItemEquipmentKind.Musket :
             id == "hook" ? ItemEquipmentKind.Hook : id == "bucket" ? ItemEquipmentKind.Bucket :
             id == "shovel" ? ItemEquipmentKind.Shovel : ItemEquipmentKind.Carry;
-        public Vector3 HeldPosition => overrideHeldPose ? heldPosition : EquipmentKind switch
+        public Vector3 HeldPosition => HeldAndIkSource.LocalHeldPosition;
+        private Vector3 LocalHeldPosition => overrideHeldPose ? heldPosition : EquipmentKind switch
         {
             ItemEquipmentKind.Musket => new Vector3(0.26f, -0.28f, 0.63f),
             ItemEquipmentKind.Bucket => new Vector3(0.32f, -0.43f, 0.7f),
@@ -96,18 +99,22 @@ namespace WaveByWave.Items
         };
         // Rotation and scale come from the prefab. These optional values are only an
         // additional hand-pose offset for exceptional items.
-        public Vector3 HeldEulerAngles => overrideHeldPose ? heldEulerAngles : Vector3.zero;
-        public float HeldScale => overrideHeldPose ? Mathf.Max(0.01f, heldScale) : 1f;
-        public Vector3 SecondaryHeldPosition => overrideSecondaryHeldPose ? secondaryHeldPosition :
-            EquipmentKind == ItemEquipmentKind.Musket ? new Vector3(0f, -0.13f, 0.7f) : HeldPosition;
-        public Quaternion SecondaryHeldRotation => Quaternion.Euler(
-            overrideSecondaryHeldPose ? secondaryHeldEulerAngles : HeldEulerAngles);
-        public bool OverridesHandGripPoints => overrideHandGripPoints;
+        public Vector3 HeldEulerAngles => HeldAndIkSource.LocalHeldEulerAngles;
+        private Vector3 LocalHeldEulerAngles => overrideHeldPose ? heldEulerAngles : Vector3.zero;
+        public float HeldScale => HeldAndIkSource.LocalHeldScale;
+        private float LocalHeldScale => overrideHeldPose ? Mathf.Max(0.01f, heldScale) : 1f;
+        public Vector3 SecondaryHeldPosition => HeldAndIkSource.LocalSecondaryHeldPosition;
+        private Vector3 LocalSecondaryHeldPosition => overrideSecondaryHeldPose ? secondaryHeldPosition :
+            EquipmentKind == ItemEquipmentKind.Musket ? new Vector3(0f, -0.13f, 0.7f) : LocalHeldPosition;
+        public Quaternion SecondaryHeldRotation => Quaternion.Euler(HeldAndIkSource.LocalSecondaryHeldEulerAngles);
+        private Vector3 LocalSecondaryHeldEulerAngles => overrideSecondaryHeldPose ? secondaryHeldEulerAngles : LocalHeldEulerAngles;
+        public bool OverridesHandGripPoints => HeldAndIkSource.overrideHandGripPoints;
 
         public bool TryGetHandGrip(ItemGripHand hand, out ItemHandGripPose grip)
         {
-            grip = hand == ItemGripHand.Right ? rightHandGrip : leftHandGrip;
-            return overrideHandGripPoints && grip.Enabled;
+            var source = HeldAndIkSource;
+            grip = hand == ItemGripHand.Right ? source.rightHandGrip : source.leftHandGrip;
+            return source.overrideHandGripPoints && grip.Enabled;
         }
 
         public string Id => id;
@@ -121,6 +128,8 @@ namespace WaveByWave.Items
         public int MaximumStack => Mathf.Clamp(maximumStack, 1, ushort.MaxValue);
         public SupplyKind SupplyKind => supplyKind;
         public float Potency => Mathf.Max(0f, potency);
+        public float CannonDamageModifier => supplyKind == SupplyKind.Cannonball ?
+            Mathf.Max(0f, cannonDamageModifier) : 0f;
         public bool IsWeapon => EquipmentKind == ItemEquipmentKind.Sword || EquipmentKind == ItemEquipmentKind.Musket;
         public float WeaponDamage => Potency * RarityDamageMultiplier(rarity);
         public static float RarityDamageMultiplier(ItemRarity value) => value switch

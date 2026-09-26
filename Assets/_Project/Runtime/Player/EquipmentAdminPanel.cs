@@ -1,6 +1,11 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using WaveByWave.Enemies;
+using WaveByWave.Generation;
+using WaveByWave.Items;
 using WaveByWave.UI;
 
 namespace WaveByWave.Player
@@ -8,23 +13,50 @@ namespace WaveByWave.Player
     [DefaultExecutionOrder(-200)]
     public sealed class EquipmentAdminPanel : MonoBehaviour
     {
+        private enum Section { Waves, Enemies, Items, Rings, Stress }
+        private sealed class EnemySpawnControls
+        {
+            public EnemyKind Kind;
+            public bool IsShip;
+            public int Count = 1;
+            public float Radius = 15f;
+            public bool HealthBars;
+            public Text CountLabel;
+            public Text RadiusLabel;
+            public Text HealthLabel;
+        }
+        private sealed class RingControls
+        {
+            public Image Background;
+            public Text Title;
+            public Text Detail;
+            public Text Level;
+        }
+
+        private const int MaximumSpawnCount = 3000;
+        private const int AdminShipGroup = -900001;
         public static bool InputCaptured { get; private set; }
+
+        private readonly Dictionary<Section, GameObject> _sections = new();
+        private readonly Dictionary<Section, Image> _tabs = new();
+        private readonly Dictionary<EnemyKind, EnemySpawnControls> _enemyControls = new();
+        private readonly Dictionary<PlayerRingStat, RingControls> _ringControls = new();
         private PlayerInventory _inventory;
+        private NetworkPlayerController _player;
         private GameObject _canvas, _panel;
-        private Slider _stressCountSlider, _stressRadiusSlider;
-        private Text _stressCountLabel, _stressRadiusLabel;
-        private int _requestedStressCount, _appliedStressCount = -1;
-        private float _requestedStressRadius = 15f, _appliedStressRadius = -1f, _stressApplyAt;
-        private Slider _enemySlider;
-        private Text _enemyLabel;
-        private int _enemyTarget;
-        private bool _enemyDirty;
-        private float _enemyApplyAt, _enemyRadius = 15f;
-        private Slider _shipCountSlider, _shipRadiusSlider;
-        private Text _shipLabel, _shipRadiusLabel;
-        private int _shipSpawnCount = 12;
-        private float _shipSpawnRadius = 600f;
-        public void Initialize(PlayerInventory inventory) => _inventory = inventory;
+        private Transform _sectionHost;
+        private Text _status, _ringSummary;
+        private Section _activeSection;
+        private float _nextRingRefresh;
+        private int _stressItemCount;
+        private float _stressItemRadius = 30f;
+
+        public void Initialize(PlayerInventory inventory)
+        {
+            _inventory = inventory;
+            _player = inventory != null ? inventory.GetComponent<NetworkPlayerController>() : null;
+        }
+
         private void Update()
         {
             if (_inventory == null || !_inventory.IsSpawned || !_inventory.IsOwner || !_inventory.IsHost) return;
@@ -36,269 +68,640 @@ namespace WaveByWave.Player
                 if (_canvas == null) Build();
                 SetOpen(!InputCaptured);
             }
-            if (InputCaptured && Time.unscaledTime >= _stressApplyAt &&
-                (_requestedStressCount != _appliedStressCount ||
-                 !Mathf.Approximately(_requestedStressRadius, _appliedStressRadius)))
+            if (InputCaptured && _activeSection == Section.Rings && Time.unscaledTime >= _nextRingRefresh)
             {
-                var applied = _inventory.SetAdminStressItems(_requestedStressCount, _requestedStressRadius);
-                if (applied)
-                {
-                    _appliedStressCount = _requestedStressCount;
-                    _appliedStressRadius = _requestedStressRadius;
-                }
-                _stressApplyAt = applied ? float.PositiveInfinity : Time.unscaledTime + 1f;
-            }
-            if (InputCaptured && _enemyDirty && Time.unscaledTime >= _enemyApplyAt)
-            {
-                var runtime = WaveByWave.Enemies.DotsEnemyRuntime.EnsureInstance();
-                _enemyDirty = runtime == null || !runtime.SetStressTarget(_enemyTarget, _inventory.transform.position, _enemyRadius);
-                _enemyApplyAt = Time.unscaledTime + 1f;
-            }
-            if (InputCaptured && _enemyLabel != null)
-            {
-                var runtime = WaveByWave.Enemies.DotsEnemyRuntime.Instance;
-                _enemyLabel.text = $"Скелеты: {runtime?.StressCount ?? 0} • цель {_enemyTarget} / 3000";
-            }
-            if (InputCaptured && _shipLabel != null)
-            {
-                var ships = WaveByWave.Enemies.DotsEnemyShipRuntime.Instance;
-                _shipLabel.text = $"Корабли: {ships?.AliveCount ?? 0} • заспавнить {_shipSpawnCount}";
+                _nextRingRefresh = Time.unscaledTime + 0.15f;
+                RefreshRings();
             }
         }
+
         private void Build()
         {
-            _canvas=GameUiPrefabs.Create("Menus/Admin", owner: this);
-            if(_canvas!=null) { GameUiPrefabs.Persist(_canvas); BindPrefab(); return; }
-            _canvas = new GameObject("Admin item spawner", typeof(RectTransform), typeof(Canvas),
-                typeof(CanvasScaler), typeof(GraphicRaycaster));
-            if(Application.isPlaying) DontDestroyOnLoad(_canvas);
-            _canvas.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.GetComponent<Canvas>().sortingOrder = 200;
-            var scaler = _canvas.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-            _panel = new GameObject("Items", typeof(RectTransform), typeof(Image));
-            _panel.transform.SetParent(_canvas.transform, false);
-            var rect = _panel.GetComponent<RectTransform>(); rect.anchorMin = rect.anchorMax = Vector2.one * 0.5f;
-            rect.sizeDelta = new Vector2(660f, 960f); _panel.GetComponent<Image>().color = new Color(0.035f, 0.055f, 0.075f, 0.98f);
-            Label(_panel.transform, "Админ-панель • F2", new Vector2(0, 390), new Vector2(610, 40), Color.white);
-
-            Label(_panel.transform, "DOTS / Steam нагрузочный тест", new Vector2(0, 345), new Vector2(600, 32),
-                new Color(0.4f, 0.85f, 1f));
-            _stressCountLabel = Label(_panel.transform, "Предметы: 0 / 3000", new Vector2(0, 310),
-                new Vector2(570, 28), Color.white);
-            _stressCountLabel.name="LootCountLabel";
-            _stressCountLabel.fontSize = 17;
-            _stressCountSlider = CreateSlider(_panel.transform, new Vector2(0, 278), 0f, 3000f, 0f, true);
-            _stressCountSlider.name="LootCount";
-            _stressCountSlider.onValueChanged.AddListener(value =>
+            _canvas = GameUiPrefabs.Create("Menus/Admin", owner: this) ?? BuildFallbackShell();
+            GameUiPrefabs.Persist(_canvas);
+            _panel = _canvas.transform.Find("Items")?.gameObject;
+            if (_panel == null)
             {
-                _requestedStressCount = Mathf.RoundToInt(value);
-                _stressCountLabel.text = $"Предметы: {_requestedStressCount} / 3000";
-                ScheduleStressApply();
-            });
-
-            _stressRadiusLabel = Label(_panel.transform, "Радиус: 15 м", new Vector2(0, 240),
-                new Vector2(570, 28), Color.white);
-            _stressRadiusLabel.name="LootRadiusLabel";
-            _stressRadiusLabel.fontSize = 17;
-            _stressRadiusSlider = CreateSlider(_panel.transform, new Vector2(0, 208), 10f, 20f, 15f, false);
-            _stressRadiusSlider.name="LootRadius";
-            _stressRadiusSlider.onValueChanged.AddListener(value =>
-            {
-                _requestedStressRadius = value;
-                _stressRadiusLabel.text = $"Радиус: {value:0.0} м";
-                ScheduleStressApply();
-            });
-
-            var scrollObject = new GameObject("Catalog", typeof(RectTransform), typeof(Image), typeof(Mask), typeof(ScrollRect));
-            scrollObject.transform.SetParent(_panel.transform, false);
-            var scrollRect = scrollObject.GetComponent<RectTransform>();
-            scrollRect.sizeDelta = new Vector2(590f, 240f);
-            scrollRect.anchoredPosition = new Vector2(0f, -285f);
-            scrollObject.GetComponent<Image>().color = new Color(0, 0, 0, 0.1f);
-            scrollObject.GetComponent<Mask>().showMaskGraphic = false;
-            var contentObject = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
-            contentObject.transform.SetParent(scrollObject.transform, false);
-            var content = contentObject.GetComponent<RectTransform>(); content.anchorMin = new Vector2(0, 1);
-            content.anchorMax = Vector2.one; content.pivot = new Vector2(0.5f, 1); content.sizeDelta = Vector2.zero;
-            var layout = contentObject.GetComponent<VerticalLayoutGroup>(); layout.spacing = 6f;
-            layout.padding = new RectOffset(8, 8, 8, 8); layout.childControlHeight = true;
-            layout.childForceExpandHeight = false; layout.childControlWidth = true;
-            contentObject.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            var scroll = scrollObject.GetComponent<ScrollRect>(); scroll.content = content; scroll.viewport = scrollRect;
-            scroll.horizontal = false; scroll.scrollSensitivity = 30f;
-            BuildCatalog(content);
-            var close = new GameObject("Close", typeof(RectTransform), typeof(Image), typeof(Button));
-            close.transform.SetParent(_panel.transform, false); close.GetComponent<RectTransform>().sizeDelta = new Vector2(170, 35);
-            close.GetComponent<RectTransform>().anchoredPosition = new Vector2(105, -455);
-            close.GetComponent<Image>().color = new Color(0.25f, 0.32f, 0.37f);
-            close.GetComponent<Button>().targetGraphic = close.GetComponent<Image>();
-            close.GetComponent<Button>().onClick.AddListener(() => SetOpen(false));
-            Label(close.transform, "Закрыть", Vector2.zero, new Vector2(160, 30), Color.white);
-
-            var clear = new GameObject("Clear stress items", typeof(RectTransform), typeof(Image), typeof(Button));
-            clear.transform.SetParent(_panel.transform, false); clear.GetComponent<RectTransform>().sizeDelta = new Vector2(190, 35);
-            clear.GetComponent<RectTransform>().anchoredPosition = new Vector2(-105, -455);
-            clear.GetComponent<Image>().color = new Color(0.45f, 0.17f, 0.15f);
-            clear.GetComponent<Button>().targetGraphic = clear.GetComponent<Image>();
-            clear.GetComponent<Button>().onClick.AddListener(() => _stressCountSlider.value = 0f);
-            Label(clear.transform, "Очистить тест", Vector2.zero, new Vector2(180, 30), Color.white);
-            _enemyLabel = Label(_panel.transform, "Скелеты: 0 / 3000", new Vector2(0, 160), new Vector2(570, 28),
-                new Color(1f, 0.8f, 0.35f));
-            _enemyLabel.name="EnemyCountLabel";
-            _enemyLabel.fontSize = 17;
-            _enemySlider = CreateSlider(_panel.transform, new Vector2(0, 130), 0, 3000, 0, true);
-            _enemySlider.name="EnemyCount";
-            _enemySlider.onValueChanged.AddListener(value =>
-            {
-                _enemyTarget = Mathf.RoundToInt(value); _enemyDirty = true; _enemyApplyAt = Time.unscaledTime + 0.2f;
-            });
-            var enemyRadiusLabel = Label(_panel.transform, "Радиус скелетов: 15 м", new Vector2(0, 90),
-                new Vector2(570, 28), Color.white);
-            enemyRadiusLabel.name="EnemyRadiusLabel";
-            enemyRadiusLabel.fontSize = 17;
-            var enemyRadius = CreateSlider(_panel.transform, new Vector2(0, 58), 5, 80, 15, false);
-            enemyRadius.name="EnemyRadius";
-            enemyRadius.onValueChanged.AddListener(value =>
-            {
-                _enemyRadius = value; enemyRadiusLabel.text = $"Радиус скелетов: {value:0.0} м";
-            });
-            clear.GetComponent<Button>().onClick.AddListener(() => { if (_enemySlider != null) _enemySlider.value = 0; });
-
-            _shipLabel = Label(_panel.transform, "Корабли: 0 • заспавнить 12", new Vector2(0, 18),
-                new Vector2(570, 28), new Color(1f, 0.45f, 0.28f));
-            _shipLabel.name="ShipCountLabel";
-            _shipLabel.fontSize = 17;
-            _shipCountSlider = CreateSlider(_panel.transform, new Vector2(0, -12), 1, 1000, _shipSpawnCount, true);
-            _shipCountSlider.name="ShipCount";
-            _shipCountSlider.onValueChanged.AddListener(value => _shipSpawnCount = Mathf.RoundToInt(value));
-            _shipRadiusLabel = Label(_panel.transform, "Радиус кораблей: 600 м", new Vector2(0, -50),
-                new Vector2(570, 28), Color.white);
-            _shipRadiusLabel.name="ShipRadiusLabel";
-            _shipRadiusLabel.fontSize = 17;
-            _shipRadiusSlider = CreateSlider(_panel.transform, new Vector2(0, -80), 35, 1000,
-                _shipSpawnRadius, false);
-            _shipRadiusSlider.name="ShipRadius";
-            _shipRadiusSlider.onValueChanged.AddListener(value =>
-            {
-                _shipSpawnRadius = value;
-                _shipRadiusLabel.text = $"Радиус кораблей: {value:0} м";
-            });
-            var spawnShips = new GameObject("Spawn enemy ships", typeof(RectTransform), typeof(Image), typeof(Button));
-            spawnShips.transform.SetParent(_panel.transform, false);
-            spawnShips.GetComponent<RectTransform>().sizeDelta = new Vector2(260, 36);
-            spawnShips.GetComponent<RectTransform>().anchoredPosition = new Vector2(0, -125);
-            spawnShips.GetComponent<Image>().color = new Color(0.62f, 0.2f, 0.12f);
-            spawnShips.GetComponent<Button>().targetGraphic = spawnShips.GetComponent<Image>();
-            spawnShips.GetComponent<Button>().onClick.AddListener(SpawnEnemyShips);
-            Label(spawnShips.transform, "Заспавнить корабли", Vector2.zero, new Vector2(250, 32), Color.white);
+                _panel = CreateImage("Items", _canvas.transform, new Color(0.025f, 0.04f, 0.06f, 0.985f)).gameObject;
+                UiDefaults.Rect(_panel.GetComponent<RectTransform>(), new Vector2(1600f, 940f), Vector2.zero);
+            }
+            PrepareShell();
+            BuildSections();
+            ShowSection(Section.Waves);
         }
 
-        private void BuildCatalog(Transform content)
+        private GameObject BuildFallbackShell()
         {
-            if (_inventory.Catalog != null)
-                foreach (var item in _inventory.Catalog.Items)
+            var root = UiDefaults.Canvas("Admin", 200);
+            if (Application.isPlaying) DontDestroyOnLoad(root);
+            var panel = CreateImage("Items", root.transform, new Color(0.025f, 0.04f, 0.06f, 0.985f));
+            UiDefaults.Rect(panel.rectTransform, new Vector2(1600f, 940f), Vector2.zero);
+            return root;
+        }
+
+        private void PrepareShell()
+        {
+            var panelRect = _panel.GetComponent<RectTransform>();
+            panelRect.sizeDelta = new Vector2(Mathf.Max(1500f, panelRect.sizeDelta.x),
+                Mathf.Max(900f, panelRect.sizeDelta.y));
+            var body = _panel.transform.Find("Body");
+            if (body == null)
+            {
+                foreach (Transform child in _panel.transform)
                 {
-                    if (item == null) continue;
-                    var id = item.Id;
-                    var button=GameUiPrefabs.Create("Elements/ItemSpawnRow",content);
-                    if(button!=null)
-                    {
-                        button.name=id;
-                        var text=button.GetComponentInChildren<Text>(true);
-                        text.text=item.DisplayName + "  •  " + item.Rarity;
-                        text.color=item.RarityColor;
-                        button.GetComponent<Button>().onClick.AddListener(()=>_inventory.SpawnAdminItem(id));
-                        continue;
-                    }
-                    button = new GameObject(id, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
-                    button.transform.SetParent(content, false); button.GetComponent<LayoutElement>().preferredHeight = 42f;
-                    button.GetComponent<Image>().color = new Color(0.1f, 0.15f, 0.19f, 1f);
-                    button.GetComponent<Button>().targetGraphic = button.GetComponent<Image>();
-                    button.GetComponent<Button>().onClick.AddListener(() => _inventory.SpawnAdminItem(id));
-                    var label = Label(button.transform, item.DisplayName + "  •  " + item.Category + " / " + item.Rarity,
-                        Vector2.zero, new Vector2(530, 38), item.RarityColor);
-                    label.fontSize = 17;
+                    child.name = "Obsolete " + child.GetSiblingIndex();
+                    child.gameObject.SetActive(false);
+                    Destroy(child.gameObject);
                 }
+                var title = CreateText("Title", _panel.transform, "АДМИН-ПАНЕЛЬ · F2", 30, Color.white,
+                    TextAnchor.MiddleLeft);
+                SetAnchors(title.rectTransform, new Vector2(0f, 1f), Vector2.one,
+                    new Vector2(32f, -68f), new Vector2(-100f, -18f));
+                var close = CreateButton("Close", _panel.transform, "×", new Color(0.38f, 0.13f, 0.13f, 1f));
+                var closeRect = close.GetComponent<RectTransform>();
+                closeRect.anchorMin = closeRect.anchorMax = Vector2.one;
+                closeRect.pivot = Vector2.one;
+                closeRect.anchoredPosition = new Vector2(-20f, -18f);
+                closeRect.sizeDelta = new Vector2(54f, 50f);
+                body = new GameObject("Body", typeof(RectTransform)).transform;
+                body.SetParent(_panel.transform, false);
+                SetAnchors((RectTransform)body, Vector2.zero, Vector2.one,
+                    new Vector2(24f, 54f), new Vector2(-24f, -78f));
+            }
+            var closeButton = _panel.transform.Find("Close")?.GetComponent<Button>();
+            if (closeButton != null)
+            {
+                closeButton.onClick.RemoveAllListeners();
+                closeButton.onClick.AddListener(() => SetOpen(false));
+            }
+            foreach (Transform child in body)
+            {
+                child.gameObject.SetActive(false);
+                Destroy(child.gameObject);
+            }
+            BuildBody(body);
         }
-        private void BindPrefab()
+
+        private void BuildBody(Transform body)
         {
-            _panel=_canvas.transform.Find("Items").gameObject;
-            T Find<T>(string name) where T:Component => GameUiPrefabs.Find<T>(_panel,name);
-            _stressCountSlider=Find<Slider>("LootCount");_stressRadiusSlider=Find<Slider>("LootRadius");
-            _enemySlider=Find<Slider>("EnemyCount");_shipCountSlider=Find<Slider>("ShipCount");_shipRadiusSlider=Find<Slider>("ShipRadius");
-            _stressCountLabel=Find<Text>("LootCountLabel");_stressRadiusLabel=Find<Text>("LootRadiusLabel");
-            _enemyLabel=Find<Text>("EnemyCountLabel");_shipLabel=Find<Text>("ShipCountLabel");_shipRadiusLabel=Find<Text>("ShipRadiusLabel");
-            _stressCountSlider.onValueChanged.AddListener(v=>{_requestedStressCount=Mathf.RoundToInt(v);_stressCountLabel.text=$"Предметы: {_requestedStressCount} / 3000";ScheduleStressApply();});
-            _stressRadiusSlider.onValueChanged.AddListener(v=>{_requestedStressRadius=v;_stressRadiusLabel.text=$"Радиус: {v:0.0} м";ScheduleStressApply();});
-            _enemySlider.onValueChanged.AddListener(v=>{_enemyTarget=Mathf.RoundToInt(v);_enemyDirty=true;_enemyApplyAt=Time.unscaledTime+.2f;});
-            Find<Slider>("EnemyRadius").onValueChanged.AddListener(v=>{_enemyRadius=v;Find<Text>("EnemyRadiusLabel").text=$"Радиус скелетов: {v:0.0} м";});
-            _shipCountSlider.onValueChanged.AddListener(v=>_shipSpawnCount=Mathf.RoundToInt(v));
-            _shipRadiusSlider.onValueChanged.AddListener(v=>{_shipSpawnRadius=v;_shipRadiusLabel.text=$"Радиус кораблей: {v:0} м";});
-            Find<Button>("Close").onClick.AddListener(()=>SetOpen(false));
-            Find<Button>("Clear stress items").onClick.AddListener(()=>{_stressCountSlider.value=0;_enemySlider.value=0;});
-            Find<Button>("Spawn enemy ships").onClick.AddListener(SpawnEnemyShips);
-            var content=_panel.transform.Find("Catalog/Content");
-            foreach(Transform child in content) {child.gameObject.SetActive(false);Destroy(child.gameObject);}
-            BuildCatalog(content);
+            var navigation = CreateImage("Navigation", body, new Color(0.035f, 0.075f, 0.1f, 1f));
+            SetAnchors(navigation.rectTransform, Vector2.zero, new Vector2(0f, 1f), Vector2.zero,
+                new Vector2(220f, 0f));
+            var content = CreateImage("Content", body, new Color(0.018f, 0.032f, 0.048f, 0.88f));
+            SetAnchors(content.rectTransform, Vector2.zero, Vector2.one,
+                new Vector2(236f, 38f), Vector2.zero);
+            var sectionHost = new GameObject("Sections", typeof(RectTransform));
+            sectionHost.transform.SetParent(content.transform, false);
+            SetAnchors(sectionHost.GetComponent<RectTransform>(), Vector2.zero, Vector2.one,
+                new Vector2(12f, 12f), new Vector2(-12f, -12f));
+
+            var tabs = new[]
+            {
+                (Section.Waves, "ВОЛНЫ"), (Section.Enemies, "ВРАГИ"),
+                (Section.Items, "ПРЕДМЕТЫ"), (Section.Rings, "КОЛЬЦА И СТАТЫ"),
+                (Section.Stress, "СТРЕСС-ТЕСТ")
+            };
+            for (var i = 0; i < tabs.Length; i++)
+            {
+                var captured = tabs[i].Item1;
+                var button = CreateButton(captured.ToString(), navigation.transform, tabs[i].Item2,
+                    new Color(0.07f, 0.14f, 0.19f, 1f));
+                var rect = button.GetComponent<RectTransform>();
+                rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+                rect.pivot = new Vector2(0.5f, 1f);
+                rect.sizeDelta = new Vector2(196f, 62f);
+                rect.anchoredPosition = new Vector2(0f, -14f - i * 72f);
+                button.onClick.AddListener(() => ShowSection(captured));
+                _tabs[captured] = button.GetComponent<Image>();
+            }
+            var hint = CreateText("Hint", navigation.transform,
+                "Изменения применяются\nна сервере сразу", 15, new Color(0.6f, 0.72f, 0.78f),
+                TextAnchor.LowerCenter);
+            SetAnchors(hint.rectTransform, Vector2.zero, Vector2.one,
+                new Vector2(8f, 12f), new Vector2(-8f, -330f));
+            _status = CreateText("Status", body, "", 16, new Color(0.55f, 0.85f, 1f), TextAnchor.MiddleLeft);
+            SetAnchors(_status.rectTransform, Vector2.zero, new Vector2(1f, 0f),
+                new Vector2(246f, 2f), new Vector2(-12f, 34f));
+            _sectionHost = sectionHost.transform;
         }
 
-        private void SpawnEnemyShips()
+        private void BuildSections()
         {
-            var runtime = WaveByWave.Enemies.DotsEnemyShipRuntime.EnsureInstance();
-            if (runtime == null || !runtime.SpawnAt(_inventory.transform.position, _shipSpawnCount,
-                    _shipSpawnRadius, (uint)Random.Range(1, int.MaxValue)))
-                Debug.LogWarning("[Admin] Вражеские корабли не заспавнены: сервер не готов или достигнут лимит.");
+            BuildWavesSection();
+            BuildEnemiesSection();
+            BuildItemsSection();
+            BuildRingsSection();
+            BuildStressSection();
         }
 
-        private void ScheduleStressApply() => _stressApplyAt = Time.unscaledTime + 0.12f;
+        private Transform CreateSection(Section key, string title, bool grid = false)
+        {
+            var root = new GameObject(key.ToString(), typeof(RectTransform));
+            root.transform.SetParent(_sectionHost, false);
+            UiDefaults.Stretch(root.GetComponent<RectTransform>());
+            var heading = CreateText("Heading", root.transform, title, 27, Color.white, TextAnchor.MiddleLeft);
+            SetAnchors(heading.rectTransform, new Vector2(0f, 1f), Vector2.one,
+                new Vector2(8f, -54f), new Vector2(-8f, -4f));
+            var scrollRoot = CreateImage("Scroll", root.transform, new Color(0f, 0f, 0f, 0.12f));
+            SetAnchors(scrollRoot.rectTransform, Vector2.zero, Vector2.one,
+                new Vector2(4f, 4f), new Vector2(-4f, -62f));
+            scrollRoot.gameObject.AddComponent<RectMask2D>();
+            var scroll = scrollRoot.gameObject.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.scrollSensitivity = 35f;
+            var content = new GameObject("Content", typeof(RectTransform));
+            content.transform.SetParent(scrollRoot.transform, false);
+            var contentRect = content.GetComponent<RectTransform>();
+            contentRect.anchorMin = new Vector2(0f, 1f);
+            contentRect.anchorMax = Vector2.one;
+            contentRect.pivot = new Vector2(0.5f, 1f);
+            contentRect.sizeDelta = Vector2.zero;
+            if (grid)
+            {
+                var layout = content.AddComponent<GridLayoutGroup>();
+                layout.padding = new RectOffset(12, 12, 12, 12);
+                layout.spacing = new Vector2(12f, 12f);
+                layout.cellSize = new Vector2(188f, 152f);
+                layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+                layout.constraintCount = 6;
+                layout.childAlignment = TextAnchor.UpperLeft;
+            }
+            else
+            {
+                var layout = content.AddComponent<VerticalLayoutGroup>();
+                layout.padding = new RectOffset(10, 10, 10, 10);
+                layout.spacing = 10f;
+                layout.childControlWidth = true;
+                layout.childControlHeight = true;
+                layout.childForceExpandWidth = true;
+                layout.childForceExpandHeight = false;
+            }
+            content.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            scroll.viewport = scrollRoot.rectTransform;
+            scroll.content = contentRect;
+            _sections[key] = root;
+            return content.transform;
+        }
 
-        private static Slider CreateSlider(Transform parent, Vector2 position, float minimum, float maximum,
-            float value, bool wholeNumbers)
+        private void BuildWavesSection()
+        {
+            var content = CreateSection(Section.Waves, "НОЧНЫЕ ВОЛНЫ");
+            var settings = Resources.Load<NightWaveSettings>("NightWaveSettings");
+            if (settings?.Waves == null || settings.Waves.Length == 0)
+            {
+                CreateInfoRow(content, "NightWaveSettings не содержит волн.", 70f);
+                return;
+            }
+            for (var i = 0; i < settings.Waves.Length; i++)
+            {
+                var wave = settings.Waves[i];
+                if (wave == null) continue;
+                var index = i;
+                var row = CreateRow(content, $"Wave {i + 1}", 98f);
+                var name = string.IsNullOrWhiteSpace(wave.Name) ? $"Wave {i + 1}" : wave.Name;
+                var title = CreateText("Title", row.transform, $"{i + 1}. {name}", 23, Color.white, TextAnchor.MiddleLeft);
+                SetAnchors(title.rectTransform, Vector2.zero, Vector2.one,
+                    new Vector2(18f, 46f), new Vector2(-210f, -8f));
+                var entries = 0;
+                foreach (var fragment in wave.Fragments ?? Array.Empty<NightWaveFragment>())
+                    entries += fragment?.Enemies?.Length ?? 0;
+                var detail = CreateText("Detail", row.transform,
+                    $"Поле боя: {wave.BattlefieldRadius:0} м   •   Фрагментов: {wave.Fragments?.Length ?? 0}   •   Групп врагов: {entries}",
+                    17, new Color(0.65f, 0.78f, 0.84f), TextAnchor.MiddleLeft);
+                SetAnchors(detail.rectTransform, Vector2.zero, Vector2.one,
+                    new Vector2(18f, 10f), new Vector2(-210f, -50f));
+                var start = CreateButton("Start", row.transform, "ЗАПУСТИТЬ", new Color(0.12f, 0.42f, 0.55f, 1f));
+                SetRightButton(start.GetComponent<RectTransform>(), 174f, 48f, 16f);
+                start.onClick.AddListener(() => StartNightWave(index));
+            }
+        }
+
+        private void BuildEnemiesSection()
+        {
+            var content = CreateSection(Section.Enemies, "СПАВН ВРАГОВ");
+            var clearRow = CreateRow(content, "Actions", 58f);
+            var clear = CreateButton("Clear", clearRow.transform, "УДАЛИТЬ ТЕСТОВЫХ ВРАГОВ", new Color(0.47f, 0.12f, 0.12f, 1f));
+            UiDefaults.Rect(clear.GetComponent<RectTransform>(), new Vector2(330f, 40f), Vector2.zero);
+            clear.onClick.AddListener(ClearAdminEnemies);
+            var runtime = DotsEnemyRuntime.EnsureInstance();
+            foreach (EnemyKind kind in Enum.GetValues(typeof(EnemyKind)))
+            {
+                var catalog = runtime.GetCatalog(kind);
+                if (catalog == null) continue;
+                var controls = new EnemySpawnControls
+                {
+                    Kind = kind,
+                    Count = 1,
+                    Radius = kind == EnemyKind.Shark ? 30f : 15f,
+                    HealthBars = catalog.ShowHealthBars
+                };
+                _enemyControls[kind] = controls;
+                BuildEnemyRow(content, controls, catalog.DisplayName);
+            }
+            BuildEnemyRow(content, new EnemySpawnControls { IsShip = true, Count = 1, Radius = 600f }, "Enemy ships");
+        }
+
+        private void BuildEnemyRow(Transform content, EnemySpawnControls controls, string displayName)
+        {
+            var row = CreateRow(content, displayName, 178f);
+            var title = CreateText("Title", row.transform, displayName, 22,
+                controls.IsShip ? new Color(1f, 0.55f, 0.28f) : Color.white, TextAnchor.MiddleLeft);
+            SetAnchors(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(18f, -42f), new Vector2(-360f, -8f));
+            controls.CountLabel = CreateText("CountLabel", row.transform, "Количество: 1", 16, Color.white, TextAnchor.MiddleLeft);
+            UiDefaults.Rect(controls.CountLabel.rectTransform, new Vector2(185f, 28f), new Vector2(-480f, 34f));
+            var countSlider = CreateSlider(row.transform, new Vector2(-180f, 34f), new Vector2(410f, 28f),
+                1f, MaximumSpawnCount, controls.Count, true);
+            countSlider.onValueChanged.AddListener(value =>
+            {
+                controls.Count = Mathf.RoundToInt(value);
+                controls.CountLabel.text = $"Количество: {controls.Count}";
+            });
+            controls.RadiusLabel = CreateText("RadiusLabel", row.transform,
+                $"Радиус: {controls.Radius:0} м", 16, Color.white, TextAnchor.MiddleLeft);
+            UiDefaults.Rect(controls.RadiusLabel.rectTransform, new Vector2(185f, 28f), new Vector2(-480f, -10f));
+            var radiusSlider = CreateSlider(row.transform, new Vector2(-180f, -10f), new Vector2(410f, 28f),
+                2f, 1000f, controls.Radius, false);
+            radiusSlider.onValueChanged.AddListener(value =>
+            {
+                controls.Radius = value;
+                controls.RadiusLabel.text = $"Радиус: {value:0} м";
+            });
+            var spawn = CreateButton("Spawn", row.transform, "ЗАСПАВНИТЬ", new Color(0.12f, 0.42f, 0.55f, 1f));
+            UiDefaults.Rect(spawn.GetComponent<RectTransform>(), new Vector2(205f, 48f), new Vector2(500f, 24f));
+            spawn.onClick.AddListener(() => SpawnEnemy(controls, displayName));
+            if (!controls.IsShip)
+            {
+                var health = CreateButton("HealthBars", row.transform, "", new Color(0.16f, 0.22f, 0.25f, 1f));
+                UiDefaults.Rect(health.GetComponent<RectTransform>(), new Vector2(205f, 38f), new Vector2(500f, -34f));
+                controls.HealthLabel = health.GetComponentInChildren<Text>();
+                void RefreshHealth() => controls.HealthLabel.text = $"HP-бары: {(controls.HealthBars ? "ВКЛ" : "ВЫКЛ")}";
+                RefreshHealth();
+                health.onClick.AddListener(() =>
+                {
+                    controls.HealthBars = !controls.HealthBars;
+                    DotsEnemyRuntime.Instance?.SetSpeciesHealthBars(controls.Kind, controls.HealthBars);
+                    RefreshHealth();
+                });
+            }
+        }
+
+        private void BuildItemsSection()
+        {
+            var content = CreateSection(Section.Items, "ВСЕ ПРЕДМЕТЫ · НАЖМИ ДЛЯ СПАВНА", true);
+            if (_inventory.Catalog == null) return;
+            foreach (var item in _inventory.Catalog.Items)
+            {
+                if (item == null) continue;
+                var card = CreateImage(item.Id, content, new Color(0.055f, 0.09f, 0.12f, 1f));
+                var button = card.gameObject.AddComponent<Button>();
+                button.targetGraphic = card;
+                var itemId = item.Id;
+                button.onClick.AddListener(() =>
+                {
+                    _inventory.SpawnAdminItem(itemId);
+                    SetStatus($"Создан предмет: {item.DisplayName}");
+                });
+                var iconBack = CreateImage("IconBackground", card.transform, new Color(0.02f, 0.03f, 0.04f, 0.7f));
+                UiDefaults.Rect(iconBack.rectTransform, new Vector2(82f, 82f), new Vector2(0f, 25f));
+                var icon = CreateImage("Icon", iconBack.transform, Color.white);
+                UiDefaults.Stretch(icon.rectTransform, 5f);
+                icon.sprite = item.Icon;
+                icon.preserveAspect = true;
+                icon.enabled = item.Icon != null;
+                var title = CreateText("Title", card.transform, item.DisplayName, 15, item.RarityColor, TextAnchor.MiddleCenter);
+                SetAnchors(title.rectTransform, Vector2.zero, new Vector2(1f, 0f),
+                    new Vector2(5f, 24f), new Vector2(-5f, 54f));
+                var rarity = CreateText("Rarity", card.transform, item.Rarity.ToString(), 12,
+                    new Color(item.RarityColor.r, item.RarityColor.g, item.RarityColor.b, 0.8f), TextAnchor.MiddleCenter);
+                SetAnchors(rarity.rectTransform, Vector2.zero, new Vector2(1f, 0f),
+                    new Vector2(5f, 4f), new Vector2(-5f, 25f));
+            }
+        }
+
+        private void BuildRingsSection()
+        {
+            var content = CreateSection(Section.Rings, "ХАРАКТЕРИСТИКИ И КОЛЬЦА");
+            _ringSummary = CreateInfoRow(content, "", 64f);
+            var catalog = _player != null ? _player.RingCatalog : Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
+            if (catalog?.Rings == null) return;
+            foreach (var ring in catalog.Rings)
+            {
+                if (ring.BaseBonus <= 0f || _ringControls.ContainsKey(ring.Stat)) continue;
+                BuildRingRow(content, ring);
+            }
+            RefreshRings();
+        }
+
+        private void BuildStressSection()
+        {
+            var content = CreateSection(Section.Stress, "СТРЕСС-ТЕСТ ПРЕДМЕТОВ");
+            CreateInfoRow(content,
+                "Создаёт выбранное количество сетевых предметов вокруг игрока. Максимум: 3000 предметов в радиусе 30 м.",
+                70f);
+            var row = CreateRow(content, "Stress settings", 190f);
+            var countLabel = CreateText("CountLabel", row.transform, "Предметы: 0 / 3000", 18,
+                Color.white, TextAnchor.MiddleLeft);
+            UiDefaults.Rect(countLabel.rectTransform, new Vector2(250f, 30f), new Vector2(-430f, 48f));
+            var count = CreateSlider(row.transform, new Vector2(-90f, 48f), new Vector2(610f, 30f),
+                0f, MaximumSpawnCount, 0f, true);
+            count.onValueChanged.AddListener(value =>
+            {
+                _stressItemCount = Mathf.RoundToInt(value);
+                countLabel.text = $"Предметы: {_stressItemCount} / {MaximumSpawnCount}";
+            });
+            var radiusLabel = CreateText("RadiusLabel", row.transform, "Радиус: 30 м", 18,
+                Color.white, TextAnchor.MiddleLeft);
+            UiDefaults.Rect(radiusLabel.rectTransform, new Vector2(250f, 30f), new Vector2(-430f, 2f));
+            var radius = CreateSlider(row.transform, new Vector2(-90f, 2f), new Vector2(610f, 30f),
+                2f, 30f, 30f, false);
+            radius.onValueChanged.AddListener(value =>
+            {
+                _stressItemRadius = value;
+                radiusLabel.text = $"Радиус: {value:0} м";
+            });
+            var spawn = CreateButton("Apply", row.transform, "ЗАПУСТИТЬ", new Color(0.12f, 0.42f, 0.55f, 1f));
+            UiDefaults.Rect(spawn.GetComponent<RectTransform>(), new Vector2(220f, 48f), new Vector2(465f, 30f));
+            spawn.onClick.AddListener(ApplyStressItems);
+            var clear = CreateButton("Clear", row.transform, "ОЧИСТИТЬ", new Color(0.47f, 0.12f, 0.12f, 1f));
+            UiDefaults.Rect(clear.GetComponent<RectTransform>(), new Vector2(220f, 42f), new Vector2(465f, -32f));
+            clear.onClick.AddListener(() =>
+            {
+                _stressItemCount = 0;
+                count.SetValueWithoutNotify(0f);
+                countLabel.text = $"Предметы: 0 / {MaximumSpawnCount}";
+                ApplyStressItems();
+            });
+        }
+
+        private void ApplyStressItems()
+        {
+            if (!_inventory.SetAdminStressItems(_stressItemCount, _stressItemRadius))
+            {
+                SetStatus("Стресс-тест не запущен: сервер предметов ещё не готов.", true);
+                return;
+            }
+            SetStatus(_stressItemCount > 0
+                ? $"Стресс-тест: {_stressItemCount} предметов, радиус {_stressItemRadius:0} м."
+                : "Предметы стресс-теста удалены.");
+        }
+
+        private void BuildRingRow(Transform content, PlayerRingDefinition definition)
+        {
+            var row = CreateRow(content, definition.Stat.ToString(), 112f);
+            var select = new GameObject("Select", typeof(RectTransform), typeof(Image), typeof(Button));
+            select.transform.SetParent(row.transform, false);
+            SetAnchors(select.GetComponent<RectTransform>(), Vector2.zero, Vector2.one,
+                new Vector2(8f, 8f), new Vector2(-340f, -8f));
+            var background = select.GetComponent<Image>();
+            background.color = new Color(0.055f, 0.1f, 0.13f, 1f);
+            select.GetComponent<Button>().targetGraphic = background;
+            var iconBack = CreateImage("Badge", select.transform, new Color(0.17f, 0.22f, 0.25f, 1f));
+            var badgeRect = iconBack.rectTransform;
+            badgeRect.anchorMin = badgeRect.anchorMax = new Vector2(0f, 0.5f);
+            badgeRect.pivot = new Vector2(0f, 0.5f);
+            badgeRect.anchoredPosition = new Vector2(10f, 0f);
+            badgeRect.sizeDelta = new Vector2(78f, 78f);
+            var icon = CreateImage("Icon", iconBack.transform, Color.white);
+            UiDefaults.Stretch(icon.rectTransform, 7f);
+            icon.sprite = definition.Icon;
+            icon.preserveAspect = true;
+            icon.enabled = definition.Icon != null;
+            var title = CreateText("Title", select.transform, definition.DisplayName, 21, Color.white, TextAnchor.MiddleLeft);
+            SetAnchors(title.rectTransform, Vector2.zero, Vector2.one,
+                new Vector2(104f, 48f), new Vector2(-10f, -8f));
+            var detail = CreateText("Detail", select.transform, "", 16,
+                new Color(0.65f, 0.76f, 0.82f), TextAnchor.MiddleLeft);
+            SetAnchors(detail.rectTransform, Vector2.zero, Vector2.one,
+                new Vector2(104f, 10f), new Vector2(-10f, -50f));
+            var minus = CreateButton("Decrease", row.transform, "−", new Color(0.34f, 0.14f, 0.14f, 1f));
+            UiDefaults.Rect(minus.GetComponent<RectTransform>(), new Vector2(58f, 58f), new Vector2(400f, 0f));
+            var level = CreateText("Level", row.transform, "0", 21, Color.white, TextAnchor.MiddleCenter);
+            UiDefaults.Rect(level.rectTransform, new Vector2(120f, 58f), new Vector2(490f, 0f));
+            var plus = CreateButton("Increase", row.transform, "+", new Color(0.12f, 0.36f, 0.22f, 1f));
+            UiDefaults.Rect(plus.GetComponent<RectTransform>(), new Vector2(58f, 58f), new Vector2(580f, 0f));
+            _ringControls[definition.Stat] = new RingControls
+            {
+                Background = background, Title = title, Detail = detail, Level = level
+            };
+            select.GetComponent<Button>().onClick.AddListener(() => ToggleRing(definition.Stat));
+            minus.onClick.AddListener(() => ChangeRingLevel(definition.Stat, -1));
+            plus.onClick.AddListener(() => ChangeRingLevel(definition.Stat, 1));
+        }
+
+        private void ShowSection(Section section)
+        {
+            _activeSection = section;
+            foreach (var pair in _sections) pair.Value.SetActive(pair.Key == section);
+            foreach (var pair in _tabs)
+                pair.Value.color = pair.Key == section
+                    ? new Color(0.12f, 0.45f, 0.57f, 1f)
+                    : new Color(0.07f, 0.14f, 0.19f, 1f);
+            if (section == Section.Rings) RefreshRings();
+        }
+
+        private void SpawnEnemy(EnemySpawnControls controls, string displayName)
+        {
+            if (controls.IsShip)
+            {
+                var ships = DotsEnemyShipRuntime.EnsureInstance();
+                if (ships == null || !ships.SpawnAt(_inventory.transform.position, controls.Count,
+                        controls.Radius, (uint)UnityEngine.Random.Range(1, int.MaxValue), AdminShipGroup))
+                {
+                    SetStatus("Корабли не созданы: достигнут лимит или сервер не готов.", true);
+                    return;
+                }
+            }
+            else
+            {
+                var runtime = DotsEnemyRuntime.EnsureInstance();
+                var health = controls.HealthBars ? EnemyHealthBarMode.Show : EnemyHealthBarMode.Hide;
+                if (runtime == null || !runtime.SpawnAdminSpecies(controls.Kind, _inventory.transform.position,
+                        controls.Count, controls.Radius, health))
+                {
+                    SetStatus($"{displayName}: не удалось создать врагов. Проверьте bake и лимит.", true);
+                    return;
+                }
+            }
+            SetStatus($"{displayName}: запрошено {controls.Count}, радиус {controls.Radius:0} м.");
+        }
+
+        private void ClearAdminEnemies()
+        {
+            DotsEnemyRuntime.Instance?.ClearAdminSpecies();
+            DotsEnemyShipRuntime.Instance?.DespawnGroup(AdminShipGroup);
+            SetStatus("Тестовые враги и корабли удалены.");
+        }
+
+        private void StartNightWave(int index)
+        {
+            var controller = NightWaveController.Active ?? FindFirstObjectByType<NightWaveController>();
+            if (controller == null || !controller.StartAdminWaveServer(index))
+            {
+                SetStatus($"Не удалось запустить волну {index + 1}.", true);
+                return;
+            }
+            SetOpen(false);
+        }
+
+        private void ToggleRing(PlayerRingStat stat)
+        {
+            if (_player == null) return;
+            var target = _player.RingLevel(stat) > 0 ? 0 : 1;
+            if (!_player.AdminSetRingLevelServer(stat, target))
+                SetStatus("Нельзя надеть кольцо: все четыре слота заняты.", true);
+            else SetStatus(target > 0 ? "Кольцо надето." : "Кольцо снято.");
+            RefreshRings();
+        }
+
+        private void ChangeRingLevel(PlayerRingStat stat, int delta)
+        {
+            if (_player == null) return;
+            var target = Mathf.Max(0, _player.RingLevel(stat) + delta);
+            if (!_player.AdminSetRingLevelServer(stat, target))
+                SetStatus("Нельзя добавить кольцо: все четыре слота заняты.", true);
+            RefreshRings();
+        }
+
+        private void RefreshRings()
+        {
+            if (_player == null || _ringSummary == null) return;
+            var catalog = _player.RingCatalog;
+            _ringSummary.text = $"Надето: {_player.DistinctRingCount} / {catalog.MaximumDistinctRings}   •   " +
+                $"Атака ×{_player.AttackSpeedMultiplier:0.##}   Перезарядка ×{_player.ReloadSpeedMultiplier:0.##}   " +
+                $"Область ×{_player.MeleeAreaMultiplier:0.##}   Снарядов: {_player.ProjectileCount}";
+            foreach (var pair in _ringControls)
+            {
+                var level = _player.RingLevel(pair.Key);
+                var value = _player.RingValue(pair.Key);
+                var equipped = level > 0;
+                var controls = pair.Value;
+                controls.Background.color = equipped
+                    ? new Color(0.06f, 0.28f, 0.16f, 1f)
+                    : new Color(0.055f, 0.1f, 0.13f, 1f);
+                controls.Title.color = equipped ? new Color(0.28f, 1f, 0.48f) : Color.white;
+                controls.Level.text = $"Ур. {level}";
+                controls.Detail.text = equipped
+                    ? $"Бонус: {PlayerRingCatalog.FormatBonus(pair.Key, value)} · нажми, чтобы снять"
+                    : $"За уровень: {PlayerRingCatalog.FormatBonus(pair.Key, catalog.Bonus(pair.Key, ItemRarity.Common))} · нажми, чтобы надеть";
+            }
+        }
+
+        private void SetStatus(string message, bool error = false)
+        {
+            if (_status == null) return;
+            _status.text = message;
+            _status.color = error ? new Color(1f, 0.42f, 0.32f) : new Color(0.55f, 0.85f, 1f);
+        }
+
+        private static Image CreateRow(Transform parent, string name, float height)
+        {
+            var row = CreateImage(name, parent, new Color(0.045f, 0.075f, 0.1f, 1f));
+            row.gameObject.AddComponent<LayoutElement>().preferredHeight = height;
+            return row;
+        }
+
+        private static Text CreateInfoRow(Transform parent, string text, float height)
+        {
+            var row = CreateRow(parent, "Info", height);
+            var label = CreateText("Label", row.transform, text, 17,
+                new Color(0.65f, 0.8f, 0.87f), TextAnchor.MiddleCenter);
+            UiDefaults.Stretch(label.rectTransform, 8f);
+            return label;
+        }
+
+        private static Image CreateImage(string name, Transform parent, Color color)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var image = go.GetComponent<Image>();
+            image.color = color;
+            return image;
+        }
+
+        private static Text CreateText(string name, Transform parent, string value, int size, Color color,
+            TextAnchor alignment)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Text));
+            go.transform.SetParent(parent, false);
+            var text = go.GetComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.fontSize = size;
+            text.alignment = alignment;
+            text.text = value;
+            text.color = color;
+            text.raycastTarget = false;
+            return text;
+        }
+
+        private static Button CreateButton(string name, Transform parent, string value, Color color)
+        {
+            var image = CreateImage(name, parent, color);
+            var button = image.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            var label = CreateText("Label", image.transform, value, 18, Color.white, TextAnchor.MiddleCenter);
+            UiDefaults.Stretch(label.rectTransform, 3f);
+            return button;
+        }
+
+        private static Slider CreateSlider(Transform parent, Vector2 position, Vector2 size,
+            float minimum, float maximum, float value, bool wholeNumbers)
         {
             var root = new GameObject("Slider", typeof(RectTransform), typeof(Slider));
             root.transform.SetParent(parent, false);
-            var rect = root.GetComponent<RectTransform>(); rect.sizeDelta = new Vector2(540f, 28f); rect.anchoredPosition = position;
-
-            var background = new GameObject("Background", typeof(RectTransform), typeof(Image));
-            background.transform.SetParent(root.transform, false);
-            var backgroundRect = background.GetComponent<RectTransform>(); backgroundRect.anchorMin = Vector2.zero;
-            backgroundRect.anchorMax = Vector2.one; backgroundRect.offsetMin = new Vector2(0, 8); backgroundRect.offsetMax = new Vector2(0, -8);
-            background.GetComponent<Image>().color = new Color(0.08f, 0.11f, 0.14f, 1f);
-
-            var fillArea = new GameObject("Fill Area", typeof(RectTransform)); fillArea.transform.SetParent(root.transform, false);
-            var fillAreaRect = fillArea.GetComponent<RectTransform>(); fillAreaRect.anchorMin = Vector2.zero;
-            fillAreaRect.anchorMax = Vector2.one; fillAreaRect.offsetMin = new Vector2(5, 8); fillAreaRect.offsetMax = new Vector2(-5, -8);
-            var fill = new GameObject("Fill", typeof(RectTransform), typeof(Image)); fill.transform.SetParent(fillArea.transform, false);
-            var fillRect = fill.GetComponent<RectTransform>(); fillRect.anchorMin = Vector2.zero; fillRect.anchorMax = Vector2.one;
-            fillRect.offsetMin = fillRect.offsetMax = Vector2.zero; fill.GetComponent<Image>().color = new Color(0.16f, 0.67f, 0.9f);
-
-            var handleArea = new GameObject("Handle Slide Area", typeof(RectTransform)); handleArea.transform.SetParent(root.transform, false);
-            var handleAreaRect = handleArea.GetComponent<RectTransform>(); handleAreaRect.anchorMin = Vector2.zero;
-            handleAreaRect.anchorMax = Vector2.one; handleAreaRect.offsetMin = new Vector2(8, 0); handleAreaRect.offsetMax = new Vector2(-8, 0);
-            var handle = new GameObject("Handle", typeof(RectTransform), typeof(Image)); handle.transform.SetParent(handleArea.transform, false);
-            var handleRect = handle.GetComponent<RectTransform>(); handleRect.sizeDelta = new Vector2(20f, 28f);
-            handle.GetComponent<Image>().color = Color.white;
-
-            var slider = root.GetComponent<Slider>(); slider.minValue = minimum; slider.maxValue = maximum;
-            slider.wholeNumbers = wholeNumbers; slider.fillRect = fillRect; slider.handleRect = handleRect;
-            slider.targetGraphic = handle.GetComponent<Image>(); slider.direction = Slider.Direction.LeftToRight; slider.value = value;
+            UiDefaults.Rect(root.GetComponent<RectTransform>(), size, position);
+            var background = CreateImage("Background", root.transform, new Color(0.015f, 0.025f, 0.035f, 1f));
+            SetAnchors(background.rectTransform, Vector2.zero, Vector2.one, new Vector2(0f, 9f), new Vector2(0f, -9f));
+            var fillArea = new GameObject("Fill Area", typeof(RectTransform));
+            fillArea.transform.SetParent(root.transform, false);
+            SetAnchors(fillArea.GetComponent<RectTransform>(), Vector2.zero, Vector2.one,
+                new Vector2(5f, 9f), new Vector2(-5f, -9f));
+            var fill = CreateImage("Fill", fillArea.transform, new Color(0.12f, 0.6f, 0.82f, 1f));
+            UiDefaults.Stretch(fill.rectTransform);
+            var handleArea = new GameObject("Handle Slide Area", typeof(RectTransform));
+            handleArea.transform.SetParent(root.transform, false);
+            SetAnchors(handleArea.GetComponent<RectTransform>(), Vector2.zero, Vector2.one,
+                new Vector2(9f, 0f), new Vector2(-9f, 0f));
+            var handle = CreateImage("Handle", handleArea.transform, Color.white);
+            handle.rectTransform.sizeDelta = new Vector2(18f, 28f);
+            var slider = root.GetComponent<Slider>();
+            slider.minValue = minimum;
+            slider.maxValue = maximum;
+            slider.wholeNumbers = wholeNumbers;
+            slider.fillRect = fill.rectTransform;
+            slider.handleRect = handle.rectTransform;
+            slider.targetGraphic = handle;
+            slider.value = value;
             return slider;
         }
-        private static Text Label(Transform parent, string value, Vector2 position, Vector2 size, Color color)
+
+        private static void SetAnchors(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax,
+            Vector2 offsetMin, Vector2 offsetMax)
         {
-            var go = new GameObject("Label", typeof(RectTransform), typeof(Text)); go.transform.SetParent(parent, false);
-            go.GetComponent<RectTransform>().sizeDelta = size; go.GetComponent<RectTransform>().anchoredPosition = position;
-            var text = go.GetComponent<Text>(); text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = 21; text.alignment = TextAnchor.MiddleCenter; text.text = value; text.color = color;
-            text.raycastTarget = false; return text;
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
+            rect.offsetMin = offsetMin;
+            rect.offsetMax = offsetMax;
         }
+
+        private static void SetRightButton(RectTransform rect, float width, float height, float margin)
+        {
+            rect.anchorMin = rect.anchorMax = new Vector2(1f, 0.5f);
+            rect.pivot = new Vector2(1f, 0.5f);
+            rect.anchoredPosition = new Vector2(-margin, 0f);
+            rect.sizeDelta = new Vector2(width, height);
+        }
+
         private void SetOpen(bool open)
         {
-            InputCaptured = open; if (_canvas != null) _canvas.SetActive(open);
+            InputCaptured = open;
+            if (_canvas != null) _canvas.SetActive(open);
+            if (open && _activeSection == Section.Rings) RefreshRings();
             var unlocked = open || SessionMenuPresenter.InputCaptured;
-            Cursor.visible = unlocked; Cursor.lockState = unlocked ? CursorLockMode.None : CursorLockMode.Locked;
+            Cursor.visible = unlocked;
+            Cursor.lockState = unlocked ? CursorLockMode.None : CursorLockMode.Locked;
         }
+
         private void OnDestroy()
         {
             if (!Application.isPlaying) return;

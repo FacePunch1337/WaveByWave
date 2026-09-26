@@ -13,6 +13,9 @@ namespace WaveByWave.Enemies
         [GhostField] public int Id;
         [GhostField] public int Scene;
         [GhostField] public uint Seed;
+        [GhostField] public EnemyKind Kind;
+        [GhostField] public EnemyHealthBarMode HealthBar;
+        [GhostField] public byte Swimming;
         [GhostField] public EnemyCombatType CombatType;
         [GhostField] public EnemyAnimationState Animation;
         [GhostField(Quantization = 1000)] public float3 Position;
@@ -40,6 +43,9 @@ namespace WaveByWave.Enemies
         public float3 MoveDirection;
         public float3 MoveTarget;
         public float TargetDistance;
+        // Cached profile dimensions used by Burst steering; zero retains the legacy
+        // defaults for skeleton crews and editor-created test entities.
+        public float SpeciesSpeed, SpeciesStoppingDistance, SpeciesSpacing;
         public float NextAttack;
         public float StrikeAt;
         public float LastSurfaceTime;
@@ -66,7 +72,7 @@ namespace WaveByWave.Enemies
     }
 
     public struct DotsEnemyPrefab : IComponentData { public Entity Value; }
-    public struct EnemyTarget { public float3 Position; public int Index; }
+    public struct EnemyTarget { public float3 Position; public int Index; public byte InWater; }
 
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation | WorldSystemFilterFlags.ClientSimulation)]
     [UpdateInGroup(typeof(SimulationSystemGroup), OrderFirst = true)]
@@ -77,7 +83,7 @@ namespace WaveByWave.Enemies
             var prefab = EntityManager.CreateEntity(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
             GhostPrefabCreation.ConvertToGhostPrefab(EntityManager, prefab, new GhostPrefabCreation.Config
             {
-                Name = "WaveByWave.SkeletonEnemy.v1",
+                Name = "WaveByWave.Enemy.v2",
                 Importance = 10,
                 MaxSendRate = 10,
                 SupportedGhostModes = GhostModeMask.Interpolated,
@@ -355,6 +361,9 @@ namespace WaveByWave.Enemies
         private void Execute(in DotsEnemyState state, ref DotsEnemyBrain brain)
         {
             var oldTarget = brain.Target;
+            var stoppingDistance = brain.SpeciesStoppingDistance > 0 ? brain.SpeciesStoppingDistance : StoppingDistance;
+            var speed = brain.SpeciesSpeed > 0 ? brain.SpeciesSpeed : MoveSpeed;
+            var spacing = math.max(BodySpacing, brain.SpeciesSpacing);
             brain.Target = -1;
             brain.Direction = float3.zero;
             brain.MoveDirection = float3.zero;
@@ -373,6 +382,7 @@ namespace WaveByWave.Enemies
             var bestDelta = float3.zero;
             for (var i = 0; i < Targets.Length; i++)
             {
+                if (state.Kind == EnemyKind.Shark && Targets[i].InWater == 0) continue;
                 var delta = Targets[i].Position - state.Position;
                 var distance = math.lengthsq(delta);
                 if (distance >= best) continue;
@@ -403,14 +413,14 @@ namespace WaveByWave.Enemies
                     }
                     // Equal-area Vogel spiral. Direction and radius factor are cached once;
                     // no neighbour lists, shared occupancy map or per-frame reassignment.
-                    var assignedRadius = StoppingDistance + TargetSlotSpacing * brain.TargetSlotRadiusFactor;
+                    var assignedRadius = stoppingDistance + TargetSlotSpacing * brain.TargetSlotRadiusFactor;
                     var currentRadius = math.length(bestDelta.xz);
                     // A wide outer slot must never order a skeleton that is already closer
                     // to retreat from the player. It keeps the stable angle and advances
                     // inward instead; bots approaching from afar retain the full spiral.
                     var radius = assignedRadius <= currentRadius ? assignedRadius :
-                        currentRadius <= StoppingDistance ? currentRadius :
-                        math.max(StoppingDistance, currentRadius - TargetSlotSpacing);
+                        currentRadius <= stoppingDistance ? currentRadius :
+                        math.max(stoppingDistance, currentRadius - TargetSlotSpacing);
                     var slotDelta = bestDelta + new float3(brain.TargetSlotDirection.x * radius, 0,
                         brain.TargetSlotDirection.y * radius);
                     brain.MoveTarget = state.Position + slotDelta;
@@ -432,7 +442,7 @@ namespace WaveByWave.Enemies
 
             if (AvoidanceLookAhead > 0)
                 EnemyCrowdSteering.Update(in state, ref brain, CrowdGrid, CrowdCellSize,
-                    AvoidanceLookAhead, BodySpacing, CrowdVerticalRange, MoveSpeed, Time, StoppingDistance);
+                    AvoidanceLookAhead, spacing, CrowdVerticalRange, speed, Time, stoppingDistance);
             else EnemyCrowdSteering.Reset(ref brain);
 
             if (CrowdRadius <= 0 || CrowdCellSize <= 0) return;

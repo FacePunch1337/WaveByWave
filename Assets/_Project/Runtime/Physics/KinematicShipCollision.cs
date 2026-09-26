@@ -974,7 +974,7 @@ namespace WaveByWave.Collision
             // Mechanisms rotate independently of the hull. Freezing them
             // into its cached triangle geometry would leave invisible contacts
             // at their original positions. The mechanism has its own PhysX collider.
-            if (filter.GetComponentInParent<ShipAnchor>() != null || filter.GetComponentInParent<ShipCannon>() != null)
+            if (filter.GetComponentInParent<ShipAnchor>() != null || filter.GetComponentInParent<Cannon>() != null)
                 return false;
             var renderer = filter.GetComponent<MeshRenderer>();
             if (renderer == null || !renderer.enabled)

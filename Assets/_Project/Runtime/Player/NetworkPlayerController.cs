@@ -157,7 +157,7 @@ namespace WaveByWave.Player
         private ShipSailControl _activeSailControl;
         private ShipMastControl _activeMastControl;
         private ShipAnchor _activeAnchor;
-        private ShipCannon _activeCannon;
+        private Cannon _activeCannon;
         private ClimbableLadder _activeLadder;
         private float _ladderProgress;
         private Vector3 _ladderApproachLocalPosition;
@@ -165,7 +165,7 @@ namespace WaveByWave.Player
         private CustomizationStation _activeCustomizationStation;
         private CustomizationMenu _customizationMenu;
         private float _customizationPreviewYaw;
-        private ShipCannon _pendingCannon;
+        private Cannon _pendingCannon;
         private bool _cannonControlActive;
         private float _cannonRequestDeadline;
         private float _nextCannonAimSend;
@@ -222,6 +222,7 @@ namespace WaveByWave.Player
         private bool _sprintExhausted;
         private float _smoothedWaterHeight;
         private float _ignoreSwimmingUntil;
+        private bool _waterJumpExertion;
 
         // The ordinary OwnerNetworkTransform remains responsible for movement replication.
         // This small parallel state keeps presentation relative to the supporting platform,
@@ -247,7 +248,7 @@ namespace WaveByWave.Player
         public bool IsAtMastControl => _activeMastControl != null;
         public bool IsAtAnchor => _activeAnchor != null;
         public bool IsAtCannon => _activeCannon != null;
-        public ShipCannon ActiveCannon => _activeCannon;
+        public Cannon ActiveCannon => _activeCannon;
         public CustomizationStation ActiveCustomizationStation => _activeCustomizationStation;
         public bool IsCustomizing => _activeCustomizationStation != null || _isCustomizing.Value;
         public bool IsSwimming => _isSwimming;
@@ -500,13 +501,14 @@ namespace WaveByWave.Player
             if (_anchorHandleIndex >= 0 && (_activeAnchor == null ||
                 _activeAnchor.Ship == null || !_activeAnchor.Ship.IsSpawned))
                 LeaveAnchorHandle(false);
-            if (_cannonControlActive && (_activeCannon == null || _activeCannon.Battery == null || !_activeCannon.Battery.IsSpawned))
+            if (_cannonControlActive && (_activeCannon == null || _activeCannon.Controller == null ||
+                !_activeCannon.Controller.IsSpawned))
                 LeaveCannon(false);
             if (_pendingCannon != null && (Time.unscaledTime >= _cannonRequestDeadline ||
-                _pendingCannon.Battery == null || !_pendingCannon.Battery.IsSpawned))
+                _pendingCannon.Controller == null || !_pendingCannon.Controller.IsSpawned))
             {
-                if (_pendingCannon.Battery != null && _pendingCannon.Battery.IsSpawned)
-                    _pendingCannon.Battery.ReleaseCannonServerRpc();
+                if (_pendingCannon.Controller != null && _pendingCannon.Controller.IsSpawned)
+                    _pendingCannon.Controller.ReleaseCannonServerRpc();
                 _pendingCannon = null;
             }
 
@@ -629,7 +631,8 @@ namespace WaveByWave.Player
             _sprintHeld = false;
             _isSprinting = false;
             _jumpQueued = false;
-            _equipment?.SetMovementExertion(false, false);
+            _equipment?.SetMovementExertion(false, !_sceneTransitioning && !IsAtControlStation &&
+                (_health == null || !_health.IsDead) && (_isSwimming || _waterJumpExertion));
         }
 
         private void EnableKccMotor()
@@ -711,6 +714,7 @@ namespace WaveByWave.Player
         {
             if (!_useKccMotor || !IsOwner || _sceneTransitioning || IsAtControlStation)
             {
+                _waterJumpExertion = false;
                 currentVelocity = Vector3.zero;
                 _isSprinting = false;
                 _jumpQueued = false;
@@ -799,7 +803,8 @@ namespace WaveByWave.Player
             }
 
             _jumpQueued = false;
-            _equipment?.SetMovementExertion(sprinting, false);
+            if (stableOnGround && !jumped) _waterJumpExertion = false;
+            _equipment?.SetMovementExertion(_waterJumpExertion ? false : sprinting, _waterJumpExertion);
             var horizontalAnimationSpeed = Vector3.ProjectOnPlane(currentVelocity, characterUp).magnitude;
             var animationReferenceSpeed = sprinting ? sprintAnimationReferenceSpeed : walkAnimationReferenceSpeed;
             var animationAmount = Mathf.Clamp01(horizontalAnimationSpeed / Mathf.Max(0.1f, speed));
@@ -865,10 +870,12 @@ namespace WaveByWave.Player
                 _jumpQueued = false;
                 _isSwimming = false;
                 _ignoreSwimmingUntil = Time.time + waterJumpReentryDelay;
+                // A jump out of the sea remains part of swimming until landing on solid ground.
+                _waterJumpExertion = true;
                 _kccMotor.ForceUnground();
                 var launchHorizontal = Vector3.ProjectOnPlane(currentVelocity, characterUp);
                 currentVelocity = launchHorizontal + characterUp * waterJumpSpeed;
-                _equipment?.SetMovementExertion(false, false);
+                _equipment?.SetMovementExertion(false, true);
                 animationSync.BeginJump(waterJumpSpeed);
                 return;
             }
@@ -2509,22 +2516,22 @@ namespace WaveByWave.Player
             animationSync.SetLocomotion(pushing ? 1f : 0f, true, 0f);
         }
 
-        public void RequestCannon(ShipCannon cannon)
+        public void RequestCannon(Cannon cannon)
         {
-            if (!IsOwner || cannon == null || cannon.Battery == null || !cannon.Battery.IsSpawned ||
+            if (!IsOwner || cannon == null || cannon.Controller == null || !cannon.Controller.IsSpawned ||
                 IsAtControlStation || _pendingAnchor != null || _pendingCannon != null || _sceneTransitioning) return;
             _pendingCannon = cannon;
             _cannonRequestDeadline = Time.unscaledTime + 2f;
-            cannon.Battery.RequestCannonServerRpc(cannon.Battery.GetCannonIndex(cannon));
+            cannon.Controller.RequestCannonServerRpc(cannon.Controller.GetCannonIndex(cannon));
         }
 
-        public void HandleCannonAssignment(ShipCannonBattery battery, ShipCannon cannon)
+        public void HandleCannonAssignment(CannonNetworkController controller, Cannon cannon)
         {
             if (!IsOwner) return;
             if (cannon == null) { _pendingCannon = null; return; }
             if (_pendingCannon != cannon || _sceneTransitioning || PlayerEquipment.InputCaptured || IsAtControlStation)
             {
-                if (battery.IsSpawned) battery.ReleaseCannonServerRpc();
+                if (controller.IsSpawned) controller.ReleaseCannonServerRpc();
                 _pendingCannon = null;
                 return;
             }
@@ -2538,12 +2545,12 @@ namespace WaveByWave.Player
             _nextCannonAimSend = 0f;
             ClearMovementInput();
             _airbornePlatformMomentum = Vector3.zero;
-            var platform = battery.GetComponent<MovingPlatform>();
+            var platform = controller.GetComponent<MovingPlatform>();
             if (platform != null) AttachToPlatform(platform);
             _isGrounded = true;
             SetOwnerPhysicsSimulation(false);
             SnapToActiveControlStation();
-            var state = battery.GetState(battery.GetCannonIndex(cannon));
+            var state = controller.GetState(controller.GetCannonIndex(cannon));
             _camera?.SetReferenceFrame(cannon.transform);
             _camera?.SetAimLimits(cannon.YawLimits, cannon.ElevationLimits, cannon.AimSpeed);
             _camera?.SetLookRotation(look);
@@ -2554,8 +2561,8 @@ namespace WaveByWave.Player
 
         private void UpdateCannonInput()
         {
-            var battery = _activeCannon.Battery;
-            var state = battery.GetState(battery.GetCannonIndex(_activeCannon));
+            var controller = _activeCannon.Controller;
+            var state = controller.GetState(controller.GetCannonIndex(_activeCannon));
             if (state.Operator == OwnerClientId) _cannonOccupationConfirmed = true;
             else if (_cannonOccupationConfirmed || Time.unscaledTime >= _cannonAssignmentDeadline)
             { LeaveCannon(); return; }
@@ -2565,10 +2572,10 @@ namespace WaveByWave.Player
             if (Time.unscaledTime >= _nextCannonAimSend)
             {
                 _nextCannonAimSend = Time.unscaledTime + 0.05f;
-                battery.SubmitAimServerRpc(aim.x, aim.y);
+                controller.SubmitAimServerRpc(aim.x, aim.y);
             }
             if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-                battery.FireOrReloadServerRpc(inventory.SelectedIndex, inventory.SelectionRevision, aim.x, aim.y);
+                controller.FireOrReloadServerRpc(inventory.SelectedIndex, inventory.SelectionRevision, aim.x, aim.y);
             SnapToActiveControlStation();
             animationSync.SetLocomotion(0f, true, 0f);
         }
@@ -2581,8 +2588,8 @@ namespace WaveByWave.Player
             _anchorApproachStation = null;
             cannon?.ReleaseLocalAim();
             _camera?.ClearAimLimits();
-            if (notifyServer && cannon != null && cannon.Battery != null && cannon.Battery.IsSpawned)
-                cannon.Battery.ReleaseCannonServerRpc();
+            if (notifyServer && cannon != null && cannon.Controller != null && cannon.Controller.IsSpawned)
+                cannon.Controller.ReleaseCannonServerRpc();
             ClearMovementInput();
             if (_platform != null) AttachToPlatform(_platform);
             else _camera?.SetReferenceFrame(null);
@@ -2592,8 +2599,8 @@ namespace WaveByWave.Player
         private void ResetCannonInteraction()
         {
             var cannon = _activeCannon != null ? _activeCannon : _pendingCannon;
-            if (IsOwner && cannon != null && cannon.Battery != null && cannon.Battery.IsSpawned &&
-                NetworkManager != null && NetworkManager.IsListening) cannon.Battery.ReleaseCannonServerRpc();
+            if (IsOwner && cannon != null && cannon.Controller != null && cannon.Controller.IsSpawned &&
+                NetworkManager != null && NetworkManager.IsListening) cannon.Controller.ReleaseCannonServerRpc();
             cannon?.ReleaseLocalAim();
             _camera?.ClearAimLimits();
             _activeCannon = _pendingCannon = null;
@@ -2984,6 +2991,7 @@ namespace WaveByWave.Player
             LeaveLadder(false);
             ExitCustomization();
             _sceneTransitioning = true;
+            _isSwimming = _waterJumpExertion = false;
             StopShipControlInputsForMenu();
             ResetAnchorInteraction();
             RemoveAnyNetworkParent();
@@ -3096,6 +3104,8 @@ namespace WaveByWave.Player
             LeaveLadder(false);
             SetOwnerPhysicsSimulation(false);
             ResetAnchorInteraction();
+            _isSwimming = _waterJumpExertion = false;
+            _ignoreSwimmingUntil = 0f;
 
             _enemyShip = null;
             _enemyPoseInitialized = false;
@@ -3162,6 +3172,7 @@ namespace WaveByWave.Player
                 _kccMotor.enabled = false;
             }
             _useKccMotor = false;
+            _waterJumpExertion = false;
             _waterQuery?.Dispose();
             _waterQuery = null;
             _isSwimming = false;
@@ -3271,6 +3282,48 @@ namespace WaveByWave.Player
             for (var i = 0; i < _ringStats.Count; i++)
                 if (_ringStats[i].Stat == (byte)stat) return _ringStats[i].Level;
             return 0;
+        }
+
+        public bool AdminSetRingLevelServer(PlayerRingStat stat, int requestedLevel)
+        {
+            if (!IsServer || !IsSpawned || !System.Enum.IsDefined(typeof(PlayerRingStat), stat)) return false;
+            _ringCatalog ??= Resources.Load<PlayerRingCatalog>("PlayerRingCatalog");
+            if (_ringCatalog == null) return false;
+            var definition = _ringCatalog.Find(stat);
+            if (definition.BaseBonus <= 0f) return false;
+            var found = -1;
+            for (var i = 0; i < _ringStats.Count; i++)
+                if (_ringStats[i].Stat == (byte)stat) { found = i; break; }
+            var level = Mathf.Clamp(requestedLevel, 0, ushort.MaxValue);
+            if (found < 0 && level > 0 && _ringStats.Count >= _ringCatalog.MaximumDistinctRings) return false;
+
+            var previousValue = found >= 0 ? _ringStats[found].Value : 0f;
+            if (level == 0)
+            {
+                if (found < 0) return true;
+                _ringStats.RemoveAt(found);
+            }
+            else
+            {
+                var rarity = found >= 0
+                    ? (ItemRarity)Mathf.Clamp(_ringStats[found].Rarity, 0, 4)
+                    : ItemRarity.Common;
+                var state = new PlayerRingState
+                {
+                    Stat = (byte)stat,
+                    Rarity = (byte)rarity,
+                    Level = (ushort)level,
+                    Value = _ringCatalog.Bonus(stat, rarity) * level
+                };
+                if (found >= 0) _ringStats[found] = state;
+                else _ringStats.Add(state);
+            }
+            var currentValue = RingValue(stat);
+            if (stat == PlayerRingStat.MaximumHealth)
+                GetComponent<WaveByWave.Combat.NetworkHealth>()?.ApplyRingHealthChangeServer(currentValue - previousValue);
+            if (stat == PlayerRingStat.Stamina)
+                _equipment?.ApplyRingStaminaChangeServer(currentValue - previousValue);
+            return true;
         }
 
         internal bool BeginRingChoiceServer(int level, uint seed)

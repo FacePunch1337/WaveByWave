@@ -27,6 +27,8 @@ namespace WaveByWave.Enemies
         public float SampleTime, AnimationStarted, Duration, FlashUntil;
         public int FirstRow, FrameCount;
         public byte Loop, Stunned;
+        public float Scale, HealthFraction, HealthBarHeight;
+        public float2 HealthBarSize;
     }
 
     [BurstCompile]
@@ -69,7 +71,7 @@ namespace WaveByWave.Enemies
             }
             interpolation.Support = update.Support;
             Interpolations[update.Root] = interpolation;
-            var matrix = float4x4.TRS(interpolation.Position, interpolation.Rotation, new float3(Scale));
+            var matrix = float4x4.TRS(interpolation.Position, interpolation.Rotation, new float3(update.Scale > 0 ? update.Scale : Scale));
             if (update.Support != 0) matrix = math.mul(update.Surface, matrix);
             var elapsed = math.max(0, Now - update.AnimationStarted) / math.max(0.001f, update.Duration);
             var phase = update.Loop != 0 ? math.frac(elapsed + (update.Seed % 997) / 997f) : math.saturate(elapsed);
@@ -81,7 +83,8 @@ namespace WaveByWave.Enemies
                 Frame = new float4(update.FirstRow + first,
                     update.FirstRow + math.min(first + 1, update.FrameCount - 1), frame - first,
                     RenderTime < update.FlashUntil ? 1 : 0),
-                Time = EffectTime, Stunned = update.Stunned
+                Time = EffectTime, Stunned = update.Stunned, HealthFraction = update.HealthFraction,
+                HealthBarHeight = update.HealthBarHeight, HealthBarSize = update.HealthBarSize
             };
         }
     }

@@ -503,14 +503,16 @@ namespace WaveByWave.Editor
             if (cannonPrefab == null || chestPrefab == null)
                 throw new System.InvalidOperationException("Ship cannon and treasure chest prefabs are missing.");
             var battery = root.AddComponent<ShipCannonBattery>();
-            var guns = new ShipCannon[2];
+            var cannonController = root.AddComponent<CannonNetworkController>();
+            root.AddComponent<ShipHullHealth>();
+            var guns = new Cannon[2];
             for (var i = 0; i < 2; i++)
             {
                 var gun = (GameObject)PrefabUtility.InstantiatePrefab(cannonPrefab);
                 gun.transform.SetParent(root.transform, false);
                 gun.transform.localPosition = new Vector3(i == 0 ? -3f : 3f, 1.175f, 0f);
                 gun.transform.localRotation = Quaternion.Euler(0f, i == 0 ? -90f : 90f, 0f);
-                guns[i] = gun.GetComponent<ShipCannon>();
+                guns[i] = gun.GetComponent<Cannon>();
             }
             var chest = (GameObject)PrefabUtility.InstantiatePrefab(chestPrefab);
             chest.transform.SetParent(root.transform, false);
@@ -520,11 +522,18 @@ namespace WaveByWave.Editor
             cannonArray.arraySize = guns.Length;
             for (var i = 0; i < guns.Length; i++) cannonArray.GetArrayElementAtIndex(i).objectReferenceValue = guns[i];
             serializedBattery.ApplyModifiedPropertiesWithoutUndo();
+            var serializedController = new SerializedObject(cannonController);
+            var controlledCannons = serializedController.FindProperty("cannons");
+            controlledCannons.arraySize = guns.Length;
+            for (var i = 0; i < guns.Length; i++)
+                controlledCannons.GetArrayElementAtIndex(i).objectReferenceValue = guns[i];
+            serializedController.ApplyModifiedPropertiesWithoutUndo();
             SetObjectReference(battery, "treasureChest", chest.GetComponent<ShipTreasureChest>());
             SetObjectReference(battery, "ballMaterial", AssetDatabase.LoadAssetAtPath<Material>(Materials + "/CannonIron.mat"));
             SetObjectReference(battery, "effectMaterial", AssetDatabase.LoadAssetAtPath<Material>(Materials + "/LootGlow.mat"));
-            SetObjectReference(battery, "waterSplashPrefab", AssetDatabase.LoadAssetAtPath<GameObject>(
-                "Assets/Stylized Water 3/Prefabs/Particles/BigSplash.prefab"));
+            var splash = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Stylized Water 3/Prefabs/Particles/BigSplash.prefab");
+            foreach (var gun in guns) SetObjectReference(gun, "waterSplashPrefab", splash);
 
             var path = Prefabs + "/Ship.prefab";
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);

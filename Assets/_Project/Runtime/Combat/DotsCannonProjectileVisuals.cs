@@ -30,8 +30,10 @@ namespace WaveByWave.Combat
             public Vector3 Origin, Velocity, Gravity, HitPoint, HitNormal;
             public double Started;
             public float Age, Lifetime, ImpactAge;
-            public bool Impact, Water, Show, MuzzleShown;
-            public GameObject Muzzle, WaterEffect, GroundEffect;
+            public float WaterEntryAge;
+            public bool Impact, Water, Show, MuzzleShown, WaterEntry, WaterEntryShown;
+            public Vector3 WaterEntryPoint;
+            public GameObject Muzzle, WaterEffect, GroundEffect, WaterEntryEffect;
             public Mesh Mesh;
             public Material Material;
             public Vector3 Scale;
@@ -97,6 +99,17 @@ namespace WaveByWave.Combat
             shot.GroundEffect = groundEffect;
         }
 
+        public static void EnterWater(ulong owner, uint revision, bool enemy, Vector3 point,
+            double at, GameObject waterEffect)
+        {
+            if (_instance == null || !_instance._shots.TryGetValue(
+                    new ShotKey(owner, revision, enemy), out var shot)) return;
+            shot.WaterEntry = true;
+            shot.WaterEntryAge = Mathf.Max(0f, (float)(at - shot.Started));
+            shot.WaterEntryPoint = point;
+            shot.WaterEntryEffect = waterEffect;
+        }
+
         public static void ClearOwner(ulong owner, bool enemy)
         {
             if (_instance == null) return;
@@ -129,6 +142,12 @@ namespace WaveByWave.Combat
                 {
                     shot.MuzzleShown = true;
                     CannonEffects.Muzzle(shot.Origin, shot.Velocity.normalized, shot.Muzzle);
+                }
+                if (shot.WaterEntry && !shot.WaterEntryShown && shot.Age >= shot.WaterEntryAge)
+                {
+                    shot.WaterEntryShown = true;
+                    CannonEffects.Hit(shot.WaterEntryPoint, Vector3.up, true,
+                        shot.WaterEntryEffect, null);
                 }
                 if (shot.Impact && shot.Age >= shot.ImpactAge)
                 {

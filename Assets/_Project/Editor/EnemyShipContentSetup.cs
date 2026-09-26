@@ -10,7 +10,7 @@ namespace WaveByWave.Editor
 {
     public static class EnemyShipContentSetup
     {
-        public const string DefinitionPath = "Assets/_Project/Resources/EnemyShipDefinition.asset";
+        public const string DefinitionPath = "Assets/_Project/Resources/Enemies/EnemyShipDefinition.asset";
         public const string ViewPath = "Assets/_Project/Prefabs/Enemies/EnemyShip.prefab";
         public const string SpawnPointPath = "Assets/_Project/Prefabs/Enemies/EnemyShipSpawnPoint.prefab";
         private const string PlayerShipPath = "Assets/_Project/Prefabs/Ship.prefab";
@@ -21,7 +21,7 @@ namespace WaveByWave.Editor
             if (EditorApplication.isPlayingOrWillChangePlaymode)
                 throw new InvalidOperationException("Stop Play Mode before creating enemy ship content.");
             Directory.CreateDirectory("Assets/_Project/Prefabs/Enemies");
-            Directory.CreateDirectory("Assets/_Project/Resources");
+            Directory.CreateDirectory("Assets/_Project/Resources/Enemies");
             AssetDatabase.Refresh();
 
             var view = AssetDatabase.LoadAssetAtPath<GameObject>(ViewPath);

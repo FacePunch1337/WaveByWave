@@ -11,7 +11,9 @@ namespace WaveByWave.Player
         private Vector3 _origin, _velocity, _point, _normal;
         private float _gravity, _lifetime;
         private double _started, _impactAt;
-        private bool _impact, _water, _show;
+        private bool _impact, _water, _show, _waterEntry, _waterEntryShown;
+        private Vector3 _waterEntryPoint;
+        private double _waterEntryAt;
         private GameObject _waterImpact, _groundImpact;
         private Renderer _renderer;
         private TrailRenderer _trail;
@@ -37,6 +39,13 @@ namespace WaveByWave.Player
             _impact = true; _point = point; _normal = normal; _water = water; _show = show;
             _impactAt = at; _waterImpact = waterImpact; _groundImpact = groundImpact;
         }
+        public void SetWaterEntry(Vector3 point, double at, GameObject waterImpact)
+        {
+            _waterEntry = true;
+            _waterEntryPoint = point;
+            _waterEntryAt = at;
+            _waterImpact = waterImpact;
+        }
         private void LateUpdate()
         {
             if (_equipment == null || !_equipment.IsSpawned) { Destroy(gameObject); return; }
@@ -44,6 +53,11 @@ namespace WaveByWave.Player
             var t = (float)(now - _started);
             if (_renderer != null) _renderer.enabled = t >= 0f;
             if (_trail != null) _trail.emitting = t >= 0f;
+            if (_waterEntry && !_waterEntryShown && now >= _waterEntryAt)
+            {
+                _waterEntryShown = true;
+                CannonEffects.Hit(_waterEntryPoint, Vector3.up, true, _waterImpact, null);
+            }
             if (_impact && now >= _impactAt)
             {
                 transform.position = _point;

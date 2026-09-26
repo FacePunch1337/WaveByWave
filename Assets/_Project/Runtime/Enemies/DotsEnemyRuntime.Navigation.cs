@@ -30,12 +30,13 @@ namespace WaveByWave.Enemies
             float deltaTime, bool wantsToMove, float now, ref int edgeBudget)
         {
             if (!Catalog.UseBakedDeckNavigation) return false;
+            var catalog = GetCatalog(state.Kind) ?? Catalog;
             var map = DeckMap(state.SupportId);
             if (map == null || !map.IsBaked || !TryGetSurfaceFrame(state.SupportId, true, out var frame)) return false;
             var scale = frame.lossyScale;
             var minimumScale = Mathf.Min(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
-            if (minimumScale < 0.001f || map.AgentRadius * minimumScale + 0.001f < Catalog.BodyRadius ||
-                map.AgentHeight * Mathf.Abs(scale.y) + 0.001f < Catalog.BodyHeight || map.MaximumSlope > Catalog.MaximumSlope + 0.001f)
+            if (minimumScale < 0.001f || map.AgentRadius * minimumScale + 0.001f < catalog.BodyRadius ||
+                map.AgentHeight * Mathf.Abs(scale.y) + 0.001f < catalog.BodyHeight || map.MaximumSlope > Catalog.MaximumSlope + 0.001f)
                 return false; // A map baked for a smaller agent cannot guarantee this one's clearance.
             var inverse = frame.inverse;
             var from = inverse.MultiplyPoint3x4(state.Position);
@@ -69,7 +70,7 @@ namespace WaveByWave.Enemies
                     else evaluated = false;
                 }
                 moving = Catalog.EnableSurfaceEdgeFollowing && map.TryFollow(node, from, inverse.MultiplyPoint3x4(movementGoal),
-                    Catalog.MoveSpeed * deltaTime / minimumScale, step, drop, out feet, out normal);
+                    catalog.MoveSpeed * deltaTime / minimumScale, step, drop, out feet, out normal);
             }
             var distance = 0f;
             if (moving)

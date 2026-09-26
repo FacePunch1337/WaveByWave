@@ -88,7 +88,8 @@ namespace WaveByWave.Editor
                 register.Invoke(runtime, new object[] { 1 });
                 register.Invoke(runtime, new object[] { 2 });
                 var first = new DotsEnemyBrain { CrewShipId = 1 };
-                var boarder = new DotsEnemyBrain { CrewShipId = 1, SpawnGroup = DotsEnemyRuntime.CrewGroupForShip(1) };
+                var boarder = new DotsEnemyBrain { CrewShipId = 1,
+                    SpawnGroup = DotsEnemyRuntime.CrewGroupForShip(1) };
                 var otherShip = new DotsEnemyBrain { CrewShipId = 2 };
                 var islandEnemy = new DotsEnemyBrain();
                 var neverSpawned = new DotsEnemyBrain { CrewShipId = 3 };
@@ -149,9 +150,10 @@ namespace WaveByWave.Editor
                 world.EntityManager.SetComponentData(right, new DotsEnemyState
                     { Id = 2, Health = 60, Scene = 1, SupportId = 9, Position = new float3(0.4f,0,0) });
                 system.Seek(targets, 0, 0.82f, 1.2f);
-                Check(world.EntityManager.GetComponentData<DotsEnemyBrain>(left).Separation.x < 0 &&
-                      world.EntityManager.GetComponentData<DotsEnemyBrain>(right).Separation.x > 0,
-                    "Close skeletons on one surface were not directed apart.");
+                var leftSeparation = world.EntityManager.GetComponentData<DotsEnemyBrain>(left).Separation;
+                var rightSeparation = world.EntityManager.GetComponentData<DotsEnemyBrain>(right).Separation;
+                Check(leftSeparation.x < 0 && rightSeparation.x > 0,
+                    $"Close skeletons on one surface were not directed apart: {leftSeparation}, {rightSeparation}.");
                 var separatedSurface = world.EntityManager.GetComponentData<DotsEnemyState>(right);
                 separatedSurface.SupportId = 10;
                 world.EntityManager.SetComponentData(right, separatedSurface);
@@ -275,7 +277,7 @@ namespace WaveByWave.Editor
 
         private static void CheckAuthoredHull()
         {
-            var definition = Resources.Load<EnemyShipDefinition>("EnemyShipDefinition");
+            var definition = EnemyShipDefinition.Load();
             var factory = typeof(DotsEnemyShipRuntime).Assembly.GetType("WaveByWave.Collision.AuthoredShipHull")
                 .GetMethod("Create", BindingFlags.Static | BindingFlags.Public);
             var hull = (BlobAssetReference<Unity.Physics.Collider>)factory.Invoke(null,

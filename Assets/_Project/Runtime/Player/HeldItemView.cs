@@ -20,6 +20,7 @@ namespace WaveByWave.Player
         private GameObject _hookVisual, _bucketWater;
         private LineRenderer _rope;
         private ItemDefinition _definition;
+        private GameObject _gripPrefab;
         private ItemDefinition _lastDrinkItem;
         private GripPose _rightGrip, _leftGrip;
         private GripPose _muzzlePoint;
@@ -140,9 +141,9 @@ namespace WaveByWave.Player
             if (_itemPose != null) Destroy(_itemPose.gameObject);
             if (_hookVisual != null) Destroy(_hookVisual);
             _itemPose = null; _item = null; _bucketWater = null; _hookVisual = null;
-            _rightGrip = default; _leftGrip = default; _muzzlePoint = default; _hasAuthoredGrips = false;
+            _rightGrip = default; _leftGrip = default; _muzzlePoint = default; _hasAuthoredGrips = false; _gripPrefab = null;
             if (definition == null || definition.WorldVisualPrefab == null) return;
-            ReadGripPoints(definition.WorldVisualPrefab);
+            RefreshGripPoints();
             ReadMuzzlePoint(definition.WorldVisualPrefab);
             _itemPose = new GameObject("Held " + definition.Id).transform;
             _itemPose.SetParent(_motion, false);
@@ -159,15 +160,23 @@ namespace WaveByWave.Player
                 if (_bucketWater != null) _bucketWater.SetActive(false);
             }
         }
-        private void ReadGripPoints(GameObject prefab)
+        private void RefreshGripPoints()
+        {
+            _gripPrefab = _definition != null ? _definition.HandGripPrefab : null;
+            _rightGrip = default; _leftGrip = default; _hasAuthoredGrips = false;
+            if (_gripPrefab != null && _definition.WorldVisualPrefab != null)
+                ReadGripPoints(_gripPrefab, _definition.WorldVisualPrefab.transform);
+        }
+        private void ReadGripPoints(GameObject prefab, Transform visualRoot)
         {
             var root = prefab.transform;
             // _itemPose represents the prefab's parent, not its root. Keep the complete
-            // authored root transform in the grip matrix (notably root scale on muskets).
-            var prefabParentInverse = root.parent != null ? root.parent.worldToLocalMatrix : Matrix4x4.identity;
+            // visual root transform. Inherited markers are relative to the base prefab's
+            // root, then mapped onto this variant's own model (and its authored scale).
+            var visualRootMatrix = Matrix4x4.TRS(visualRoot.localPosition, visualRoot.localRotation, visualRoot.localScale);
             foreach (var point in prefab.GetComponentsInChildren<ItemHandGripPoint>(true))
             {
-                var pose = new GripPose(prefabParentInverse * point.transform.localToWorldMatrix);
+                var pose = new GripPose(visualRootMatrix * root.worldToLocalMatrix * point.transform.localToWorldMatrix);
                 if (point.Hand == ItemGripHand.Right)
                 {
                     if (_rightGrip.IsSet)
@@ -288,6 +297,7 @@ namespace WaveByWave.Player
                 _equipment.NetworkManager.ServerTime.Time < motion.Started + motion.Duration)
                 definition = _lastDrinkItem;
             if (_definition != definition) SetItem(definition);
+            if (definition != null && _gripPrefab != definition.HandGripPrefab) RefreshGripPoints();
             var visible = definition != null && _equipment.Available && !_player.IsAtControlStation &&
                 !_player.IsCustomizing &&
                 (!_equipment.IsOwner || (_player.OwnerView.gameObject.activeInHierarchy && !PlayerEquipment.InputCaptured));

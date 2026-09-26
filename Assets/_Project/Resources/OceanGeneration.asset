@@ -89,8 +89,28 @@ MonoBehaviour:
     Spacing: 1.4
     AlignToSurface: 0
   GenerateEnemySpawnPoints: 1
+  EnemySpawnDays:
+  - FromDay: 1
+    Skeleton: 1
+    Troll: 0
+    Shark: 0
+    Amphibian: 0
+    Random: 1
+  - FromDay: 2
+    Skeleton: 0
+    Troll: 1
+    Shark: 0
+    Amphibian: 0
+    Random: 1
+  - FromDay: 3
+    Skeleton: 1
+    Troll: 1
+    Shark: 0
+    Amphibian: 0
+    Random: 1
   EnemySpawnPointPrefabs:
   - {fileID: 7781738345221626232, guid: 839d93365f4604242988f79aea861bf7, type: 3}
+  - {fileID: 1574576170766270260, guid: 71ea93d9a08be264c988486819881b40, type: 3}
   EnemySpawnPointCountSmall: {x: 1, y: 1}
   EnemySpawnPointCountMedium: {x: 1, y: 2}
   EnemySpawnPointCountLarge: {x: 1, y: 3}

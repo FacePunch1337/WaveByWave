@@ -497,7 +497,7 @@ namespace WaveByWave.Generation
                 Debug.LogWarning($"[Island {Id}] Placed {placed.Count}/{count} enemy spawn points: insufficient dry ground at the configured slope/spacing.", this);
         }
 
-        private bool TryMeshSurface(float x, float z, out RaycastHit result)
+        internal bool TryMeshSurface(float x, float z, out RaycastHit result)
         {
             result = default;
             var top = transform.TransformPoint(new Vector3(x, Settings.SandHeight + 1f, z));

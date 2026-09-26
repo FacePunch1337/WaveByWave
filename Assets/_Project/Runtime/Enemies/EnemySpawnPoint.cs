@@ -7,6 +7,8 @@ namespace WaveByWave.Enemies
     public sealed class EnemySpawnPoint : MonoBehaviour
     {
         public EnemySpawnMode Mode;
+        public EnemyKind Kind;
+        public EnemyHealthBarMode HealthBar;
         public EnemyCombatType CombatType = EnemyCombatType.Random;
         [Range(1, 3000)] public int Count = 6;
         [Min(0.1f)] public float SpawnRadius = 4f;

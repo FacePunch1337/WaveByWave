@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 using StylizedWater3;
 using WaveByWave.Items;
 
 namespace WaveByWave.Enemies
 {
+    public enum EnemyKind : byte { Skeleton, Troll, Shark, Amphibian }
+    public enum EnemyHabitat : byte { Land, Water, Amphibious }
+    public enum EnemyHealthBarMode : byte { Profile, Show, Hide }
     public enum EnemyCombatType : byte
     {
         Melee,
@@ -28,7 +32,8 @@ namespace WaveByWave.Enemies
         MeleeAttack,
         PistolAttack,
         RifleAttack,
-        Stunned
+        Stunned,
+        Swim
     }
 
     public enum EnemyBakedPartCategory : byte
@@ -100,6 +105,45 @@ namespace WaveByWave.Enemies
         fileName = "SkeletonEnemyCatalog")]
     public sealed class DotsEnemyCatalog : ScriptableObject
     {
+        [Header("Species")]
+        public EnemyKind Kind;
+        public string DisplayName = "Скелеты";
+        public EnemyHabitat Habitat;
+        [Tooltip("Off uses every baked body part with its authored material, without clothing or weapons.")]
+        public bool RandomizeAppearance = true;
+        [Min(0.1f)] public float SwimSpeed = 4f;
+        [Min(0.1f), Tooltip("Depth of the model origin below the ocean surface while swimming.")]
+        public float SwimmingDepth = 1.1f;
+        [Min(0f)] public float MinimumWaterDepth = 1.2f;
+        [FormerlySerializedAs("AmphibiousBoardingHeight")]
+        [Min(0f), Tooltip("Maximum vertical distance this enemy may climb onto a player ship. Set to zero to disable ship boarding.")]
+        public float ShipBoardingHeight = 5f;
+        public AnimationClip SwimClip;
+        [Tooltip("Optional local capsule endpoints for a horizontal animal. Values are in world metres before rotation.")]
+        public bool CustomHitCapsule;
+        public Vector3 HitCapsuleStart = new(0, 0.4f, -0.8f);
+        public Vector3 HitCapsuleEnd = new(0, 0.4f, 0.8f);
+
+        [Header("Automatic ocean encounter (Shark only)")]
+        [Tooltip("One shared encounter for the crew. Starts with one shark while any living player is in the ocean; each defeated group increases the next group by one.")]
+        public bool SpawnWhenPlayerEntersOcean = true;
+        [Min(1), Tooltip("Maximum sharks in an automatic encounter group. At this limit, subsequent groups keep the same size. Resets for a new voyage.")]
+        public int OceanEncounterMaximumSharks = 5;
+        [Min(0f), Tooltip("Seconds between defeating a group and spawning its replacement. A player must still be in the ocean.")]
+        public float OceanEncounterRespawnDelay = 3f;
+        [Min(0f), Tooltip("Closest horizontal distance from the entering player at which the shark may appear.")]
+        public float OceanEncounterMinimumDistance = 8f;
+        [Min(0.1f), Tooltip("Farthest horizontal distance from the entering player at which the shark may appear.")]
+        public float OceanEncounterMaximumDistance = 16f;
+
+        [Header("Health bars (optional)")]
+        public bool ShowHealthBars;
+        [Min(0f)] public float HealthBarHeight = 2.1f;
+        public Vector2 HealthBarSize = new(0.9f, 0.1f);
+        [Min(1f)] public float HealthBarDistance = 45f;
+        public Material HealthBarMaterial;
+        public Mesh HealthBarMesh;
+
         [Header("Enabled skeleton types (new spawns only)")]
         [Tooltip("Allow melee skeletons in new spawns, including the admin panel and ship crews. Existing skeletons are unaffected.")]
         public bool EnableMeleeSpawns = true;
@@ -264,6 +308,7 @@ namespace WaveByWave.Enemies
             EnemyAnimationState.MeleeAttack => MeleeAttackClip,
             EnemyAnimationState.PistolAttack => PistolAttackClip,
             EnemyAnimationState.RifleAttack => RifleAttackClip,
+            EnemyAnimationState.Swim => SwimClip != null ? SwimClip : RunClip,
             _ => IdleClip
         };
 

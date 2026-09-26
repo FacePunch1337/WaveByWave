@@ -29,11 +29,14 @@ namespace WaveByWave.UI
             if(!active) {if(_hud!=null)_hud.SetActive(false);if(_result!=null)_result.SetActive(false);return;}
             if(_hud==null) _hud=GameUiPrefabs.Create("HUD/Voyage", owner: this)??BuildHud();
             _hud.SetActive(!_ship.VoyageEnded);
-            GameUiPrefabs.Find<Text>(_hud,"Day/Label").text=_ship.Phase switch
+            var waveLabel=_ship.Phase switch
             {
                 VoyagePhase.Day=>$"День {_ship.WaveNumber}",VoyagePhase.Night=>$"Ночная волна {_ship.WaveNumber}",
                 VoyagePhase.Sunset=>"Наступает ночь",_=>"Рассвет"
             };
+            if(_ship.Phase==VoyagePhase.Night&&_ship.WaveEnemiesTotal>0)
+                waveLabel+=$"  ·  {_ship.WaveEnemiesDefeated}/{_ship.WaveEnemiesTotal}";
+            GameUiPrefabs.Find<Text>(_hud,"Day/Label").text=waveLabel;
             GameUiPrefabs.Find<RectTransform>(_hud,"Day/Progress").anchorMax=new Vector2(_ship.DayProgress,0);
             if(_flood!=null)
             {
@@ -41,7 +44,8 @@ namespace WaveByWave.UI
                 GameUiPrefabs.Find<RectTransform>(_hud,"Flood/Progress").anchorMax=new Vector2(_flood.Fill,0);
             }
             var wave=NightWaveController.Active;
-            GameUiPrefabs.Find<Text>(_hud,"Warning").text=wave!=null?wave.BoundaryWarning:"";
+            GameUiPrefabs.Find<Text>(_hud,"Warning").text=NightBattlefieldController.Active!=null?
+                NightBattlefieldController.Active.BoundaryWarning:"";
             var announcement=GameUiPrefabs.Find<Text>(_hud,"Announcement");
             announcement.text=wave!=null?wave.Announcement:"";
             var color=announcement.color;color.a=wave!=null?wave.AnnouncementAlpha:0;announcement.color=color;

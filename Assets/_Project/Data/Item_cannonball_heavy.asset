@@ -22,6 +22,7 @@ MonoBehaviour:
   maximumStack: 40
   supplyKind: 1
   potency: 75
+  cannonDamageModifier: 35
   treasureExperience: 0
   coinReward: 0
   upgradeStat: 0

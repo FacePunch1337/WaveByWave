@@ -48,6 +48,8 @@ namespace WaveByWave.Generation
         public bool AlignToSurface;
         [Tooltip("Place the bottom of the visible mesh on the island instead of the prefab root. Accounts for nested model offsets and scale; useful after replacing a tree mesh. Off preserves deliberately buried rocks.")]
         public bool GroundMeshBase;
+        [Tooltip("World-space vertical placement offset in metres, applied after grounding. Negative values bury the base; positive values raise it. Independent of random scale and surface alignment.")]
+        public float VerticalOffset;
     }
 
     [CreateAssetMenu(menuName = "Wave by Wave/World/Ocean Generation Settings")]
@@ -65,8 +67,13 @@ namespace WaveByWave.Generation
         [Min(0.1f)] public float LootFadeDuration = 1.2f;
         [Range(0.05f, 1f), Tooltip("Интервал проверки видимости готовых островов после загрузки. Эта проверка не обязана выполняться каждый кадр.")]
         public float PresentationRefreshInterval = 0.2f;
-        [FormerlySerializedAs("FloatingLoot"), Tooltip("All floating items and their relative selection weights. Locked rarities are excluded until their unlock day.")]
-        public List<WeightedItemEntry> FloatingObjects = new();
+        [SerializeField, InspectorName("Floating Items"), Tooltip("Separate editable pool of every item that may spawn on the ocean surface.")]
+        private FloatingItemPool floatingItemPool;
+        [SerializeField, HideInInspector, FormerlySerializedAs("FloatingObjects"), FormerlySerializedAs("FloatingLoot")]
+        private List<WeightedItemEntry> legacyFloatingObjects = new();
+        public FloatingItemPool FloatingItemPoolAsset => floatingItemPool;
+        public List<WeightedItemEntry> FloatingObjects =>
+            floatingItemPool != null ? floatingItemPool.Items : legacyFloatingObjects;
         [Tooltip("Each day entry permanently unlocks every tier in its Rarities list. Unlisted rarities never spawn; an empty schedule disables floating loot.")]
         public List<LootRarityUnlock> FloatingRarityUnlocks = DefaultRarityUnlocks();
         [Header("Цепочка и предзагрузка островов")]

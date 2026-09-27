@@ -17,7 +17,8 @@ namespace WaveByWave.Editor.Items
         public Vector3 ModelEulerAngles;
         public bool RemoveBackground = true;
         public int BackgroundTolerance = 6;
-        public bool RemoveEnclosedBackground;
+        public bool RemoveEnclosedBackground = true;
+        public int BackgroundRemovalVersion = 1;
         public bool Crop = true;
         public int Padding = 2;
         public bool BrightenPreview = true;
@@ -166,13 +167,14 @@ namespace WaveByWave.Editor.Items
             }
         }
 
-        public static Sprite Save(ItemDefinition item, Texture2D processed, string outputFolder)
+        public static Sprite Save(ItemDefinition item, Texture2D processed, string outputFolder,
+            bool createUniqueAsset = false)
         {
             var itemPath = AssetDatabase.GetAssetPath(item);
             if (string.IsNullOrEmpty(itemPath)) throw new ArgumentException("Сначала сохраните ItemDefinition как ассет.");
             // Rebaking a native icon must update the asset already used by the project.
             // The original HUD icons store Sprite and Texture2D in separate .asset files.
-            if (CanReplaceNativeIcon(item.Icon))
+            if (!createUniqueAsset && CanReplaceNativeIcon(item.Icon))
             {
                 ReplaceNativeIcon(item.Icon, processed);
                 return item.Icon;
@@ -273,6 +275,7 @@ namespace WaveByWave.Editor.Items
     public sealed class ItemIconBakeJob
     {
         private readonly ItemDefinition[] _items;
+        private readonly HashSet<Sprite> _sharedIcons;
         private readonly ItemIconBakeSettings _settings;
         private readonly Func<GameObject, Texture2D> _getPreview;
         private readonly ItemIconPreviewSource _previewSource;
@@ -291,6 +294,14 @@ namespace WaveByWave.Editor.Items
         public ItemIconBakeJob(IEnumerable<ItemDefinition> items, ItemIconBakeSettings settings, Func<GameObject, Texture2D> getPreview = null)
         {
             _items = items.Where(x => x != null).Distinct().ToArray();
+            _sharedIcons = AssetDatabase.FindAssets("t:ItemDefinition")
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Select(AssetDatabase.LoadAssetAtPath<ItemDefinition>)
+                .Where(value => value != null && value.Icon != null)
+                .GroupBy(value => value.Icon)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .ToHashSet();
             _settings = settings.Copy();
             ItemIconBaker.ValidateFolder(_settings.OutputFolder);
             if (getPreview != null) _getPreview = getPreview;
@@ -327,7 +338,8 @@ namespace WaveByWave.Editor.Items
                     throw new TimeoutException("Unity не подготовила миниатюру за 40 с. Проверьте, есть ли у prefab видимые меши.");
                 }
                 processed = ItemIconBaker.Process(preview, _settings);
-                ItemIconBaker.Save(item, processed, _settings.OutputFolder);
+                ItemIconBaker.Save(item, processed, _settings.OutputFolder,
+                    item.Icon != null && _sharedIcons.Contains(item.Icon));
                 Saved++;
             }
             catch (Exception ex)

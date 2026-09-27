@@ -31,6 +31,7 @@ namespace WaveByWave.Editor
                 settings.SmallDiameter = 10;
                 settings.Decorations = new System.Collections.Generic.List<IslandDecoration> {
                     new IslandDecoration { Prefab = palm.Prefab, GroundMeshBase = true,
+                        VerticalOffset = palm.VerticalOffset,
                         InstancesPerSquareMetre = 0.06f, ScaleRange = palm.ScaleRange,
                         MaximumSlope = 50, MinimumHeightAboveWater = 0.1f, Spacing = 0.5f } };
                 var island = root.AddComponent<ProceduralIsland>();
@@ -45,8 +46,9 @@ namespace WaveByWave.Editor
                     {
                         var contact = tree.TransformPoint(anchor);
                         Require(island.TrySurface(contact.x, contact.z, out var surface, out _, true) &&
-                            Mathf.Abs(contact.y - surface.y) < 0.002f, "Generated palm base missed the island surface.");
-                        Require(island.DensityAt(contact - Vector3.up * 0.15f).x >= -0.1f,
+                            Mathf.Abs(contact.y - surface.y - palm.VerticalOffset) < 0.002f,
+                            "Generated palm base missed its configured vertical offset.");
+                        Require(island.DensityAt(surface - Vector3.up * 0.15f).x >= -0.1f,
                             "The palm lost its digging support after pivot compensation.");
                         var lowest = float.PositiveInfinity;
                         // Editor-only read access proves contact against the actual FBX
@@ -60,8 +62,8 @@ namespace WaveByWave.Editor
                             foreach (var vertex in vertices)
                                 lowest = Mathf.Min(lowest, filter.transform.TransformPoint(vertex).y);
                         }
-                        Require(Mathf.Abs(lowest - surface.y) < 0.005f,
-                            $"Actual palm geometry floats/sinks: bottom={lowest}, ground={surface.y}, seed={seed}.");
+                        Require(Mathf.Abs(lowest - surface.y - palm.VerticalOffset) < 0.005f,
+                            $"Actual palm geometry missed its offset: bottom={lowest}, ground={surface.y}, offset={palm.VerticalOffset}, seed={seed}.");
                     }
                 }
                 finally

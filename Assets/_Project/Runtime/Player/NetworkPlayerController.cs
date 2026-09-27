@@ -3326,6 +3326,14 @@ namespace WaveByWave.Player
             return true;
         }
 
+        public ulong GetEnemyNavigationSupportOnServer()
+        {
+            if (_enemyPassengerPose.Value.ShipId != 0)
+                return DotsEnemyRuntime.ShipSurfaceKey(_enemyPassengerPose.Value.ShipId);
+            var ship = GetSupportingShipOnServer();
+            return ship != null ? ship.NetworkObjectId + 1 : 0;
+        }
+
         internal bool BeginRingChoiceServer(int level, uint seed)
         {
             if (!IsServer || !IsSpawned) return false;

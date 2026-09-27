@@ -22,19 +22,8 @@ MonoBehaviour:
   LootDespawnRadius: 100
   LootFadeDuration: 1.2
   PresentationRefreshInterval: 0.2
-  FloatingObjects:
-  - Item: {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
-    Weight: 3
-  - Item: {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
-    Weight: 2
-  - Item: {fileID: 11400000, guid: 98a88a164ead42db8a1c940ca2cca621, type: 2}
-    Weight: 0.5
-  - Item: {fileID: 11400000, guid: bf77909465994dd1afb1b1465e577977, type: 2}
-    Weight: 0.2
-  - Item: {fileID: 11400000, guid: 298a8c701dfa4681944fba4ebb0bc3b3, type: 2}
-    Weight: 0.1
-  - Item: {fileID: 11400000, guid: ab844d8473b14fbaa6827e333ad5bb11, type: 2}
-    Weight: 0.01
+  floatingItemPool: {fileID: 11400000, guid: 60b8879eebff86f4a91e16bbc58e101b, type: 2}
+  legacyFloatingObjects: []
   FloatingRarityUnlocks:
   - FromDay: 1
     Rarities:
@@ -84,6 +73,7 @@ MonoBehaviour:
     Spacing: 1.4
     AlignToSurface: 0
     GroundMeshBase: 1
+    VerticalOffset: -0.25
   - Prefab: {fileID: 1538027470874685010, guid: bdd2a5c95ae34574f9e6a41cc59cbf91, type: 3}
     InstancesPerSquareMetre: 0.001
     ScaleRange: {x: 0.25, y: 0.6}
@@ -91,6 +81,8 @@ MonoBehaviour:
     MinimumHeightAboveWater: 0.25
     Spacing: 1.4
     AlignToSurface: 0
+    GroundMeshBase: 0
+    VerticalOffset: 0
   EnemySpawnDays:
   - FromDay: 1
     Random: 0

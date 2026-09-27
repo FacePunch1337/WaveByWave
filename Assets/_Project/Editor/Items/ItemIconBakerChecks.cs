@@ -22,7 +22,8 @@ namespace WaveByWave.Editor.Items
                 Require(rejected, "Output path must stay inside Assets");
                 var settings = new ItemIconBakeSettings
                 {
-                    OutputFolder = folder, BrightenPreview = false, Brightness = 1, Padding = 2, BackgroundTolerance = 0
+                    OutputFolder = folder, BrightenPreview = false, Brightness = 1, Padding = 2,
+                    BackgroundTolerance = 0, RemoveEnclosedBackground = false
                 };
                 source = new Texture2D(16, 16, TextureFormat.RGBA32, false);
                 var gray = new Color32(82, 82, 82, 255);

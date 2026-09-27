@@ -54,8 +54,8 @@ namespace WaveByWave.Editor
         {
             Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Player.prefab"), "Player prefab");
             Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Ship.prefab"), "Ship prefab");
-            Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Items/Cannonball.prefab"), "Item prefab");
-            var worldItem = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Items/Cannonball.prefab");
+            Require(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Items/Supply/Common/cannonball.prefab"), "Item prefab");
+            var worldItem = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Items/Supply/Common/cannonball.prefab");
             if (worldItem.GetComponent<Rigidbody>() != null || worldItem.GetComponent<NetworkTransform>() != null ||
                 worldItem.GetComponent<NetworkRigidbody>() != null || !worldItem.GetComponent<Collider>().isTrigger)
                 throw new InvalidOperationException("Loot must use procedural placement and only a pickup trigger, without Rigidbody or NetworkTransform.");

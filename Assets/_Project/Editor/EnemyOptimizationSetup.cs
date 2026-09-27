@@ -18,7 +18,6 @@ namespace WaveByWave.Editor
             if (catalog.CombinedSourceHash != EnemyCombinedVariantBaker.SourceHash(catalog)) EnemyCombinedVariantBaker.Bake(catalog);
             if (catalog.UseBakedDeckNavigation)
             {
-                BakeShip("Assets/_Project/Prefabs/Enemies/EnemyShip.prefab", "Assets/_Project/Data/Enemies/EnemyShipNavigation.asset", catalog);
                 BakeShip("Assets/_Project/Prefabs/Ship.prefab", "Assets/_Project/Data/Enemies/PlayerShipNavigation.asset", catalog);
             }
             else Debug.Log("[Enemies] Deck-map baking is disabled. Ship movement uses the current colliders.");
@@ -36,8 +35,8 @@ namespace WaveByWave.Editor
                     nav = root.AddComponent<EnemyDeckNavigation>();
                     var scale = Mathf.Max(0.001f, Mathf.Min(Mathf.Abs(root.transform.lossyScale.x),
                         Mathf.Abs(root.transform.lossyScale.y), Mathf.Abs(root.transform.lossyScale.z)));
-                    nav.AgentRadius = catalog.BodyRadius / scale;
-                    nav.AgentHeight = catalog.BodyHeight / scale;
+                    nav.AgentRadius = catalog.DeckAgentRadius / scale;
+                    nav.AgentHeight = catalog.DeckAgentHeight / scale;
                     nav.MaximumSlope = catalog.MaximumSlope;
                     nav.StepHeight = Mathf.Min(0.45f, catalog.StepHeight / scale);
                     nav.MaximumDrop = Mathf.Min(2f, catalog.MaximumDrop / scale);

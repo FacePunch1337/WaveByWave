@@ -34,6 +34,7 @@ namespace WaveByWave.Editor
         private const string Scenes = Root + "/Scenes";
         private const string Prefabs = Root + "/Prefabs";
         private const string Data = Root + "/Data";
+        private const string ItemData = Data + "/Items";
         private const string Materials = Generated + "/Materials";
         private const string Animations = Generated + "/Animations";
         private const string PortScenePath = Scenes + "/Port.unity";
@@ -83,7 +84,9 @@ namespace WaveByWave.Editor
             EnsureFolder(Prefabs);
             EnsureFolder(Prefabs + "/Items");
             EnsureFolder(Prefabs + "/Items/Visuals");
+            EnsureFolder(Prefabs + "/Items/Supply/Common");
             EnsureFolder(Data);
+            EnsureFolder(ItemData);
             EnsureFolder(Materials);
             EnsureFolder(Animations);
         }
@@ -188,7 +191,8 @@ namespace WaveByWave.Editor
 
         private static ItemDefinition CreateItem(string id, string displayName, string description, ItemCategory category)
         {
-            var path = $"{Data}/Item_{id}.asset";
+            EnsureFolder($"{ItemData}/{category}/Common");
+            var path = $"{ItemData}/{category}/Common/Item_{id}.asset";
             var item = AssetDatabase.LoadAssetAtPath<ItemDefinition>(path);
             if (item == null)
             {
@@ -282,7 +286,7 @@ namespace WaveByWave.Editor
             SetObjectReference(item, "rarityEffectPrefab",
                 AssetDatabase.LoadAssetAtPath<GameObject>(Prefabs + "/Effects/LootRarity.prefab"));
 
-            var path = Prefabs + "/Items/Cannonball.prefab";
+            var path = Prefabs + "/Items/Supply/Common/cannonball.prefab";
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
             return prefab.GetComponent<WorldItem>();

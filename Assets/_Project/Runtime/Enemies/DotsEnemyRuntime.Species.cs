@@ -96,6 +96,7 @@ namespace WaveByWave.Enemies
                 shoreFound && shore.point.y <= from.y + normalReach)
             {
                 if (state.Swimming == 0) return false;
+                shore = PreferPassageGround(from, destination, shore, catalog);
                 // The walkable shore collider is also the first solid seen by the horizontal
                 // transition ray. It is the destination support, not an obstacle in front of it.
                 if (SolidBetween(from + Vector3.up * 0.7f, shore.point + Vector3.up * 0.7f,
@@ -148,7 +149,9 @@ namespace WaveByWave.Enemies
         private bool TryBoardPlayerShip(ref DotsEnemyState state, ref DotsEnemyBrain brain,
             float3 displacement, float dt, bool wantsToMove, float now, DotsEnemyCatalog catalog)
         {
-            if (catalog.ShipBoardingHeight <= 0f || !wantsToMove || brain.Target < 0 ||
+            if (state.Kind == EnemyKind.Shark || catalog.Habitat == EnemyHabitat.Water ||
+                catalog.ShipBoardingHeight <= 0f || !wantsToMove ||
+                (brain.Target < 0 && brain.TargetingShip == 0) ||
                 math.lengthsq(displacement.xz) < 0.000001f) return false;
             var from = (Vector3)state.Position;
             var destination = from + (Vector3)displacement;
@@ -156,7 +159,12 @@ namespace WaveByWave.Enemies
             if (!TryGround(destination + Vector3.up * reach,
                     reach + catalog.MaximumDrop, catalog, out var deck)) return false;
             var ship = deck.collider.GetComponentInParent<NetworkShipController>();
+            if (ship == null || !ship.IsSpawned || state.SupportId == ship.NetworkObjectId + 1) return false;
+            if (brain.TargetingShip != 0 && brain.TargetSupport != ship.NetworkObjectId + 1) return false;
+            deck = PreferPassageGround(from, destination, deck, catalog);
+            ship = deck.collider.GetComponentInParent<NetworkShipController>();
             if (ship == null || !ship.IsSpawned || state.SupportId == ship.NetworkObjectId + 1 ||
+                (brain.TargetingShip != 0 && brain.TargetSupport != ship.NetworkObjectId + 1) ||
                 deck.point.y > from.y + catalog.ShipBoardingHeight) return false;
             // The destination ship's hull surrounds the deck by design. Ignore that one
             // moving hierarchy while retaining occlusion from islands and other ships.
@@ -175,7 +183,15 @@ namespace WaveByWave.Enemies
         {
             if (catalog.Habitat == EnemyHabitat.Water &&
                 (!_water.TryWaterLevel(target, out var level) || target.y >= level - 0.15f)) return false;
-            return !SolidBetween((Vector3)state.Position + Vector3.up * catalog.BodyHeight * 0.7f,
+            var height = catalog.BodyHeight;
+            // An intentionally smaller deck agent can stand under a ceiling that intersects
+            // its model. Keep its attack sight origin below that ceiling as well; the combat
+            // hit capsule and the rendered model still use their original dimensions.
+            if (catalog.UsesShipNavigation && !IsShipSurface(state.SupportId) &&
+                TryGetSurfaceFrame(state.SupportId, true, out var frame) &&
+                DeckMap(state.SupportId, state.Kind, frame.lossyScale) != null)
+                height = Mathf.Min(height, catalog.DeckAgentHeight);
+            return !SolidBetween((Vector3)state.Position + Vector3.up * height * 0.7f,
                 target + Vector3.up * 0.9f, true);
         }
 

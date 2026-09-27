@@ -59,6 +59,12 @@ namespace WaveByWave.Editor.Items
                 try { JsonUtility.FromJsonOverwrite(saved, settings); }
                 catch (ArgumentException) { settings = new ItemIconBakeSettings(); }
             }
+            if (string.IsNullOrEmpty(saved) || !saved.Contains("\"BackgroundRemovalVersion\"", StringComparison.Ordinal) ||
+                settings.BackgroundRemovalVersion < 1)
+            {
+                settings.RemoveEnclosedBackground = true;
+                settings.BackgroundRemovalVersion = 1;
+            }
             if (catalog == null) catalog = AssetDatabase.LoadAssetAtPath<ItemCatalog>("Assets/_Project/Data/ItemCatalog.asset");
             EditorApplication.update -= Tick;
             EditorApplication.update += Tick;
@@ -160,7 +166,7 @@ namespace WaveByWave.Editor.Items
                 }
                 settings.ReplaceExisting = EditorGUILayout.ToggleLeft("Заменять существующие иконки", settings.ReplaceExisting);
                 if (settings.ReplaceExisting)
-                    EditorGUILayout.HelpBox("Существующие иконки .asset обновляются на месте с сохранением ссылок. Папка выше используется для новых иконок. Если несколько предметов используют один Sprite, его изображение изменится у всех.", MessageType.Info);
+                    EditorGUILayout.HelpBox("Уникальные иконки .asset обновляются на месте с сохранением ссылок. Общая иконка автоматически разделяется на отдельные ассеты для каждого предмета.", MessageType.Info);
                 if (!settings.ReplaceExisting)
                     EditorGUILayout.LabelField("Предметы с заполненным Icon будут пропущены.", EditorStyles.wordWrappedMiniLabel);
                 using (new EditorGUILayout.HorizontalScope())

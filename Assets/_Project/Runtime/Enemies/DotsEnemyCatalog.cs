@@ -237,8 +237,16 @@ namespace WaveByWave.Enemies
         public int EdgeSearchesPerFrame = 32;
 
         [Header("Ship surface movement")]
-        [Tooltip("On: use and bake ship-local deck maps. Off: skip deck-map baking and move along the ship's current colliders using ground probes. Existing maps are kept for switching back. Applies live on the server; collider movement requires a physical ship view.")]
+        [Tooltip("Use and bake local deck maps on the player ship. Enemy ships always use their original collider movement and boarding. Off: the player ship also uses ground probes. Existing maps are kept for switching back. Applies live on the server.")]
         public bool UseBakedDeckNavigation;
+        public bool UsesShipNavigation => Kind != EnemyKind.Shark && Habitat != EnemyHabitat.Water && UseBakedDeckNavigation;
+        public bool CanAttackPlayerShip => UsesShipNavigation && EnableCombat;
+        [Min(0f), Tooltip("Navigation-only radius on the player ship. Zero uses Body Radius. Does not change the model or projectile hit capsule; a smaller value permits squeezing through passages.")]
+        public float ShipNavigationRadius;
+        [Min(0f), Tooltip("Navigation-only height on the player ship. Zero uses Body Height. A value below the model's height allows passage under low ceilings but can visually intersect them.")]
+        public float ShipNavigationHeight;
+        public float DeckAgentRadius => ShipNavigationRadius > 0 ? ShipNavigationRadius : BodyRadius;
+        public float DeckAgentHeight => ShipNavigationHeight > 0 ? ShipNavigationHeight : BodyHeight;
 
         [Header("Performance diagnostics (live toggles)")]
         [Tooltip("Give every skeleton a stable point in a spiral around its player target. This only changes desired movement: it has no neighbour search and does not prevent physical overlap by itself. Applies live.")]

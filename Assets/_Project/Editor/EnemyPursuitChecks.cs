@@ -28,6 +28,17 @@ namespace WaveByWave.Editor
             if (File.GetLastWriteTimeUtc("Assets/_Project/Editor/EnemyPursuitChecks.cs") >
                 File.GetLastWriteTimeUtc(typeof(EnemyPursuitChecks).Assembly.Location))
             { AssetDatabase.Refresh(); return; }
+            foreach (var source in new[] { "EnemyDeckNavigationBaker.cs", "OceanGenerationChecks.cs" })
+                if (File.GetLastWriteTimeUtc("Assets/_Project/Editor/" + source) >
+                    File.GetLastWriteTimeUtc(typeof(EnemyPursuitChecks).Assembly.Location))
+                { AssetDatabase.Refresh(); return; }
+            foreach (var source in new[] { "Enemies/DotsEnemyRuntime.cs", "Enemies/DotsEnemyRuntime.Navigation.cs",
+                "Enemies/DotsEnemyRuntime.Surface.cs", "Enemies/DotsEnemyRuntime.Species.cs", "Enemies/DotsEnemyCatalog.cs",
+                "Enemies/DotsEnemyNetcode.cs", "Enemies/EnemyDeckNavigationData.cs",
+                "Enemies/EnemyDeckNavigation.cs", "Ships/ShipHoldSabotage.cs", "Ships/ShipFlooding.cs" })
+                if (File.GetLastWriteTimeUtc("Assets/_Project/Runtime/" + source) >
+                    File.GetLastWriteTimeUtc(typeof(DotsEnemyRuntime).Assembly.Location))
+                { AssetDatabase.Refresh(); return; }
             string command;
             try { command = File.ReadAllText(Request).Trim(); }
             catch (IOException) { return; }
@@ -55,6 +66,88 @@ namespace WaveByWave.Editor
                 File.Delete(Request);
                 try { CheckClimbing(); File.WriteAllText("Temp/EnemyClimbing.result", "PASS: mesh deck recovery, raised ledge, ship gap, disabled edge following, gap and height limits."); }
                 catch (Exception error) { File.WriteAllText("Temp/EnemyClimbing.result", "FAIL: " + error); }
+                return;
+            }
+            if (command == "arch-regression")
+            {
+                File.Delete(Request);
+                try
+                {
+                    CheckArchPassages();
+                    CheckClimbing();
+                    File.WriteAllText("Temp/EnemyArch.result", "PASS: full movement batch through separate/combined arch colliders, low headroom, solid box/closed mesh, upper-floor support, raised ledge and ship-gap climbing.");
+                }
+                catch (Exception error) { File.WriteAllText("Temp/EnemyArch.result", "FAIL: " + error); }
+                return;
+            }
+            if (command == "ship-routes-setup")
+            {
+                File.Delete(Request);
+                try
+                {
+                    EnemyDeckNavigationBaker.BakeProjectShipRoutes();
+                    File.WriteAllText("Temp/EnemyShipRoutes.result", "PASS: ship route maps built and assigned; navigation enabled.");
+                }
+                catch (Exception error) { File.WriteAllText("Temp/EnemyShipRoutes.result", "FAIL: " + error); }
+                return;
+            }
+            if (command == "ship-routes-check")
+            {
+                File.Delete(Request);
+                try { CheckShipRouteMaps(); }
+                catch (Exception error) { File.WriteAllText("Temp/EnemyShipRouteChecks.result", "FAIL: " + error); }
+                return;
+            }
+            if (command == "ship-species-report")
+            {
+                File.Delete(Request);
+                try
+                {
+                    var report = new System.Text.StringBuilder();
+                    var ship = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Ship.prefab");
+                    var nav = ship.GetComponent<EnemyDeckNavigation>();
+                    foreach (var species in new[] { "Skeleton", "Amphibian", "Troll" })
+                    {
+                        var profile = AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>($"Assets/_Project/Resources/Enemies/{species}EnemyCatalog.asset");
+                        var minimum = Vector3.positiveInfinity; var maximum = Vector3.negativeInfinity;
+                        foreach (var part in profile.BakedParts)
+                            foreach (var v in part.Mesh.vertices)
+                            { minimum = Vector3.Min(minimum,v*profile.VisualScale); maximum = Vector3.Max(maximum,v*profile.VisualScale); }
+                        var map = nav.MapFor(profile.DeckAgentRadius,profile.DeckAgentHeight,profile.MaximumSlope);
+                        var holdNodes=0;
+                        if (map != null) foreach (var node in map.Nodes) if(node.Position.y<1.8f) holdNodes++;
+                        report.AppendLine($"{species}: visual idle bounds {minimum}..{maximum}; body R={profile.BodyRadius} H={profile.BodyHeight}; navigation R={profile.DeckAgentRadius} H={profile.DeckAgentHeight}; map={map?.name}, nodes={map?.Nodes.Length}, hold nodes={holdNodes}");
+                    }
+                    File.WriteAllText("Temp/EnemyShipSpecies.result",report.ToString());
+                }
+                catch(Exception error) { File.WriteAllText("Temp/EnemyShipSpecies.result","FAIL: "+error); }
+                return;
+            }
+            if (command == "ship-routes-verify")
+            {
+                File.Delete(Request);
+                try
+                {
+                    EnemyDeckNavigationBaker.ConfigurePlayerHold();
+                    CheckDeckRoutes();
+                    CheckDeckMovement();
+                    CheckDeckTargetPriority();
+                    File.WriteAllText("Temp/EnemyShipRouteVerification.result", "PASS: ship routes, floor selection, shared cache, gap limits, hold slots and crowd damage cap.");
+                }
+                catch (Exception error) { File.WriteAllText("Temp/EnemyShipRouteVerification.result", "FAIL: " + error); }
+                return;
+            }
+            if (command == "ship-species-verify")
+            {
+                File.Delete(Request);
+                try
+                {
+                    foreach(var kind in new[] {EnemyKind.Skeleton,EnemyKind.Amphibian,EnemyKind.Troll})
+                        CheckDeckMovement(kind);
+                    CheckDeckTargetPriority();
+                    File.WriteAllText("Temp/EnemyShipSpeciesVerification.result","PASS: all land species navigate decks/hold on level and rotated ships; baked/unbaked hand-offs and bow recovery; same-island, aboard-ship, water and remote-island target priorities; independent profiles and enemy-ship exclusion.");
+                }
+                catch(Exception error) { File.WriteAllText("Temp/EnemyShipSpeciesVerification.result","FAIL: "+error); }
                 return;
             }
             if (command == "boarding-snapshot")
@@ -94,6 +187,408 @@ namespace WaveByWave.Editor
                 "Runtime loads a different skeleton profile than the one authored in Resources/Enemies.");
             Check(AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(EnemyContentSetup.CatalogPath) == authored,
                 "Skeleton baking/editor tools address a different profile than runtime.");
+        }
+
+        private static void CheckShipRouteMaps()
+        {
+            var output = new System.Text.StringBuilder();
+            var root = PrefabUtility.LoadPrefabContents("Assets/_Project/Prefabs/Ship.prefab");
+            try
+            {
+                var nav = root.GetComponent<EnemyDeckNavigation>();
+                Check(nav != null && nav.Data != null && nav.Data.IsBaked, "Player ship has no map.");
+                foreach (var collider in root.GetComponentsInChildren<UnityEngine.Collider>())
+                {
+                    if (!collider.enabled || collider.isTrigger) continue;
+                    if (!collider.name.Contains("Floor") && !collider.name.Contains("Stairs") &&
+                        !collider.name.Contains("Mast") && !collider.name.Contains("Ladder")) continue;
+                    output.AppendLine($"{collider.name}: {root.transform.InverseTransformPoint(collider.bounds.center)} size={collider.bounds.size}");
+                }
+                var map = nav.Data;
+                var groups = new System.Collections.Generic.Dictionary<int, int>();
+                for (var i = 0; i < map.Nodes.Length; i++)
+                {
+                    var bin = Mathf.RoundToInt(map.Nodes[i].Position.y * 2);
+                    groups[bin] = groups.TryGetValue(bin, out var count) ? count + 1 : 1;
+                }
+                output.AppendLine($"nodes={map.Nodes.Length}; links={map.Links.Length}");
+                foreach (var entry in groups) output.AppendLine($"y={entry.Key * 0.5f}: {entry.Value}");
+                var visits = new bool[map.Nodes.Length];
+                var queue = new System.Collections.Generic.Queue<int>();
+                for (var start = 0; start < visits.Length; start++)
+                {
+                    if (visits[start]) continue;
+                    queue.Enqueue(start); visits[start] = true;
+                    var count = 0; var min = float.PositiveInfinity; var max = float.NegativeInfinity;
+                    while (queue.Count > 0)
+                    {
+                        var index = queue.Dequeue(); count++;
+                        var node = map.Nodes[index]; min = Mathf.Min(min, node.Position.y); max = Mathf.Max(max, node.Position.y);
+                        for (var j = node.FirstLink; j < node.FirstLink + node.LinkCount; j++)
+                        { var next = map.Links[j]; if (!visits[next]) { visits[next] = true; queue.Enqueue(next); } }
+                    }
+                    if (count >= 10) output.AppendLine($"component start={start} count={count} height={min}..{max} pos={map.Nodes[start].Position}");
+                }
+                File.WriteAllText("Temp/EnemyShipRouteChecks.result", output.ToString());
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+
+        private static void CheckDeckRoutes()
+        {
+            var root = PrefabUtility.LoadPrefabContents("Assets/_Project/Prefabs/Ship.prefab");
+            try
+            {
+                var nav = root.GetComponent<EnemyDeckNavigation>();
+                var hold = root.GetComponent<WaveByWave.Ships.ShipHoldSabotage>();
+                Check(hold != null, "Hold objective is not configured.");
+                var map = nav.Data;
+                var points = new[] { new Vector3(0.1f, 3f, 0), new Vector3(2.4f, 3f, 0),
+                    new Vector3(1.2f, 0.95f, -1f), new Vector3(1.2f, 4.9f, -4f), new Vector3(1.2f, 3.52f, 4f) };
+                var indexes = new int[points.Length];
+                for (var i = 0; i < points.Length; i++)
+                    Check(map.TryNearest(points[i], 0.9f, 0.45f, out indexes[i]), "No floor near " + points[i]);
+                for (var a = 0; a < indexes.Length; a++)
+                for (var b = 0; b < indexes.Length; b++)
+                {
+                    var budget = 1;
+                    Check(map.TryRoute(998, b, indexes[a], indexes[b], map.StepHeight, map.MaximumDrop, 1,
+                        ref budget, out var route, 5, 10), $"No ship route {a} -> {b}.");
+                    var current = indexes[a]; var count = 0;
+                    while (current != indexes[b] && count++ < map.Nodes.Length)
+                    {
+                        var next = route[current];
+                        Check(next >= 0 && next != current, "Route stopped before target.");
+                        Check(map.Nodes[next].Position.y < 6, "Deck pursuit climbed mast.");
+                        if (!map.TryGap(current, next, out var gap, out var arc))
+                            Check(map.MoveAlongRoute(current, map.Nodes[current].Position, route, 0.02f,
+                                map.StepHeight, map.MaximumDrop, out _, out _), "Route cannot follow its own connection.");
+                        else Check(gap <= 5.001f && Mathf.Abs(map.Nodes[next].Position.y - map.Nodes[current].Position.y) + arc <= 10,
+                            "Route violated bridge limits.");
+                        current = next;
+                    }
+                    Check(current == indexes[b], "Route contains a cycle.");
+                    budget = 0;
+                    Check(map.TryRoute(998, b, indexes[a], indexes[b], map.StepHeight, map.MaximumDrop, 1,
+                        ref budget, out var reused, 5, 10) && ReferenceEquals(route, reused), "Bots did not share route field.");
+                }
+                for (var id = 0; id < hold.AttackPositions; id++)
+                {
+                    Check(hold.TryAttackPosition(map, id, out _, out var feet, out var outward), "Missing hold attack slot.");
+                    Check(hold.HoldBounds.Contains(feet) && Mathf.Abs(outward.x) > 0.9f, "Hold attacker faces wrong way.");
+                    Check(map.TryLocate(feet, 0.1f, out var goal), "Hold slot is off map.");
+                    var budget = 1;
+                    Check(map.TryRoute(998, -2-id, indexes[0], goal, map.StepHeight, map.MaximumDrop, 1,
+                        ref budget, out _, 5, 10), "Hold slot is unreachable.");
+                }
+                // A route across erased cells must disappear when transfers are disabled
+                // or their allowed gap/height is too small.
+                var bridge = ScriptableObject.CreateInstance<EnemyDeckNavigationData>();
+                try
+                {
+                    bridge.Width = 2; bridge.Depth = 1; bridge.CellSize = 1;
+                    bridge.Columns = new[] { new EnemyDeckColumn { FirstNode=0,Count=1 }, new EnemyDeckColumn { FirstNode=1,Count=1 } };
+                    bridge.Nodes = new[] { new EnemyDeckNode { Position=Vector3.zero,Normal=Vector3.up,FirstLink=0,LinkCount=1 },
+                        new EnemyDeckNode { Position=new Vector3(2,1,0),Normal=Vector3.up,FirstLink=1,LinkCount=0 } };
+                    bridge.Links = new[] {1}; bridge.LinkGaps = new[] {2f}; bridge.LinkArcs = new[] {0.5f};
+                    foreach (var limit in new[] { 0f, 1f, 2f })
+                    {
+                        var budget=1;
+                        Check(bridge.TryRoute(1,0,0,1,10,10,1,ref budget,out _,limit,2) == (limit==2), "Bridge ignored runtime gap toggle/limit.");
+                    }
+                    var heightBudget=1;
+                    Check(!bridge.TryRoute(1,0,0,1,10,10,1,ref heightBudget,out _,2,1), "Bridge ignored transfer height.");
+                }
+                finally { Object.DestroyImmediate(bridge); }
+                foreach (var attackers in new[] { 1, 4, 3000 })
+                {
+                    var damage = new WaveByWave.Ships.HoldBreachBudget(); var hits = 0; var last = -100f;
+                    for (var tick = 1; tick <= 3000; tick++)
+                        if (damage.Tick(0.02f, attackers, true, 3, 12, 3, 4))
+                        { Check(tick * 0.02f - last >= 2.99f, "Crowd bypassed minimum breach interval."); last = tick * 0.02f; hits++; }
+                    Check(attackers == 1 ? hits == 4 : hits >= 18 && hits <= 19, "Unexpected shared damage rate: " + hits);
+                    Check(!damage.Tick(0.02f, 0, true, 3, 12, 3, 4), "Damage continued without attackers.");
+                    Check(!damage.Tick(0.02f, attackers, true, 3, 12, 3, 4), "Damage did not reset after defense.");
+                }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+
+        private static void CheckDeckTargetPriority()
+        {
+            using var world = new World("Ship target priority regression");
+            var system = world.GetOrCreateSystemManaged<EnemyServerSystem>();
+            var entity = world.EntityManager.CreateEntity(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
+            world.EntityManager.SetComponentData(entity,new DotsEnemyState { Id=1,Health=60,Scene=1,SupportId=9,Position=float3.zero });
+            world.EntityManager.SetComponentData(entity,new DotsEnemyBrain {CanAttackShip=1});
+            var targets=new NativeArray<EnemyTarget>(2,Allocator.TempJob);
+            var ships=new NativeArray<PlayerShipObjective>(1,Allocator.TempJob);
+            try
+            {
+                ships[0]=new PlayerShipObjective {Position=new float3(20,0,0),SupportId=50};
+                targets[0]=new EnemyTarget { Index=0,Position=new float3(1,0,0),SupportId=10 };
+                targets[1]=new EnemyTarget { Index=1,Position=new float3(0,-3,8),SupportId=9 };
+                system.Seek(targets,0,0,1,shipTargets:ships);
+                Check(world.EntityManager.GetComponentData<DotsEnemyBrain>(entity).Target==1,
+                    "A nearby player on another island overrode the player on the enemy's island.");
+                var outside=targets[1]; outside.SupportId=10; targets[1]=outside;
+                system.Seek(targets,1,0,1,shipTargets:ships);
+                var brain=world.EntityManager.GetComponentData<DotsEnemyBrain>(entity);
+                Check(brain.Target<0 && brain.TargetingShip!=0 && brain.TargetSupport==50,
+                    "Enemies on an undefended island did not prefer the player ship.");
+                var aboard=targets[0]; aboard.SupportId=50; aboard.AboardAttackableShip=1;
+                aboard.Position=new float3(30,0,0); targets[0]=aboard;
+                system.Seek(targets,2,0,1,shipTargets:ships);
+                brain=world.EntityManager.GetComponentData<DotsEnemyBrain>(entity);
+                Check(brain.Target==0 && brain.TargetingShip==0,
+                    "A player aboard the ship was not preferred over attacking the hull.");
+                aboard.SupportId=0; aboard.AboardAttackableShip=0; aboard.InWater=1;
+                aboard.Position=new float3(1,0,0); targets[0]=aboard;
+                system.Seek(targets,3,0,1,shipTargets:ships);
+                brain=world.EntityManager.GetComponentData<DotsEnemyBrain>(entity);
+                Check(brain.Target<0 && brain.TargetingShip!=0,
+                    "A player in the water lured a hull-attacking enemy away from the ship.");
+                var state = world.EntityManager.GetComponentData<DotsEnemyState>(entity);
+                state.SupportId = DotsEnemyRuntime.ShipSurfaceKey(99);
+                world.EntityManager.SetComponentData(entity, state);
+                var incapable=world.EntityManager.GetComponentData<DotsEnemyBrain>(entity);
+                incapable.CanAttackShip=0; world.EntityManager.SetComponentData(entity,incapable);
+                targets[0]=new EnemyTarget {Index=0,Position=new float3(1,0,0),SupportId=10};
+                outside.SupportId = state.SupportId; outside.Position=new float3(0,0,8); targets[1] = outside;
+                system.Seek(targets,4,0,1,shipTargets:ships);
+                Check(world.EntityManager.GetComponentData<DotsEnemyBrain>(entity).Target==0,
+                    "A species without hull attacks no longer uses its original nearest-player pursuit.");
+            }
+            finally { targets.Dispose(); ships.Dispose(); }
+
+            var enemyPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Enemies/EnemyShip.prefab");
+            Check(enemyPrefab.GetComponent<EnemyDeckNavigation>() == null &&
+                enemyPrefab.GetComponent<WaveByWave.Ships.ShipHoldSabotage>() == null,
+                "Enemy ship still contains player-ship navigation or hold sabotage.");
+            var root = new GameObject("Enemy ship navigation exclusion check"); root.SetActive(false);
+            var map = ScriptableObject.CreateInstance<EnemyDeckNavigationData>();
+            try
+            {
+                var runtime = root.AddComponent<DotsEnemyRuntime>();
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var support = DotsEnemyRuntime.ShipSurfaceKey(99);
+                var maps = (System.Collections.Generic.Dictionary<(ulong,EnemyKind),EnemyDeckNavigationData>)
+                    typeof(DotsEnemyRuntime).GetField("_deckMaps",flags).GetValue(runtime);
+                maps[(support,EnemyKind.Skeleton)] = map;
+                Check(typeof(DotsEnemyRuntime).GetMethod("DeckMap",flags).Invoke(runtime,
+                    new object[] {support,EnemyKind.Skeleton,Vector3.one}) == null,
+                    "Enemy ship reused a stale baked navigation map.");
+                maps[(9,EnemyKind.Shark)] = map;
+                Check(typeof(DotsEnemyRuntime).GetMethod("DeckMap",flags).Invoke(runtime,
+                    new object[] {9UL,EnemyKind.Shark,Vector3.one}) == null,
+                    "Shark received a cached ship navigation map.");
+            }
+            finally { Object.DestroyImmediate(root); Object.DestroyImmediate(map); }
+        }
+
+        private static void CheckDeckMovement(EnemyKind kind = EnemyKind.Skeleton)
+        {
+            var previousScene = SceneManager.GetActiveScene();
+            var scene = Application.isPlaying ? SceneManager.CreateScene("Deck route regression " + Guid.NewGuid()) :
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            var prefab = PrefabUtility.LoadPrefabContents("Assets/_Project/Prefabs/Ship.prefab");
+            var fixture = new GameObject("Deck route fixture");
+            var runtimeObject = new GameObject("Deck route runtime"); runtimeObject.SetActive(false);
+            var master = Object.Instantiate(AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(EnemyContentSetup.CatalogPath));
+            var catalog = kind == EnemyKind.Skeleton ? master : Object.Instantiate(AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(
+                $"Assets/_Project/Resources/Enemies/{kind}EnemyCatalog.asset"));
+            var water = new EquipmentWaterQuery(null);
+            using var world = new World("Deck route regression");
+            using var query = world.EntityManager.CreateEntityQuery(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            DotsEnemyRuntime runtime = null;
+            try
+            {
+                SceneManager.MoveGameObjectToScene(fixture, scene); SceneManager.MoveGameObjectToScene(runtimeObject, scene);
+                fixture.transform.position = new Vector3(20000, 15000, 20000);
+                fixture.AddComponent<EnemySurfaceAnchor>().Key = "Deck route fixture";
+                var navigation = fixture.AddComponent<EnemyDeckNavigation>();
+                navigation.Data = prefab.GetComponent<EnemyDeckNavigation>().Data;
+                navigation.AdditionalAgentMaps = prefab.GetComponent<EnemyDeckNavigation>().AdditionalAgentMaps;
+                foreach (var source in prefab.GetComponentsInChildren<UnityEngine.Collider>())
+                {
+                    if (!source.enabled || source.isTrigger || !source.gameObject.activeInHierarchy) continue;
+                    if (source is not UnityEngine.MeshCollider && source is not UnityEngine.BoxCollider) continue;
+                    var child = new GameObject(source.name); child.transform.SetParent(fixture.transform, false);
+                    var matrix = prefab.transform.worldToLocalMatrix * source.transform.localToWorldMatrix;
+                    child.transform.localPosition = matrix.GetColumn(3); child.transform.localRotation = matrix.rotation;
+                    child.transform.localScale = matrix.lossyScale; child.layer = source.gameObject.layer;
+                    if (source is UnityEngine.MeshCollider mesh)
+                    { var c = child.AddComponent<UnityEngine.MeshCollider>(); c.sharedMesh = mesh.sharedMesh; c.convex = mesh.convex; }
+                    else if (source is UnityEngine.BoxCollider box)
+                    { var c = child.AddComponent<UnityEngine.BoxCollider>(); c.center = box.center; c.size = box.size; }
+                }
+                runtime = runtimeObject.AddComponent<DotsEnemyRuntime>();
+                typeof(DotsEnemyRuntime).GetProperty("Catalog").SetValue(runtime, master);
+                ((DotsEnemyCatalog[])typeof(DotsEnemyRuntime).GetField("_species",flags).GetValue(runtime))[(int)kind] = catalog;
+                typeof(DotsEnemyRuntime).GetField("_water", flags).SetValue(runtime, water);
+                typeof(DotsEnemyRuntime).GetField("_serverWorld", flags).SetValue(runtime, world);
+                typeof(DotsEnemyRuntime).GetField("_enemies", flags).SetValue(runtime, query);
+                typeof(DotsEnemyRuntime).GetField("_scene", flags).SetValue(runtime, 991);
+                Check(catalog.UsesShipNavigation,kind+" ship navigation is not enabled in the authored profile.");
+                Check(catalog.CanAttackPlayerShip,kind+" cannot select the player ship as an objective.");
+                master.UseBakedDeckNavigation = kind == EnemyKind.Skeleton;
+                master.EnableCrowdCollisions = catalog.EnableCrowdCollisions = false;
+                master.EnableCrowdAvoidance = false; master.EnableTargetSlots = false;
+                runtime.RegisterSurface(fixture.transform);
+                var map = navigation.MapFor(catalog.DeckAgentRadius,catalog.DeckAgentHeight,catalog.MaximumSlope);
+                Check(map != null,kind+" has no suitable navigation map.");
+                var hold = prefab.GetComponent<WaveByWave.Ships.ShipHoldSabotage>();
+                Check(hold.TryAttackPosition(map,0,out _,out var attackPosition,out _),kind+" has no hold attack position.");
+                var points = new[] { new Vector3(0.1f,3f,0), new Vector3(1.2f,0.95f,-1),
+                    new Vector3(1.2f,4.9f,-4), new Vector3(1.2f,3.52f,4) };
+                var move = typeof(DotsEnemyRuntime).GetMethod("MoveBatch", flags);
+                var attach = typeof(DotsEnemyRuntime).GetMethod("AttachSurface", flags);
+                var ground = typeof(DotsEnemyRuntime).GetMethod("TransferGroundAtWithProps", flags);
+                if (kind == EnemyKind.Troll)
+                {
+                    // A low ceiling must not blind an agent deliberately allowed to fit below it.
+                    var ceiling = new GameObject("Navigation height visibility check");
+                    ceiling.transform.SetParent(fixture.transform, false);
+                    ceiling.transform.localPosition = new Vector3(100,1.8f,0);
+                    var ceilingCollider = ceiling.AddComponent<UnityEngine.BoxCollider>();
+                    ceilingCollider.size = new Vector3(10,0.1f,10);
+                    try
+                    {
+                        UnityEngine.Physics.SyncTransforms();
+                        var origin = fixture.transform.TransformPoint(new Vector3(100,0,0));
+                        object[] args = { new DotsEnemyState { Kind=kind,Position=origin,Rotation=quaternion.identity }, ceilingCollider };
+                        attach.Invoke(runtime,args);
+                        var state = (DotsEnemyState)args[0];
+                        var see = typeof(DotsEnemyRuntime).GetMethod("CanSee",flags);
+                        Check((bool)see.Invoke(runtime,new object[]{state,origin+Vector3.right,catalog}),
+                            "Low ceiling blocked the troll's navigation-height attack sight.");
+                        catalog.UseBakedDeckNavigation = false;
+                        Check(!(bool)see.Invoke(runtime,new object[]{state,origin+Vector3.right,catalog}),
+                            "Visibility fixture did not intersect the full-size troll's sight ray.");
+                        object[] movementArgs = {state,new DotsEnemyBrain(),Vector3.zero,0.04f,false,0f,1};
+                        Check(!(bool)typeof(DotsEnemyRuntime).GetMethod("MoveOnBakedDeck",flags).Invoke(runtime,movementArgs),
+                            "Disabled species navigation still handled movement.");
+                        catalog.UseBakedDeckNavigation = true;
+                    }
+                    finally { Object.DestroyImmediate(ceiling); }
+                }
+                var hybridNode = -1;
+                var hybridTarget = Vector3.zero;
+                var hybridDirections = new[] {Vector3.right,Vector3.left,Vector3.forward,Vector3.back};
+                for (var n = 0; n < map.Nodes.Length && hybridNode < 0; n++)
+                {
+                    if (!map.Nodes[n].Boundary) continue;
+                    foreach (var direction in hybridDirections)
+                    {
+                        var candidate = map.Nodes[n].Position + direction * 1.5f;
+                        if (map.TryLocate(candidate,0.8f,out _) ||
+                            !map.TryNearest(candidate,Mathf.Max(map.Width,map.Depth)*map.CellSize,0.8f,out var nearest) ||
+                            nearest != n) continue;
+                        hybridNode=n; hybridTarget=candidate; break;
+                    }
+                }
+                Check(hybridNode>=0,kind+" map has no testable baked/unbaked boundary.");
+                var hybridPosition=fixture.transform.TransformPoint(map.Nodes[hybridNode].Position);
+                object[] hybridGround={hybridPosition,default(RaycastHit),fixture.transform,false};
+                Check((bool)ground.Invoke(runtime,hybridGround),kind+" hybrid boundary has no supporting collider.");
+                object[] hybridAttach={new DotsEnemyState {Id=9700+(int)kind,Scene=991,Health=100,Kind=kind,
+                    Position=hybridPosition,Rotation=quaternion.identity},((RaycastHit)hybridGround[1]).collider};
+                attach.Invoke(runtime,hybridAttach);
+                var hybridState=(DotsEnemyState)hybridAttach[0];
+                var hybridBrain=new DotsEnemyBrain {Target=9000+(int)kind,DeckNode=hybridNode,
+                    DeckSupport=hybridState.SupportId,MoveTarget=fixture.transform.TransformPoint(hybridTarget)};
+                hybridBrain.MoveDirection=hybridBrain.Direction=math.normalizesafe(
+                    (float3)((Vector3)hybridBrain.MoveTarget-hybridPosition));
+                typeof(DotsEnemyRuntime).GetField("_deckRouteBuildsRemaining",flags).SetValue(runtime,1);
+                object[] leaveArgs={hybridState,hybridBrain,(Vector3)hybridBrain.MoveDirection*0.08f,0.04f,true,20f,32};
+                Check(!(bool)typeof(DotsEnemyRuntime).GetMethod("MoveOnBakedDeck",flags).Invoke(runtime,leaveArgs),
+                    kind+" did not hand movement from the baked map to an unbaked ship surface.");
+                hybridState=(DotsEnemyState)leaveArgs[0]; hybridBrain=(DotsEnemyBrain)leaveArgs[1];
+                Check(hybridBrain.DeckNode<0 && hybridBrain.DeckSupport==0,
+                    kind+" retained stale baked-map state after the unbaked hand-off.");
+                hybridState.Position=fixture.transform.TransformPoint(hybridTarget);
+                hybridBrain.Target=9100+(int)kind; hybridBrain.MoveTarget=hybridPosition;
+                hybridBrain.MoveDirection=hybridBrain.Direction=math.normalizesafe((float3)(hybridPosition-(Vector3)hybridState.Position));
+                var recover=typeof(DotsEnemyRuntime).GetMethod("TryDeckRecovery",BindingFlags.Static|BindingFlags.NonPublic);
+                object[] recoverArgs={map,hybridState.SupportId,hybridTarget,catalog,hybridBrain,Vector3.zero};
+                Check((bool)recover.Invoke(null,recoverArgs),kind+" could not select a baked-deck return point.");
+                hybridBrain=(DotsEnemyBrain)recoverArgs[4];
+                Check(hybridBrain.DeckNode==hybridNode && hybridBrain.DeckSupport==hybridState.SupportId &&
+                    Vector3.Distance((Vector3)recoverArgs[5],map.Nodes[hybridNode].Position)<0.001f,
+                    kind+" did not steer from the unbaked bow back to the nearest deck boundary.");
+                object[] returnArgs={hybridState,hybridBrain,(Vector3)hybridBrain.MoveDirection*0.08f,0.04f,true,21f,32};
+                Check(!(bool)typeof(DotsEnemyRuntime).GetMethod("MoveOnBakedDeck",flags).Invoke(runtime,returnArgs),
+                    kind+" did not retain collider movement while returning from a distant unbaked surface.");
+                for (var run = 0; run < 2; run++)
+                {
+                    fixture.transform.rotation = run == 0 ? Quaternion.identity : Quaternion.Euler(3, 37, 4);
+                    UnityEngine.Physics.SyncTransforms();
+                    for (var a = 0; a < points.Length; a++)
+                    for (var b = 0; b < points.Length; b++)
+                    {
+                        if (a == b) continue;
+                        Check(map.TryNearest(points[a], 0.9f, 0.45f, out var start) &&
+                            map.TryNearest(points[b], 0.9f, 0.45f, out _), kind+" route fixture floor missing.");
+                        var position = fixture.transform.TransformPoint(map.Nodes[start].Position);
+                        object[] groundArgs = { position, default(RaycastHit), fixture.transform, false };
+                        Check((bool)ground.Invoke(runtime, groundArgs), "Fixture ground missing.");
+                        object[] attachArgs = { new DotsEnemyState { Id = 9800 + a * 4 + b, Scene = 991, Health = 100, Kind = kind,
+                            Position = position, Rotation = quaternion.identity }, ((RaycastHit)groundArgs[1]).collider };
+                        attach.Invoke(runtime, attachArgs);
+                        var entity = world.EntityManager.CreateEntity(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
+                        world.EntityManager.SetComponentData(entity, (DotsEnemyState)attachArgs[0]);
+                        using var entities = new NativeArray<Entity>(new[] { entity }, Allocator.Temp);
+                        var reached = false; var lastPosition = Vector3.zero;
+                        for (var tick = 1; tick <= 3000 && !reached; tick++)
+                        {
+                            var state = world.EntityManager.GetComponentData<DotsEnemyState>(entity);
+                            var brain = world.EntityManager.GetComponentData<DotsEnemyBrain>(entity);
+                            var target = fixture.transform.TransformPoint(points[b]);
+                            var delta = target - (Vector3)state.Position;
+                            brain.Target = b; brain.MoveTarget = target; brain.TargetDistance = delta.magnitude;
+                            brain.MoveDirection = brain.Direction = new Vector3(delta.x, 0, delta.z).normalized;
+                            world.EntityManager.SetComponentData(entity, brain);
+                            move.Invoke(runtime, new object[] { entities, tick * 0.04f });
+                            state = world.EntityManager.GetComponentData<DotsEnemyState>(entity);
+                            lastPosition = fixture.transform.InverseTransformPoint(state.Position);
+                            reached = Vector2.Distance(new Vector2(lastPosition.x,lastPosition.z),new Vector2(points[b].x,points[b].z)) < catalog.MeleeRange * 0.82f + 0.1f &&
+                                Mathf.Abs(lastPosition.y - points[b].y) < 0.45f;
+                            Check(lastPosition.y < 6, "Runtime pursued deck target up the mast.");
+                        }
+                        if (!reached)
+                        {
+                            var state = world.EntityManager.GetComponentData<DotsEnemyState>(entity);
+                            var brain = world.EntityManager.GetComponentData<DotsEnemyBrain>(entity);
+                            map.TryNearest(points[b],1.5f,0.8f,out var goal);
+                            map.TryLocate(lastPosition,map.StepHeight,out var node);
+                            var budget=1; map.TryRoute(state.SupportId,b,node,goal,map.StepHeight,map.MaximumDrop,120,ref budget,out var route,5,10);
+                            var next=route != null && node>=0 ? route[node] : -1;
+                            var nextPoint=next>=0 ? map.Nodes[next].Position : Vector3.zero;
+                            map.TryGap(node,next,out var gap,out var arc);
+                            object[] landingArgs={fixture.transform.TransformPoint(nextPoint),default(RaycastHit),fixture.transform,false};
+                            var found=(bool)ground.Invoke(runtime,landingArgs);
+                            var hit=(RaycastHit)landingArgs[1];
+                            var selected=typeof(DotsEnemyRuntime).GetMethod("DeckMap",flags).Invoke(runtime,new object[]{state.SupportId,state.Kind,Vector3.one});
+                            typeof(DotsEnemyRuntime).GetField("_deckRouteBuildsRemaining",flags).SetValue(runtime,1);
+                            object[] movementArgs={state,brain,(Vector3)brain.MoveDirection*0.08f,0.04f,true,121f,32};
+                            var handled=typeof(DotsEnemyRuntime).GetMethod("MoveOnBakedDeck",flags).Invoke(runtime,movementArgs);
+                            var resulting=(DotsEnemyState)movementArgs[0]; var resultingBrain=(DotsEnemyBrain)movementArgs[1];
+                            throw new InvalidOperationException($"{kind} runtime route {a}->{b}, rotation {run}, stuck at {lastPosition}; support={state.SupportId}/{brain.DeckSupport}, swim={state.Swimming}, node={node}/{brain.DeckNode} next={next} {nextPoint} gap={gap} arc={arc}, landing={found} {hit.collider?.name} {fixture.transform.InverseTransformPoint(hit.point)} normal={hit.normal}, local={state.LocalPosition}, time={brain.LastSurfaceTime}, root={runtime.ResolveSurface(state.SupportId)?.name}, selected={selected}, handled={handled}, after={fixture.transform.InverseTransformPoint(resulting.Position)}/{resultingBrain.DeckNode}, slope={catalog.MaximumSlope}.");
+                        }
+                        world.EntityManager.DestroyEntity(entity);
+                    }
+                }
+            }
+            finally
+            {
+                if (runtime != null) typeof(DotsEnemyRuntime).GetMethod("DisposeProbes", flags).Invoke(runtime, null);
+                Object.DestroyImmediate(runtimeObject); Object.DestroyImmediate(fixture); Object.DestroyImmediate(catalog); water.Dispose();
+                if (master != catalog) Object.DestroyImmediate(master);
+                PrefabUtility.UnloadPrefabContents(prefab);
+                if (Application.isPlaying) SceneManager.UnloadSceneAsync(scene); else EditorSceneManager.CloseScene(scene, true);
+                if (previousScene.IsValid() && previousScene.isLoaded) SceneManager.SetActiveScene(previousScene);
+            }
         }
 
         private static void CheckClimbing()
@@ -229,6 +724,141 @@ namespace WaveByWave.Editor
             }
         }
 
+        private static void CheckArchPassages()
+        {
+            var activeScene = SceneManager.GetActiveScene();
+            var scene = Application.isPlaying ? SceneManager.CreateScene("Enemy arch regression " + Guid.NewGuid()) :
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            var root = new GameObject("Arch check runtime");
+            root.SetActive(false);
+            var fixture = new GameObject("Arch fixture");
+            var origin = new Vector3(10000, 15000, 10000);
+            fixture.transform.position = origin;
+            var catalog = ScriptableObject.CreateInstance<DotsEnemyCatalog>();
+            var water = new EquipmentWaterQuery(null);
+            var mesh = new Mesh();
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            DotsEnemyRuntime runtime = null;
+            using var world = new World("Arch movement regression");
+            using var query = world.EntityManager.CreateEntityQuery(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
+            try
+            {
+                SceneManager.MoveGameObjectToScene(root, scene);
+                SceneManager.MoveGameObjectToScene(fixture, scene);
+                runtime = root.AddComponent<DotsEnemyRuntime>();
+                typeof(DotsEnemyRuntime).GetProperty("Catalog").SetValue(runtime, catalog);
+                typeof(DotsEnemyRuntime).GetField("_water", flags).SetValue(runtime, water);
+                typeof(DotsEnemyRuntime).GetField("_serverWorld", flags).SetValue(runtime, world);
+                typeof(DotsEnemyRuntime).GetField("_enemies", flags).SetValue(runtime, query);
+                typeof(DotsEnemyRuntime).GetField("_scene", flags).SetValue(runtime, 991);
+                catalog.StepHeight = catalog.MaximumDrop = 10;
+                catalog.BodyHeight = 1.7f; catalog.BodyRadius = 0.1f;
+                catalog.MoveSpeed = 2; catalog.SurfaceVerticalSpeed = 4;
+                catalog.IgnoredObstacleWidth = 3;
+                catalog.EnableCrowdCollisions = catalog.EnableCrowdAvoidance = false;
+                catalog.EnableSurfaceContinuityChecks = true;
+                catalog.UseBakedDeckNavigation = false;
+                GameObject Box(string name, Vector3 position, Vector3 size)
+                {
+                    var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    box.name = name;
+                    box.transform.SetParent(fixture.transform, false);
+                    box.transform.localPosition = position;
+                    box.transform.localScale = size;
+                    return box;
+                }
+                var floor = Box("Ground", new Vector3(0, -0.5f, 0), new Vector3(20, 1, 20));
+                var left = Box("Left post", new Vector3(-2.5f, 1.8f, 0), new Vector3(0.25f, 3.6f, 1));
+                var right = Box("Right post", new Vector3(2.5f, 1.8f, 0), new Vector3(0.25f, 3.6f, 1));
+                var beam = Box("Overhead beam", new Vector3(0, 3.8f, 0), new Vector3(5.25f, 0.4f, 1));
+                var entity = world.EntityManager.CreateEntity(typeof(DotsEnemyState), typeof(DotsEnemyBrain));
+                using var entities = new NativeArray<Entity>(new[] { entity }, Allocator.Temp);
+                var move = typeof(DotsEnemyRuntime).GetMethod("MoveBatch", flags);
+                var transfers = (System.Collections.IDictionary)typeof(DotsEnemyRuntime)
+                    .GetField("_surfaceTransfers", flags).GetValue(runtime);
+                var peakHeight = 0f;
+                DotsEnemyState Traverse(float startHeight, bool keepHeight, string label, float slope = 0)
+                {
+                    peakHeight = startHeight;
+                    transfers.Clear();
+                    world.EntityManager.SetComponentData(entity, new DotsEnemyState {
+                        Id = 99001, Scene = 991, Health = 60, Rotation = quaternion.identity,
+                        Position = origin + new Vector3(0, startHeight, -2) });
+                    world.EntityManager.SetComponentData(entity, new DotsEnemyBrain {
+                        Target = -1, TargetDistance = 100, Direction = new float3(0, 0, 1),
+                        MoveDirection = new float3(0, 0, 1) });
+                    UnityEngine.Physics.SyncTransforms();
+                    for (var frame = 1; frame <= 20; frame++)
+                    {
+                        move.Invoke(runtime, new object[] { entities, frame * 0.1f });
+                        var state = world.EntityManager.GetComponentData<DotsEnemyState>(entity);
+                        peakHeight = Mathf.Max(peakHeight, state.Position.y - origin.y);
+                        var expectedHeight = startHeight - (state.Position.z - origin.z + 2) * slope;
+                        if (keepHeight) Check(Mathf.Abs(state.Position.y - origin.y - expectedHeight) < 0.02f,
+                            label + ": climbed overhead geometry or lost the current floor.");
+                    }
+                    return world.EntityManager.GetComponentData<DotsEnemyState>(entity);
+                }
+                Check(Traverse(0, true, "Separate colliders").Position.z > origin.z + 1.5f,
+                    "The bot did not walk through the arch.");
+                floor.transform.localRotation = Quaternion.Euler(45, 0, 0);
+                floor.transform.localPosition = Vector3.down * (0.5f / Mathf.Cos(45 * Mathf.Deg2Rad));
+                Check(Traverse(2, true, "Arch on a slope", 1).Position.z > origin.z + 1.5f,
+                    "The supporting hillside was mistaken for an obstruction under the arch.");
+                floor.transform.localRotation = Quaternion.identity;
+                floor.transform.localPosition = Vector3.down * 0.5f;
+                var parts = new[] { floor, left, right, beam };
+                var combined = new CombineInstance[parts.Length];
+                for (var i = 0; i < parts.Length; i++)
+                {
+                    combined[i] = new CombineInstance { mesh = parts[i].GetComponent<MeshFilter>().sharedMesh,
+                        transform = Matrix4x4.TRS(parts[i].transform.localPosition, Quaternion.identity,
+                            parts[i].transform.localScale) };
+                    parts[i].GetComponent<UnityEngine.Collider>().enabled = false;
+                }
+                mesh.CombineMeshes(combined);
+                var compound = fixture.AddComponent<UnityEngine.MeshCollider>();
+                compound.sharedMesh = mesh;
+                Check(Traverse(0, true, "Single mesh collider").Position.z > origin.z + 1.5f,
+                    "The bot did not pass below the beam in the same mesh as the floor.");
+                compound.enabled = false;
+                foreach (var part in parts) part.GetComponent<UnityEngine.Collider>().enabled = true;
+
+                // A low passage and a solid block still require climbing. The ground
+                // under a closed mesh must not be mistaken for an accessible tunnel.
+                beam.transform.localPosition = new Vector3(0, 1.6f, 0);
+                Traverse(0, false, "Low doorway");
+                Check(peakHeight > 1.7f,
+                    "A low doorway was treated as a free passage.");
+                beam.transform.localPosition = new Vector3(0, 2, 0);
+                beam.transform.localScale = new Vector3(5.25f, 4, 1);
+                Traverse(0, false, "Solid box");
+                Check(peakHeight > 3.9f,
+                    "The bot walked inside a solid box.");
+                var closedMesh = beam.AddComponent<UnityEngine.MeshCollider>();
+                closedMesh.sharedMesh = beam.GetComponent<MeshFilter>().sharedMesh;
+                beam.GetComponent<UnityEngine.BoxCollider>().enabled = false;
+                Traverse(0, false, "Closed mesh");
+                Check(peakHeight > 3.9f,
+                    "The bot walked through the wall into a closed mesh.");
+                // Extend the upper platform across the entire path. A bot already on
+                // it must stay on top, despite the lower floor beneath the platform.
+                beam.transform.localPosition = new Vector3(0, 3.8f, 0);
+                beam.transform.localScale = new Vector3(5.25f, 0.4f, 8);
+                Check(Traverse(4, true, "Upper floor").Position.z > origin.z + 1.5f,
+                    "The bot failed to keep walking on its upper floor.");
+            }
+            finally
+            {
+                if (runtime != null) typeof(DotsEnemyRuntime).GetMethod("DisposeProbes", flags).Invoke(runtime, null);
+                Object.DestroyImmediate(root); Object.DestroyImmediate(fixture);
+                Object.DestroyImmediate(mesh); Object.DestroyImmediate(catalog); water.Dispose();
+                if (Application.isPlaying) SceneManager.UnloadSceneAsync(scene);
+                else EditorSceneManager.CloseScene(scene, true);
+                if (activeScene.IsValid() && activeScene.isLoaded) SceneManager.SetActiveScene(activeScene);
+            }
+        }
+
         [MenuItem("Tools/Wave by Wave/Enemies/Capture boarding diagnostics")]
         public static void CaptureBoardingSnapshot()
         {
@@ -294,6 +924,7 @@ namespace WaveByWave.Editor
             CheckMovementStability();
             CheckRenderBounds();
             CheckClimbing();
+            CheckArchPassages();
             CheckEdges();
             CheckCrewSinking();
             Debug.Log("[Enemy pursuit checks] PASS");

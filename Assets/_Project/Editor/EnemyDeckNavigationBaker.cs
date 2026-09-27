@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using WaveByWave.Enemies;
 
@@ -11,6 +12,42 @@ namespace WaveByWave.Editor
 {
     public static class EnemyDeckNavigationBaker
     {
+        public static void ConfigurePlayerHold()
+        {
+            const string path = "Assets/_Project/Prefabs/Ship.prefab";
+            var root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                if (root.GetComponent<WaveByWave.Ships.ShipHoldSabotage>() == null)
+                {
+                    root.AddComponent<WaveByWave.Ships.ShipHoldSabotage>();
+                    PrefabUtility.SaveAsPrefabAsset(root, path);
+                }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+
+        public static void RebakeAssignedMaps(EnemyDeckNavigation nav)
+        {
+            Bake(nav);
+            var primary = nav.Data;
+            var radius = nav.AgentRadius; var height = nav.AgentHeight; var slope = nav.MaximumSlope;
+            try
+            {
+                foreach (var map in nav.AdditionalAgentMaps ?? Array.Empty<EnemyDeckNavigationData>())
+                {
+                    if (map == null || map == primary) continue;
+                    nav.Data = map; nav.AgentRadius = map.AgentRadius;
+                    nav.AgentHeight = map.AgentHeight; nav.MaximumSlope = map.MaximumSlope;
+                    Bake(nav);
+                }
+            }
+            finally
+            {
+                nav.Data = primary; nav.AgentRadius = radius; nav.AgentHeight = height; nav.MaximumSlope = slope;
+                EditorUtility.SetDirty(nav); PrefabUtility.RecordPrefabInstancePropertyModifications(nav);
+            }
+        }
         public static bool BakingEnabled
         {
             get
@@ -120,9 +157,9 @@ namespace WaveByWave.Editor
 
         public static string SourceHash(EnemyDeckNavigation nav)
         {
-            var text = new StringBuilder("deck-v2|").Append(nav.CellSize).Append('|').Append(nav.AgentRadius)
+            var text = new StringBuilder("deck-v4-routing|").Append(nav.CellSize).Append('|').Append(nav.AgentRadius)
                 .Append('|').Append(nav.AgentHeight).Append('|').Append(nav.MaximumSlope).Append('|')
-                .Append(nav.StepHeight).Append('|').Append(nav.MaximumDrop);
+                .Append(nav.StepHeight).Append('|').Append(nav.MaximumDrop).Append('|').Append(nav.MaximumGap).Append('|').Append(nav.TransferHeight);
             foreach (var collider in Sources(nav))
             {
                 text.Append('|').Append((nav.transform.worldToLocalMatrix * collider.transform.localToWorldMatrix).ToString("R"));
@@ -137,10 +174,14 @@ namespace WaveByWave.Editor
             return Hash128.Compute(text.ToString()).ToString();
         }
 
-        public static void Bake(EnemyDeckNavigation nav, string assetPath = null)
+        public static void Bake(EnemyDeckNavigation nav, string assetPath = null, bool isolatedSetup = false)
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode) throw new InvalidOperationException("Bake navigation outside Play Mode.");
-            if (!BakingEnabled)
+            if (nav.GetComponent<EnemyShipView>() != null)
+                throw new InvalidOperationException("Enemy ships use collider movement; bake navigation only for the player ship.");
+            if (EditorApplication.isPlayingOrWillChangePlaymode &&
+                !(isolatedSetup && EditorSceneManager.IsPreviewSceneObject(nav.gameObject)))
+                throw new InvalidOperationException("Bake navigation outside Play Mode.");
+            if (!BakingEnabled && !isolatedSetup)
             {
                 Debug.Log("[Enemies] Deck-map baking is disabled in SkeletonEnemyCatalog. Ship movement uses colliders.", nav);
                 return;
@@ -214,7 +255,7 @@ namespace WaveByWave.Editor
             {
                 for (var column = 0; column < columns.Length; column++)
                 {
-                    if (column % 256 == 0 && EditorUtility.DisplayCancelableProgressBar("Bake deck navigation", "Sampling floors and clearance", column / (float)columns.Length * 0.7f))
+                    if (!isolatedSetup && column % 256 == 0 && EditorUtility.DisplayCancelableProgressBar("Bake deck navigation", "Sampling floors and clearance", column / (float)columns.Length * 0.7f))
                         throw new OperationCanceledException();
                     var center = new Vector3(geometry.Origin.x + (column % geometry.Width + 0.5f) * geometry.Cell, 0,
                         geometry.Origin.y + (column / geometry.Width + 0.5f) * geometry.Cell);
@@ -231,6 +272,7 @@ namespace WaveByWave.Editor
                     columns[column] = new EnemyDeckColumn { FirstNode = first, Count = nodes.Count - first };
                 }
                 var links = new List<int>();
+                var gaps = new List<float>(); var arcs = new List<float>();
                 for (var i = 0; i < nodes.Count; i++)
                 {
                     var node = nodes[i]; node.FirstLink = links.Count;
@@ -256,9 +298,26 @@ namespace WaveByWave.Editor
                             }
                             var clearance = Vector3.up * Mathf.Min(nav.AgentHeight * 0.5f, nav.StepHeight + 0.05f);
                             if (!valid || geometry.Blocked(node.Position + clearance, to.Position + clearance)) continue;
-                            links.Add(j); connected = true;
+                            links.Add(j); gaps.Add(0); arcs.Add(0); connected = true;
                         }
-                        if (connected) connectedDirections++;
+                        if (connected) { connectedDirections++; continue; }
+                        // Offline only: bridge missing cells over railings, steps and gaps.
+                        // Every bridge checks the whole body sweep; a cabin wall or ceiling
+                        // cannot become a shortcut to another deck.
+                        var stride = geometry.Cell * Mathf.Sqrt(dx * dx + dz * dz);
+                        for (var span = 1; !connected && span * stride <= nav.MaximumGap; span++)
+                        {
+                            var nx = x + dx * span; var nz = z + dz * span;
+                            if (nx < 0 || nz < 0 || nx >= geometry.Width || nz >= geometry.Depth) break;
+                            var destination = columns[nz * geometry.Width + nx];
+                            for (var j = destination.FirstNode; j < destination.FirstNode + destination.Count; j++)
+                            {
+                                var to = nodes[j].Position;
+                                if (Mathf.Abs(to.y - node.Position.y) > nav.TransferHeight) continue;
+                                if (!BridgeClear(geometry, nav, node.Position, to, out var arc)) continue;
+                                links.Add(j); gaps.Add(span * stride); arcs.Add(arc); connected = true;
+                            }
+                        }
                     }
                     node.LinkCount = links.Count - node.FirstLink;
                     node.Boundary = connectedDirections < 8;
@@ -278,14 +337,90 @@ namespace WaveByWave.Editor
                 data.Origin = geometry.Origin; data.CellSize = geometry.Cell; data.Width = geometry.Width; data.Depth = geometry.Depth;
                 data.AgentRadius = nav.AgentRadius; data.AgentHeight = nav.AgentHeight; data.MaximumSlope = nav.MaximumSlope;
                 data.StepHeight = nav.StepHeight; data.MaximumDrop = nav.MaximumDrop;
-                data.Columns = columns; data.Nodes = nodes.ToArray(); data.Links = links.ToArray(); data.SourceHash = SourceHash(nav);
+                data.Columns = columns; data.Nodes = nodes.ToArray(); data.Links = links.ToArray();
+                data.LinkGaps = gaps.ToArray(); data.LinkArcs = arcs.ToArray(); data.SourceHash = SourceHash(nav);
                 nav.Data = data;
                 EditorUtility.SetDirty(data); EditorUtility.SetDirty(nav);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(nav);
-                AssetDatabase.SaveAssets();
+                AssetDatabase.SaveAssetIfDirty(data);
                 Debug.Log($"[Enemies] Baked {data.Nodes.Length} deck nodes, {data.Links.Length} connections for {nav.name}.");
             }
             finally { EditorUtility.ClearProgressBar(); }
+        }
+
+        [MenuItem("Tools/Wave by Wave/Enemies/Bake player ship routes and enable navigation")]
+        public static void BakeProjectShipRoutes()
+        {
+            ConfigurePlayerHold();
+            var profilePaths = new[] { EnemyContentSetup.CatalogPath,
+                "Assets/_Project/Resources/Enemies/AmphibianEnemyCatalog.asset",
+                "Assets/_Project/Resources/Enemies/TrollEnemyCatalog.asset" };
+            const string name = "PlayerShip";
+            const string prefabPath = "Assets/_Project/Prefabs/Ship.prefab";
+            {
+                var root = PrefabUtility.LoadPrefabContents(prefabPath);
+                try
+                {
+                    var nav = root.GetComponent<EnemyDeckNavigation>();
+                    if (nav == null) nav = root.AddComponent<EnemyDeckNavigation>();
+                    var originalRadius = nav.AgentRadius; var originalHeight = nav.AgentHeight;
+                    var originalSlope = nav.MaximumSlope;
+                    var scale = Mathf.Max(0.001f, Mathf.Min(Mathf.Abs(root.transform.lossyScale.x),
+                        Mathf.Abs(root.transform.lossyScale.y), Mathf.Abs(root.transform.lossyScale.z)));
+                    var maps = new List<EnemyDeckNavigationData>();
+                    foreach (var profilePath in profilePaths)
+                    {
+                        // Opening/importing prefab contents can release unused assets;
+                        // acquire each profile after opening, immediately before use.
+                        var profile = AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(profilePath);
+                        if (profile == null) throw new InvalidOperationException("Missing enemy profile: " + profilePath);
+                        var suffix = profilePath == EnemyContentSetup.CatalogPath ? "" : "_" + profile.Kind;
+                        var path = "Assets/_Project/Data/Enemies/" + name + "Navigation" + suffix + ".asset";
+                        nav.AgentRadius = profile.DeckAgentRadius / scale;
+                        nav.AgentHeight = profile.DeckAgentHeight / Mathf.Max(0.001f, Mathf.Abs(root.transform.lossyScale.y));
+                        nav.MaximumSlope = Mathf.Min(originalSlope, profile.MaximumSlope);
+                        nav.Data = AssetDatabase.LoadAssetAtPath<EnemyDeckNavigationData>(path);
+                        Bake(nav, path, true);
+                        maps.Add(nav.Data);
+                    }
+                    nav.AgentRadius = originalRadius; nav.AgentHeight = originalHeight; nav.MaximumSlope = originalSlope;
+                    nav.Data = maps[0];
+                    nav.AdditionalAgentMaps = maps.Skip(1).ToArray();
+                    PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
+                }
+                finally { PrefabUtility.UnloadPrefabContents(root); }
+            }
+            var skeleton = AssetDatabase.LoadAssetAtPath<DotsEnemyCatalog>(EnemyContentSetup.CatalogPath);
+            skeleton.UseBakedDeckNavigation = true;
+            EditorUtility.SetDirty(skeleton);
+            AssetDatabase.SaveAssetIfDirty(skeleton);
+        }
+
+        private static bool BridgeClear(Geometry geometry, EnemyDeckNavigation nav, Vector3 from, Vector3 to, out float arc)
+        {
+            var side = Vector3.Cross(Vector3.up, to - from).normalized * nav.AgentRadius;
+            var samples = Mathf.Max(4, Mathf.CeilToInt(Vector3.Distance(from, to) / 0.15f));
+            for (var attempt = 0; attempt < 7; attempt++)
+            {
+                arc = attempt == 0 ? 0 : 0.125f * (1 << attempt);
+                if (Mathf.Abs(to.y - from.y) + arc > nav.TransferHeight) break;
+                var clear = true;
+                var previous = from;
+                for (var sample = 1; clear && sample <= samples; sample++)
+                {
+                    var fraction = sample / (float)samples;
+                    var point = Vector3.Lerp(from, to, fraction) + Vector3.up * (Mathf.Sin(fraction * Mathf.PI) * arc);
+                    for (var lane = -1; clear && lane <= 1; lane++)
+                    for (var height = 0; clear && height < 3; height++)
+                    {
+                        var offset = side * lane + Vector3.up * (height == 0 ? 0.06f : height == 1 ? nav.AgentHeight * 0.5f : nav.AgentHeight - 0.02f);
+                        clear = !geometry.Blocked(previous + offset, point + offset);
+                    }
+                    previous = point;
+                }
+                if (clear) return true;
+            }
+            arc = 0; return false;
         }
 
         private static bool Clearance(Geometry geometry, EnemyDeckNavigation nav, Vector3 center, Vector3 normal,
@@ -299,7 +434,19 @@ namespace WaveByWave.Editor
                 var point = center + offset;
                 point.y = center.y - (offset.x * normal.x + offset.z * normal.z) / normal.y;
                 geometry.Heights(point, hits);
-                if (!hits.Any(h => h.Normal.y >= minimumNormal && Mathf.Abs(h.Height - point.y) <= nav.StepHeight + 0.02f)) return false;
+                var supportingHeight = float.PositiveInfinity;
+                var difference = nav.StepHeight + 0.02f;
+                foreach (var hit in hits)
+                {
+                    var delta = Mathf.Abs(hit.Height - point.y);
+                    if (hit.Normal.y < minimumNormal || delta > difference) continue;
+                    difference = delta; supportingHeight = hit.Height;
+                }
+                if (float.IsPositiveInfinity(supportingHeight)) return false;
+                // Adjacent samples on stairs stand on different treads. Checking their
+                // headroom from the centre tread treated the next step's underside as
+                // a low ceiling and disconnected every staircase from the decks.
+                point.y = supportingHeight;
                 if (hits.Any(h => h.Height > point.y + 0.05f && h.Height < point.y + nav.AgentHeight &&
                     (h.Normal.y < 0 || h.Height > point.y + nav.StepHeight + 0.02f))) return false;
                 var up = Vector3.up * Mathf.Min(nav.AgentHeight * 0.5f, nav.StepHeight + 0.05f);
@@ -349,7 +496,7 @@ namespace WaveByWave.Editor
             using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
             {
                 if (GUILayout.Button("Bake deck navigation / Запечь карту палубы"))
-                { EnemyDeckNavigationBaker.Bake(nav); _hash = EnemyDeckNavigationBaker.SourceHash(nav); }
+                { EnemyDeckNavigationBaker.RebakeAssignedMaps(nav); _hash = EnemyDeckNavigationBaker.SourceHash(nav); }
                 if (GUILayout.Button("Check geometry changes")) _hash = EnemyDeckNavigationBaker.SourceHash(nav);
             }
         }

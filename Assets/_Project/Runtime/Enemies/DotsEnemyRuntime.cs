@@ -48,13 +48,14 @@ namespace WaveByWave.Enemies
             public NetworkPlayerController Player;
             public PlayerEquipment Equipment;
             public NetworkHealth Health;
-            public ulong ClientId;
+            public ulong ClientId, SupportId;
         }
         private struct Probe
         {
             public Entity Entity;
             public float DeltaTime;
             public bool WantsToMove;
+            public Vector3 Destination;
             public RaycastHit Ground;
             public int ContinuityStart, ContinuityCount;
         }
@@ -88,6 +89,7 @@ namespace WaveByWave.Enemies
         private readonly List<Entity> _remove = new();
         private readonly List<Probe> _probes = new();
         private readonly RaycastHit[] _hits = new RaycastHit[48];
+        private readonly Collider[] _passageOverlaps = new Collider[48];
         private World _serverWorld;
         private EntityQuery _enemies;
         private EquipmentWaterQuery _water;
@@ -207,12 +209,26 @@ namespace WaveByWave.Enemies
             var now = Now;
             var targets = new NativeArray<EnemyTarget>(_players.Count, Allocator.TempJob);
             using var targetLifetime = targets;
+            using var shipTargets = new NativeList<PlayerShipObjective>(
+                Mathf.Max(1, ShipHoldSabotage.Active.Count), Allocator.TempJob);
+            foreach (var hold in ShipHoldSabotage.Active)
+                if (hold != null && hold.TryGetObjective(out var shipSupport,out var shipPosition))
+                    shipTargets.Add(new PlayerShipObjective {SupportId=shipSupport,Position=shipPosition});
             for (var i = 0; i < _players.Count; i++)
             {
                 var feet = Feet(_players[i].Player);
+                var inWater = IsInOcean(feet);
+                var player = _players[i];
+                player.SupportId = PlayerSurfaceSupport(player.Player,feet,inWater);
+                _players[i] = player;
+                var aboardAttackableShip = false;
+                for (var ship = 0; ship < shipTargets.Length; ship++)
+                    if (shipTargets[ship].SupportId == player.SupportId)
+                    { aboardAttackableShip = true; break; }
                 targets[i] = new EnemyTarget { Position = feet, Index = i,
-                    InWater = IsInOcean(feet)
-                        ? (byte)1 : (byte)0 };
+                    SupportId = player.SupportId,
+                    AboardAttackableShip = aboardAttackableShip ? (byte)1 : (byte)0,
+                    InWater = inWater ? (byte)1 : (byte)0 };
             }
             QueueAutomaticShark(targets);
             ActivatePoints(targets);
@@ -224,8 +240,9 @@ namespace WaveByWave.Enemies
                 Catalog.EnableCrowdAvoidance ? Mathf.Clamp(Catalog.CrowdAvoidanceLookAhead, 0.3f, 4f) : 0,
                 Catalog.BodyRadius, Catalog.MoveSpeed, Catalog.MeleeRange * 0.82f,
                 Catalog.EnableCrowdSeparation, Catalog.EnableTargetSlots,
-                Catalog.TargetSlotSpacing, Catalog.MaximumEnemies);
+                Catalog.TargetSlotSpacing, Catalog.MaximumEnemies, shipTargets.AsArray());
             system.FaceTargets(now, Mathf.Min(Time.unscaledDeltaTime, 0.2f), _scene);
+            PrepareHoldObjectives(targets);
             StressCount = 0;
             foreach (var entity in entities)
             {
@@ -245,6 +262,8 @@ namespace WaveByWave.Enemies
                 manager.SetComponentData(entity, brain);
             }
             MoveBatch(entities, now);
+            foreach (var hold in ShipHoldSabotage.Active)
+                if (hold != null) hold.EndFrame(Time.unscaledDeltaTime);
             foreach (var entity in _remove)
                 if (manager.Exists(entity))
                 {
@@ -278,6 +297,20 @@ namespace WaveByWave.Enemies
             if (ShipFlooding.CompartmentAt(feet) != null) return false;
             return _water.TrySurface(feet, Vector2.one * 0.25f, out var height, out _) &&
                    feet.y < height - 0.15f;
+        }
+
+        private ulong PlayerSurfaceSupport(NetworkPlayerController player,Vector3 feet,bool inWater)
+        {
+            var support=player.GetEnemyNavigationSupportOnServer();
+            if (support!=0 || inWater) return support;
+            // One ground sample per player, never per enemy. Generated islands have a
+            // deterministic anchor, so separate islands no longer share SupportId zero.
+            if (!TryGround(feet+Vector3.up*0.75f,2f,Catalog,out var ground)) return 0;
+            var anchor=ground.collider.GetComponentInParent<EnemySurfaceAnchor>();
+            if (anchor==null) return 0;
+            support=SceneSurfaceKey(anchor.transform);
+            _surfaces[support]=anchor.transform;
+            return support;
         }
 
         private void QueueAutomaticShark(NativeArray<EnemyTarget> targets)
@@ -539,6 +572,7 @@ namespace WaveByWave.Enemies
                     var entity = manager.Instantiate(prefab);
                     manager.SetComponentData(entity, state);
                     manager.SetComponentData(entity, new DotsEnemyBrain { Target = -1, SpawnGroup = request.Group,
+                        CanAttackShip=(byte)(catalog.CanAttackPlayerShip ? 1 : 0),
                         SpeciesSpeed = swimming != 0 ? catalog.SwimSpeed : catalog.MoveSpeed,
                         SpeciesStoppingDistance = catalog.MeleeRange * 0.82f, SpeciesSpacing = catalog.BodyRadius * 2 + .04f,
                         LastSurfaceTime = Now, NextAttack = Now + request.Random.NextFloat(0.5f, 1.5f) });
@@ -572,6 +606,8 @@ namespace WaveByWave.Enemies
             brain.SpeciesSpeed = state.Swimming != 0 ? catalog.SwimSpeed : catalog.MoveSpeed;
             brain.SpeciesStoppingDistance = catalog.MeleeRange * 0.82f;
             brain.SpeciesSpacing = catalog.BodyRadius * 2 + .04f;
+            brain.CanAttackShip=(byte)(catalog.CanAttackPlayerShip ? 1 : 0);
+            if (TickHoldObjective(ref state, ref brain, catalog, now)) return;
             if (_surfaceTransfers.ContainsKey(state.Id)) return;
             if (state.StunUntil > now)
             {
@@ -658,6 +694,8 @@ namespace WaveByWave.Enemies
             if (entities.Length == 0) return;
             var manager = _serverWorld.EntityManager;
             _deckMaps.Clear();
+            _deckGoals.Clear();
+            _deckRouteBuildsRemaining = 1;
             PrepareMovementCrowdIndex();
             var count = Mathf.Min(entities.Length, Catalog.SurfaceProbesPerFrame);
             EnsureProbeCapacity(count);
@@ -703,8 +741,14 @@ namespace WaveByWave.Enemies
                 if (movementLength > speed) movement *= speed / movementLength;
                 var displacement = (movement + brain.Knockback) * dt;
                 var wantsToMove = math.lengthsq(movement) > 0.0001f;
-                displacement = SteerCrowdStep(in state, ref brain, displacement, dt);
                 brain.Knockback *= math.exp(-7f * dt);
+                if (MoveOnBakedDeck(ref state, ref brain, displacement, dt, wantsToMove, now, ref edgeSearchesRemaining))
+                {
+                    manager.SetComponentData(entity, state);
+                    manager.SetComponentData(entity, brain);
+                    continue;
+                }
+                displacement = SteerCrowdStep(in state, ref brain, displacement, dt);
                 manager.SetComponentData(entity, brain);
                 if (TryBoardPlayerShip(ref state, ref brain, displacement, dt, wantsToMove, now, catalog))
                 {
@@ -730,17 +774,12 @@ namespace WaveByWave.Enemies
                     manager.SetComponentData(entity, brain);
                     continue;
                 }
-                if (MoveOnBakedDeck(ref state, ref brain, displacement, dt, wantsToMove, now, ref edgeSearchesRemaining))
-                {
-                    manager.SetComponentData(entity, state);
-                    manager.SetComponentData(entity, brain);
-                    continue;
-                }
                 if (IsShipSurface(state.SupportId) && ResolveSurface(state.SupportId) == null) continue;
                 Vector3 from = state.Position;
                 var to = from + (Vector3)displacement;
                 var index = _probes.Count;
-                _probes.Add(new Probe { Entity = entity, DeltaTime = dt, WantsToMove = wantsToMove });
+                _probes.Add(new Probe { Entity = entity, DeltaTime = dt, WantsToMove = wantsToMove,
+                    Destination = to });
                 _groundCommands[index] = new RaycastCommand(to + Vector3.up * (Catalog.StepHeight + 0.08f),
                     Vector3.down, query, Catalog.StepHeight + Catalog.MaximumDrop + 0.1f);
             }
@@ -759,6 +798,9 @@ namespace WaveByWave.Enemies
             {
                 var probe = _probes[i];
                 probe.Ground = SelectBatchGround(_groundResults, i * GroundHitsPerProbe, false);
+                var state = manager.GetComponentData<DotsEnemyState>(probe.Entity);
+                probe.Ground = PreferPassageGround(state.Position, probe.Destination, probe.Ground,
+                    GetCatalog(state.Kind) ?? Catalog, false);
                 probe.ContinuityStart = continuityCount;
                 if (probe.Ground.collider != null && Catalog.EnableSurfaceContinuityChecks)
                 {
@@ -806,13 +848,14 @@ namespace WaveByWave.Enemies
                 var movementEvaluated = true;
                 if (ground.collider != null) brain.SurfaceEdgeSide = 0;
                 if (ground.collider == null && (Catalog.EnableSurfaceTransfers || Catalog.EnableSurfaceEdgeFollowing) &&
-                    brain.Target >= 0 && brain.Target < _players.Count && brain.Attacking == 0 &&
+                    (brain.Target >= 0 && brain.Target < _players.Count || brain.TargetingShip != 0) && brain.Attacking == 0 &&
                     state.StunUntil <= now)
                 {
                     if (edgeSearchesRemaining > 0)
                     {
                         edgeSearchesRemaining--;
-                        var transferGoal = Feet(_players[brain.Target].Player);
+                        var transferGoal = brain.TargetingShip != 0 ? (Vector3)brain.MoveTarget :
+                            Feet(_players[brain.Target].Player);
                         if (SearchSurfaceTransfer(state, ref brain, transferGoal, now))
                         {
                             AdvanceSurfaceTransfer(ref state, ref brain, probe.DeltaTime, now);
@@ -915,7 +958,7 @@ namespace WaveByWave.Enemies
             => TryGround(origin, distance, Catalog, out result);
 
         private bool TryGround(Vector3 origin, float distance, DotsEnemyCatalog navigation,
-            out RaycastHit result)
+            out RaycastHit result, bool ignoreMinor = true)
         {
             navigation ??= Catalog;
             result = default;
@@ -925,12 +968,56 @@ namespace WaveByWave.Enemies
             {
                 var hit = _hits[i];
                 if ((result.collider == null || hit.distance < result.distance) &&
-                    ValidSolid(hit.collider) && !IsMinorObstacle(hit.collider, navigation) &&
+                    ValidSolid(hit.collider) &&
+                    !(ignoreMinor ? IsMinorObstacle(hit.collider, navigation) : IsIslandDecoration(hit.collider)) &&
                     TryWalkableFace(ref hit, distance, navigation) &&
                     (result.collider == null || hit.distance < result.distance))
                     result = hit;
             }
             return result.collider != null;
+        }
+
+        private RaycastHit PreferPassageGround(Vector3 from, Vector3 feet, RaycastHit upper,
+            DotsEnemyCatalog navigation, bool ignoreMinor = true)
+        {
+            var height = Mathf.Max(0.1f, navigation.BodyHeight);
+            // Ordinary ground and steps retain the batched result with no extra queries.
+            // A high probe can see an arch/upper deck before the floor beneath it. Search
+            // from head level only in that case, including inside a single compound mesh.
+            if (upper.collider == null || upper.point.y < feet.y + height ||
+                !TryGround(feet + Vector3.up * (height - 0.02f),
+                    height + navigation.MaximumDrop + 0.1f, navigation, out var lower, ignoreMinor) ||
+                lower.point.y >= upper.point.y - 0.05f) return upper;
+
+            var radius = Mathf.Clamp(navigation.BodyRadius, 0.02f, height * 0.45f);
+            // Keep the foot sphere above the supporting slope, not inside the hillside.
+            var footHeight = Mathf.Min(height - radius,
+                radius / Mathf.Max(0.1f, lower.normal.y) + 0.03f);
+            var bottom = lower.point + Vector3.up * footHeight;
+            var top = lower.point + Vector3.up * (height - radius);
+            var overlaps = Physics.OverlapCapsuleNonAlloc(bottom, top, radius, _passageOverlaps,
+                navigation.SurfaceLayers, QueryTriggerInteraction.Ignore);
+            if (overlaps == _passageOverlaps.Length) return upper;
+            for (var i = 0; i < overlaps; i++)
+                if (ValidSolid(_passageOverlaps[i]) && !IsIslandDecoration(_passageOverlaps[i]))
+                    return upper;
+
+            // A ray starting inside a solid block also finds the floor underneath it.
+            // Check the entry corridor so that this fallback never walks through the
+            // side of a closed mesh, a wall or a low doorway instead of climbing it.
+            var delta = lower.point - from;
+            var distance = delta.magnitude;
+            if (distance > 0.001f)
+            {
+                var count = Physics.CapsuleCastNonAlloc(from + Vector3.up * footHeight,
+                    from + Vector3.up * (height - radius), radius, delta / distance, _hits,
+                    distance, navigation.SurfaceLayers, QueryTriggerInteraction.Ignore);
+                if (count == _hits.Length) return upper;
+                for (var i = 0; i < count; i++)
+                    if (ValidSolid(_hits[i].collider) && !IsIslandDecoration(_hits[i].collider))
+                        return upper;
+            }
+            return lower;
         }
 
         private bool TryWalkableFace(ref RaycastHit hit, float rayDistance, DotsEnemyCatalog navigation)

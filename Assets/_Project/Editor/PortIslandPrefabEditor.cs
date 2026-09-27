@@ -204,6 +204,7 @@ namespace WaveByWave.Editor
             foreach (var entry in authoring.Settings.Decorations)
             {
                 if (entry?.Prefab == null) continue;
+                var groundAnchor = entry.GroundMeshBase ? ProceduralIsland.DecorationGroundAnchor(entry.Prefab) : Vector3.zero;
                 var count = Mathf.RoundToInt(parameters.Diameter * parameters.Diameter *
                     Mathf.Max(0f, entry.InstancesPerSquareMetre));
                 for (var n = 0; n < count; n++)
@@ -227,6 +228,8 @@ namespace WaveByWave.Editor
                     var minimumScale = Mathf.Max(0.01f, entry.ScaleRange.x);
                     var scale = random.NextFloat(minimumScale, Mathf.Max(minimumScale + 0.001f, entry.ScaleRange.y));
                     instance.transform.localScale *= scale;
+                    ProceduralIsland.PlaceDecorationBase(instance.transform, groundAnchor,
+                        root.TransformPoint(point), entry.VerticalOffset);
                     break;
                 }
             }

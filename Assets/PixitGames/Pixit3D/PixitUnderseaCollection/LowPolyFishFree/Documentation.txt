@@ -1,0 +1,28 @@
+PIXIT 3D - BASIC SEA CREATURES
+Documentation
+
+OVERVIEW
+This package contains 12 stylized low-poly sea creatures supplied as individual Unity prefabs and FBX models. Nine creatures are rigged, while three objects are provided as static environmental props. A showcase scene is included.
+
+QUICK START
+1. Import the package into your Unity project.
+2. Open FishShowcase_02.unity to preview all included creatures.
+3. Drag a prefab from the Prefabs folder into your scene.
+4. Rigged creatures can be used with an Animator Controller or procedural movement. Static props can be placed directly in the environment.
+
+RIGGING
+- Rigged creatures use lightweight, species-appropriate bone structures.
+- Common controls cover the main body, tail, arms, legs, tentacles, or shell parts depending on the creature.
+- EmptyShell, SeaShell, and SeaUrchin are intentionally supplied as static props and do not require an armature.
+- The rigged models are supplied in their default/rest pose.
+- Animations are not included.
+
+RENDERING
+The package is prepared for the Universal Render Pipeline (URP). Projects using another render pipeline may require material or shader conversion.
+
+SUPPORT AND LINKS
+Website: https://pixitgames.com
+Discord: https://discord.gg/Zw3rK8r9p
+
+If you need help, find an issue, or would like to share feedback, please contact us through Discord. Reviews and ratings on the Unity Asset Store are always appreciated.
+

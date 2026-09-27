@@ -18,6 +18,8 @@ namespace WaveByWave.Editor
         private const string ResourcesFolder = "Assets/_Project/Resources";
         private const string Prefabs = "Assets/_Project/Prefabs/Generation";
         private const string Data = "Assets/_Project/Data/Ocean";
+        private const string ItemData = "Assets/_Project/Data/Items";
+        private const string ItemPrefabs = "Assets/_Project/Prefabs/Items";
         private const string Materials = "Assets/_Project/Generated/Materials";
         static OceanContentSetup() => EditorApplication.update += InstallWhenReady;
         private static void InstallWhenReady()
@@ -33,6 +35,11 @@ namespace WaveByWave.Editor
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
             Folder(ResourcesFolder); Folder(Prefabs); Folder(Data);
+            for (var rarity = 0; rarity < 5; rarity++)
+            {
+                Folder($"{ItemData}/Chest/{(ItemRarity)rarity}");
+                Folder($"{ItemPrefabs}/Chest/{(ItemRarity)rarity}");
+            }
             var catalog = AssetDatabase.LoadAssetAtPath<ItemCatalog>("Assets/_Project/Data/ItemCatalog.asset");
             if (catalog == null) throw new InvalidOperationException("ItemCatalog is missing.");
             var ground = Material(Materials + "/IslandGround.mat", "WaveByWave/Island Ground", material =>
@@ -87,7 +94,7 @@ namespace WaveByWave.Editor
             var names = new[] { "Обычный сундук", "Необычный сундук", "Редкий сундук", "Эпический сундук", "Легендарный сундук" };
             for (var rarity = 0; rarity < 5; rarity++)
             {
-                var path = Data + $"/Item_chest_{rarity}.asset";
+                var path = $"{ItemData}/Chest/{(ItemRarity)rarity}/Item_chest_{rarity}.asset";
                 var item = AssetDatabase.LoadAssetAtPath<ItemDefinition>(path);
                 if (item == null)
                 {
@@ -162,12 +169,13 @@ namespace WaveByWave.Editor
                 return root;
             });
             AssetDatabase.SaveAssets();
+            FloatingItemPoolSetup.Ensure();
             Debug.Log("[Ocean] Generation assets, five chest tiers and test spawner are ready.");
         }
 
         private static GameObject CreateChestPrefab()
         {
-            return Prefab("Assets/_Project/Prefabs/Items/LootChest.prefab", () =>
+            return Prefab(ItemPrefabs + "/Chest/Common/chest_0.prefab", () =>
             {
                 var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/ShipTreasureChest.prefab");
                 var filters = source.GetComponentsInChildren<MeshFilter>(true);

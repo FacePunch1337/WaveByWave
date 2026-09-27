@@ -182,3 +182,11 @@ Assets/_Project/Generated/ShipDamage/HullBreach.png -filter -diff -merge -text
 "Assets/Troll_Сannibal/Textures/grid.png" -filter -diff -merge -text
 "Assets/TutorialInfo/Icons/Help_Icon.png" -filter -diff -merge -text
 "Assets/TutorialInfo/Icons/UniversalIcon.png" -filter -diff -merge -text
+"Assets/Daniel Mistage/**" -filter -diff -merge -text
+Assets/PixitGames/** -filter -diff -merge -text
+Assets/Projects/** -filter -diff -merge -text
+Assets/TrophyCups/** -filter -diff -merge -text
+Assets/Zekirak/** -filter -diff -merge -text
+Assets/forest/** -filter -diff -merge -text
+Assets/jewelry_shop/** -filter -diff -merge -text
+Assets/_Project/Data/Items/Enemies/Combined/SkeletonColorAtlas.asset -filter -diff -merge -text

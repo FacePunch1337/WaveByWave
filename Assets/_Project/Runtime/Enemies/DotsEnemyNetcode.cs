@@ -57,6 +57,10 @@ namespace WaveByWave.Enemies
         public float3 Knockback;
         public float3 Separation;
         public byte Attacking;
+        public byte Sabotaging;
+        public byte CanAttackShip;
+        public byte TargetingShip;
+        public ulong TargetSupport;
         public ulong DeckSupport;
         public int DeckNode;
         // Server-only steering memory; Direction remains the actual target direction for combat.
@@ -76,7 +80,15 @@ namespace WaveByWave.Enemies
     }
 
     public struct DotsEnemyPrefab : IComponentData { public Entity Value; }
-    public struct EnemyTarget { public float3 Position; public int Index; public byte InWater; }
+    public struct EnemyTarget
+    {
+        public float3 Position;
+        public int Index;
+        public byte InWater;
+        public byte AboardAttackableShip;
+        public ulong SupportId;
+    }
+    public struct PlayerShipObjective { public float3 Position; public ulong SupportId; }
 
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation | WorldSystemFilterFlags.ClientSimulation)]
     [UpdateInGroup(typeof(SimulationSystemGroup), OrderFirst = true)]
@@ -119,7 +131,8 @@ namespace WaveByWave.Enemies
         public static void Apply(ref DotsEnemyState state, in DotsEnemyBrain brain, quaternion surfaceRotation,
             bool hasSurface, float deltaTime, float now)
         {
-            if (brain.Target < 0 || state.StunUntil > now || brain.Attacking != 0 || math.lengthsq(brain.Direction) < 0.0001f) return;
+            if ((brain.Target < 0 && brain.TargetingShip == 0) || state.StunUntil > now ||
+                brain.Attacking != 0 || math.lengthsq(brain.Direction) < 0.0001f) return;
             var up = math.mul(surfaceRotation, math.up());
             var forward = brain.Direction - up * math.dot(brain.Direction, up);
             state.Rotation = math.slerp(state.Rotation, quaternion.LookRotationSafe(forward, up), 1f - math.exp(-12f * deltaTime));
@@ -192,7 +205,8 @@ namespace WaveByWave.Enemies
             float lookAhead, float spacing, float heightRange, float speed, float now, float stoppingDistance)
         {
             var toward = brain.MoveDirection.xz;
-            if (brain.Target < 0 || brain.Attacking != 0 || brain.TargetDistance <= stoppingDistance ||
+            if ((brain.Target < 0 && brain.TargetingShip == 0) || brain.Attacking != 0 ||
+                brain.TargetDistance <= stoppingDistance ||
                 math.lengthsq(toward) < 0.0001f)
             {
                 Reset(ref brain);
@@ -353,6 +367,7 @@ namespace WaveByWave.Enemies
     public partial struct EnemySeekJob : IJobEntity
     {
         [ReadOnly] public NativeArray<EnemyTarget> Targets;
+        [ReadOnly] public NativeArray<PlayerShipObjective> ShipTargets;
         [ReadOnly] public NativeParallelMultiHashMap<int3, EnemyCrowdBody> CrowdGrid;
         public float Time;
         public float CrowdCellSize;
@@ -369,6 +384,8 @@ namespace WaveByWave.Enemies
             var speed = brain.SpeciesSpeed > 0 ? brain.SpeciesSpeed : MoveSpeed;
             var spacing = math.max(BodySpacing, brain.SpeciesSpacing);
             brain.Target = -1;
+            brain.TargetingShip = 0;
+            brain.TargetSupport = 0;
             brain.Direction = float3.zero;
             brain.MoveDirection = float3.zero;
             brain.MoveTarget = state.Position;
@@ -379,28 +396,78 @@ namespace WaveByWave.Enemies
                 EnemyCrowdSteering.Reset(ref brain);
                 return;
             }
-            // Target intent is global. Distance, water and the current supporting surface must
-            // never make a living skeleton forget the nearest living player. Traversability is
-            // handled later by surface following, including lateral movement along an edge.
             var best = float.MaxValue;
             var bestDelta = float3.zero;
-            for (var i = 0; i < Targets.Length; i++)
+            if (brain.CanAttackShip != 0)
             {
-                if (state.Kind == EnemyKind.Shark && Targets[i].InWater == 0) continue;
-                var delta = Targets[i].Position - state.Position;
-                var distance = math.lengthsq(delta);
-                if (distance >= best) continue;
-                best = distance;
-                brain.Target = Targets[i].Index;
-                bestDelta = delta;
+                // Immediate players on the same dry island/ship remain the first priority.
+                for (var i = 0; i < Targets.Length; i++)
+                {
+                    var sameSurface = Targets[i].InWater == 0 && Targets[i].SupportId == state.SupportId &&
+                        (state.SupportId != 0 || state.Swimming == 0);
+                    if (!sameSurface) continue;
+                    var delta = Targets[i].Position - state.Position;
+                    var distance = math.lengthsq(delta);
+                    if (distance >= best) continue;
+                    best = distance; brain.Target = Targets[i].Index;
+                    brain.TargetSupport = Targets[i].SupportId; bestDelta = delta;
+                }
+                // With no local player, a player aboard an attackable ship is still the
+                // target. Water and other islands do not lure enemies away from the hull.
+                if (brain.Target < 0)
+                    for (var i = 0; i < Targets.Length; i++)
+                    {
+                        if (Targets[i].InWater != 0 || Targets[i].AboardAttackableShip == 0) continue;
+                        var delta = Targets[i].Position - state.Position;
+                        var distance = math.lengthsq(delta);
+                        if (distance >= best) continue;
+                        best = distance; brain.Target = Targets[i].Index;
+                        brain.TargetSupport = Targets[i].SupportId; bestDelta = delta;
+                    }
+                if (brain.Target < 0)
+                    for (var i = 0; i < ShipTargets.Length; i++)
+                    {
+                        var delta = ShipTargets[i].Position - state.Position;
+                        var distance = math.lengthsq(delta);
+                        if (distance >= best) continue;
+                        best = distance; bestDelta = delta; brain.TargetingShip = 1;
+                        brain.TargetSupport = ShipTargets[i].SupportId;
+                    }
             }
-            if (brain.Target >= 0)
+            else
+            {
+                // Species without hull attacks retain their original target rules.
+                var ownSurface = false;
+                for (var i = 0; i < Targets.Length; i++)
+                {
+                    if (state.Kind == EnemyKind.Shark && Targets[i].InWater == 0) continue;
+                    var delta = Targets[i].Position - state.Position;
+                    var distance = math.lengthsq(delta);
+                    var aboard = state.SupportId != 0 && (state.SupportId >> 62) != 3 &&
+                        Targets[i].SupportId == state.SupportId;
+                    if (ownSurface && !aboard || aboard == ownSurface && distance >= best) continue;
+                    ownSurface = aboard; best = distance; brain.Target = Targets[i].Index;
+                    brain.TargetSupport = Targets[i].SupportId; bestDelta = delta;
+                }
+            }
+            // If no attackable ship exists, retain normal player pursuit rather than idling.
+            if (brain.Target < 0 && brain.TargetingShip == 0)
+                for (var i = 0; i < Targets.Length; i++)
+                {
+                    if (state.Kind == EnemyKind.Shark && Targets[i].InWater == 0) continue;
+                    var delta = Targets[i].Position - state.Position;
+                    var distance = math.lengthsq(delta);
+                    if (distance >= best) continue;
+                    best = distance; brain.Target = Targets[i].Index;
+                    brain.TargetSupport = Targets[i].SupportId; bestDelta = delta;
+                }
+            if (brain.Target >= 0 || brain.TargetingShip != 0)
             {
                 brain.TargetDistance = math.sqrt(best);
                 brain.Direction = math.normalizesafe(new float3(bestDelta.x, 0, bestDelta.z));
                 brain.MoveDirection = brain.Direction;
                 brain.MoveTarget = state.Position + bestDelta;
-                if (UseTargetSlots)
+                if (UseTargetSlots && brain.Target >= 0)
                 {
                     if (oldTarget != brain.Target || brain.TargetSlotTarget != brain.Target)
                         brain.TargetSlotSettled = 0;
@@ -519,7 +586,7 @@ namespace WaveByWave.Enemies
         public void Seek(NativeArray<EnemyTarget> targets, float now, float crowdRadius, float crowdVerticalRange,
             float avoidanceLookAhead = 0, float bodyRadius = 0.38f, float moveSpeed = 3.8f, float stoppingDistance = 0,
             bool enableSeparation = true, bool useTargetSlots = false, float targetSlotSpacing = 0.35f,
-            int targetSlotCount = 6000)
+            int targetSlotCount = 6000, NativeArray<PlayerShipObjective> shipTargets = default)
         {
             var count = _enemyQuery.CalculateEntityCount();
             if (count == 0) return;
@@ -544,9 +611,11 @@ namespace WaveByWave.Enemies
                     CrowdGrid = _crowdGrid.AsParallelWriter(), CellSize = cellSize
                 }.ScheduleParallel(_enemyQuery, Dependency);
             }
+            var ownsShipTargets = !shipTargets.IsCreated;
+            if (ownsShipTargets) shipTargets = new NativeArray<PlayerShipObjective>(0,Allocator.TempJob);
             Dependency = new EnemySeekJob
                 {
-                    Targets = targets, CrowdGrid = _crowdGrid,
+                    Targets = targets, ShipTargets = shipTargets, CrowdGrid = _crowdGrid,
                     Time = now,
                     CrowdCellSize = cellSize, CrowdRadius = separationRadius,
                     CrowdVerticalRange = crowdVerticalRange,
@@ -557,6 +626,7 @@ namespace WaveByWave.Enemies
                 }
                 .ScheduleParallel(_enemyQuery, Dependency);
             Dependency.Complete();
+            if (ownsShipTargets) shipTargets.Dispose();
         }
 
         public void CarryPassengers(DotsEnemyRuntime runtime, int scene)

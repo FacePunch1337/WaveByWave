@@ -128,6 +128,9 @@ namespace WaveByWave.Generation
         {
             if (_density.IsCreated) throw new InvalidOperationException("Island is already initialized.");
             Id = id; Size = size; Seed = seed == 0 ? 1u : seed; Settings = settings;
+            var surface=GetComponent<EnemySurfaceAnchor>();
+            if (surface==null) surface=gameObject.AddComponent<EnemySurfaceAnchor>();
+            surface.Key="ProceduralIsland:"+id;
             _parameters = CreateParameters(size, settings); _parameters.Seed = Seed;
             _density = new NativeArray<float2>(_parameters.Points.x * _parameters.Points.y * _parameters.Points.z,
                 Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
@@ -435,11 +438,12 @@ namespace WaveByWave.Generation
             return anchor;
         }
 
-        public static void PlaceDecorationBase(Transform instance, Vector3 anchor, Vector3 surfacePoint)
+        public static void PlaceDecorationBase(Transform instance, Vector3 anchor, Vector3 surfacePoint,
+            float verticalOffset = 0f)
         {
             // TransformPoint includes prefab scale, random scale, parent scale and
             // surface alignment. Move the entire hierarchy, including its colliders.
-            instance.position += surfacePoint - instance.TransformPoint(anchor);
+            instance.position += surfacePoint + Vector3.up * verticalOffset - instance.TransformPoint(anchor);
         }
 
         private IEnumerable<byte> CreateDecorations()
@@ -473,7 +477,7 @@ namespace WaveByWave.Generation
                     if (DensityAt(point - Vector3.up * 0.15f).x < -0.1f) break;
                     var instance = Instantiate(entry.Prefab, point, rotation, transform);
                     instance.transform.localScale *= scale;
-                    if (entry.GroundMeshBase) PlaceDecorationBase(instance.transform, groundAnchor, point);
+                    PlaceDecorationBase(instance.transform, groundAnchor, point, entry.VerticalOffset);
                     instance.SetActive(_hasCompletedInitialBuild && _presentationRequested);
                     RegisterDecoration(instance.transform, point);
                     break;

@@ -133,3 +133,7 @@ InitTestScene*.unity*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Generated automatically by ShipCollisionGeometryBaker on editor load/build.
+/Assets/_Project/Resources/ShipCollisionMeshLibrary.asset
+/Assets/_Project/Resources/ShipCollisionMeshLibrary.asset.meta

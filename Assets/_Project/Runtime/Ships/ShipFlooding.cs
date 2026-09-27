@@ -176,6 +176,18 @@ namespace WaveByWave.Ships
             return true;
         }
 
+        public bool OpenSabotageBreachServer(Vector3 point, float leakMultiplier)
+        {
+            // A completed hold attack always opens one available breach, just like zone damage.
+            if (!IsServer || !IsSpawned || IsSinking || _battery.VoyageEnded || Hull == null ||
+                !float.IsFinite(leakMultiplier) || leakMultiplier <= 0 ||
+                HoleCount >= ShipHullHoles.MaximumHoles || !Hull.TryChooseSite(point, Occupied, out var site)) return false;
+            _holes.Add(new HullBreach { Id = ++_nextHole, UV = site.UV, RadiusUV = Hull.RadiusUV(site),
+                Position = site.Position, Normal = site.Normal,
+                Leak = LeakLitresPerSecond * Mathf.Clamp(leakMultiplier, 0.1f, 8f) });
+            return true;
+        }
+
         private bool Occupied(Vector3 position)
         {
             for (var i = 0; i < HoleCount; i++)

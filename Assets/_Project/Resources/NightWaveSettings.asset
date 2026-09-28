@@ -37,7 +37,7 @@ MonoBehaviour:
       - EnemyType: {fileID: 11400000, guid: ca8756fadd514ebab3513ce28bf4df0c, type: 2}
         Count: 50
         SpawnRadius: 40
-        SpawnBandWidth: 5
+        SpawnBandWidth: 20
   - Name: Wave 3
     BattlefieldRadius: 150
     Fragments:
@@ -77,7 +77,9 @@ MonoBehaviour:
         Count: 5
         SpawnRadius: 170
         SpawnBandWidth: 20
+    - Name: Fragment 2
+      Enemies:
       - EnemyType: {fileID: 11400000, guid: ca8756fadd514ebab3513ce28bf4df0c, type: 2}
         Count: 100
-        SpawnRadius: 170
-        SpawnBandWidth: 170
+        SpawnRadius: 40
+        SpawnBandWidth: 20

@@ -153,6 +153,10 @@ MonoBehaviour:
     Weight: 0.75
     MinimumAmount: 1
     MaximumAmount: 1
+  - Item: {fileID: 11400000, guid: 44067f5d861242f43a7b848b64bd37a5, type: 2}
+    Weight: 1
+    MinimumAmount: 1
+    MaximumAmount: 3
   Tiers:
   - Tier: 0
     MinimumRolls: 2

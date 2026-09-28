@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d7c12bad94584bce8cc7b366da2a89b1, type: 3}
   m_Name: VoyageMapSettings
   m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Generation.VoyageMapSettings
-  DayDuration: 100
+  DayDuration: 240
   SunsetDuration: 20
   NightDuration: 120
   SunriseDuration: 20
-  DayStartHour: 12.34
+  DayStartHour: 10
   OverrideTime: 0
   TimeOfDay: 0
   SceneSunHour: 10

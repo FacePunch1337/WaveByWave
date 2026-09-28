@@ -332,6 +332,21 @@ namespace StylizedWater3.UnderwaterRendering
                 
 				if(!trigger.waterMaterial || !trigger.boxCollider) continue;
 
+				// Scene-view cameras do not belong to a scene. During prefab editing, only
+				// consider volumes from the current stage, otherwise a loaded ocean volume
+				// can win the overlap test and suppress the prefab's local water preview.
+#if UNITY_EDITOR
+				if (!Application.isPlaying && camera.scene.IsValid())
+				{
+					if (trigger.gameObject.scene != camera.scene) continue;
+				}
+				else if (!Application.isPlaying && camera.cameraType == CameraType.SceneView)
+				{
+					if (!UnityEditor.SceneManagement.StageUtility.GetCurrentStageHandle().Contains(trigger.gameObject)) continue;
+				}
+				else if (!Application.isPlaying && UnityEditor.SceneManagement.EditorSceneManager.IsPreviewScene(trigger.gameObject.scene)) continue;
+#endif
+
 				//Broad phase check, to avoid processing volumes that are way too far away
 				if(trigger.CameraIntersectsFast(camera) == false) continue;
 				

@@ -173,6 +173,12 @@ namespace WaveByWave.Editor
             // Approach the actual opening from outside; validate no blanket ship-HP repair remains.
             var origin = point + normal * 0.55f;
             Physics.SyncTransforms();
+            Check(_ship.RepairServer(player, inventory, origin, -normal, 0.1f) &&
+                  _ship.GetHole(0).Repair > 0f,
+                "A held plank should start repair progress");
+            ShipFlooding.CancelRepairServer(player);
+            Check(Mathf.Approximately(_ship.GetHole(0).Repair, 0f),
+                "Interrupted plank repair must reset unfinished progress");
             for (var i = 0; i < 45 && _ship.HoleCount > 0; i++)
                 Check(_ship.RepairServer(player, inventory, origin, -normal, 0.1f), "Holding a plank at the breach should repair it");
             Check(_ship.HoleCount == 0 && _ship.Inflow == 0f && inventory.GetSlot(6).Amount == boards - 1,

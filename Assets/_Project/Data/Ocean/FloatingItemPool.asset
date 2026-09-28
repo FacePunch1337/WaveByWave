@@ -63,3 +63,7 @@ MonoBehaviour:
     Weight: 0.0025
   - Item: {fileID: 11400000, guid: 31817e8c65aa6e8449d849d39ded7e05, type: 2}
     Weight: 0.0025
+  - Item: {fileID: 11400000, guid: 44067f5d861242f43a7b848b64bd37a5, type: 2}
+    Weight: 1
+  - Item: {fileID: 11400000, guid: 107a82f1ce810534ab62d342b21a8f5a, type: 2}
+    Weight: 0.35

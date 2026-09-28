@@ -90,21 +90,22 @@ namespace WaveByWave.Generation
         private void FollowCamera(Camera camera)
         {
             var compartment = WaveByWave.Ships.ShipFlooding.CompartmentAt(camera.transform.position);
-            BindWaterMaterial(compartment);
+            BindOceanMaterial();
             if (underwaterArea != null)
             {
-                var insideWater = compartment != null && compartment.WaterLitres > 0.001f &&
-                    camera.transform.position.y < compartment.WaterVolume.HeightAt(camera.transform.position, compartment.Fill);
-                // A dry masked cabin may be below sea level. Ocean fog must not
-                // make it look flooded before water has actually reached the camera.
-                var active = compartment == null || insideWater;
-                if (underwaterArea.enabled != active)
+                // The ocean volume only represents the ocean. A ship compartment owns a
+                // separate local volume, even while it is dry, so the two effects never
+                // compete while the camera crosses the hull or its internal waterline.
+                var active = compartment == null;
+                if (!underwaterArea.enabled)
+                    underwaterArea.enabled = true;
+                if (underwaterVolume != null && underwaterVolume.enabled != active)
                 {
-                    underwaterArea.enabled = active;
+                    underwaterVolume.enabled = active;
                     if (!active) foreach (var particles in _spawnedParticles)
                         if (particles != null) particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
                 }
-                underwaterArea.waterLevelSource = compartment != null ? UnderwaterArea.WaterLevelSource.FixedValue : UnderwaterArea.WaterLevelSource.Ocean;
+                underwaterArea.waterLevelSource = UnderwaterArea.WaterLevelSource.Ocean;
             }
 
             var position = transform.position;
@@ -115,11 +116,6 @@ namespace WaveByWave.Generation
                 position.y = OceanFollowBehaviour.Instance.transform.position.y;
                 if (underwaterArea != null)
                     underwaterArea.waterLevel = position.y;
-            }
-            if (compartment != null)
-            {
-                position.y = compartment.WaterVolume.HeightAt(camera.transform.position, compartment.Fill);
-                if (underwaterArea != null) underwaterArea.waterLevel = position.y;
             }
             transform.position = position;
         }
@@ -138,14 +134,6 @@ namespace WaveByWave.Generation
             if (Application.isPlaying && material.HasProperty("_Cull") &&
                 material.GetInt("_Cull") != (int)CullMode.Off)
                 material.SetInt("_Cull", (int)CullMode.Off);
-        }
-
-        private void BindWaterMaterial(WaveByWave.Ships.ShipFlooding compartment)
-        {
-            if (underwaterArea == null) return;
-            var interior = compartment?.WaterVolume?.RuntimeWaterMaterial;
-            if (interior != null) underwaterArea.waterMaterial = interior;
-            else BindOceanMaterial();
         }
 
         private void EnsureParticleEffects()

@@ -128,22 +128,10 @@ namespace WaveByWave.Editor
                 water.Level(.65f) - .55f, water.LocalBounds.center.z - 1f));
             camera.transform.SetPositionAndRotation(eye,
                 Quaternion.LookRotation(water.transform.TransformDirection(Vector3.right), Vector3.up));
-            var areaPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/Effects/OceanUnderwaterArea.prefab");
-            if (areaPrefab == null) throw new InvalidOperationException("Underwater area prefab is missing.");
-            var areaObject = Object.Instantiate(areaPrefab);
-            SceneManager.MoveGameObjectToScene(areaObject, scene);
-            var follower = areaObject.GetComponent<WaveByWave.Generation.OceanUnderwaterCameraFollower>();
-            if (follower != null) follower.enabled = false;
-            var area = areaObject.GetComponent<UnderwaterArea>();
+            var areaTransform = water.transform.Find("Interior underwater area");
+            var area = areaTransform != null ? areaTransform.GetComponent<UnderwaterArea>() : null;
+            if (area == null) throw new InvalidOperationException("Interior underwater area was not generated.");
             area.enabled = false;
-            area.waterLevelSource = UnderwaterArea.WaterLevelSource.FixedValue;
-            area.waterLevel = water.HeightAt(eye, .65f);
-            areaObject.transform.position = new Vector3(eye.x, area.waterLevel, eye.z);
-            // Other loaded scenes can contain the ocean's large camera volume.
-            // Give this preview area a closer surface so SW3 selects it.
-            area.boxCollider.size = new Vector3(14f, 20f, 24f);
-            area.boxCollider.center = new Vector3(0f, eye.y - area.waterLevel + .1f - 10f, 0f);
-            area.waterMaterial = water.RuntimeWaterMaterial;
             try
             {
                 var clearHull = Capture(camera, target);
@@ -155,9 +143,9 @@ namespace WaveByWave.Editor
                 Save(camera, target, "Temp/ShipFloodingChecks/interior-hull-clear.png");
 
                 area.enabled = true;
-                if (UnderwaterArea.GetFirstIntersecting(camera) != area)
-                    throw new InvalidOperationException("Underwater verification area does not enclose the camera.");
                 var submergedHull = Capture(camera, target);
+                if (UnderwaterArea.GetFirstIntersecting(camera) != area)
+                    throw new InvalidOperationException("Generated interior underwater area does not enclose the camera.");
                 var effect = Difference(clearHull, submergedHull);
                 if (effect < .001f)
                     throw new InvalidOperationException($"Stylized Water 3 underwater effect did not render in the verification view ({effect:0.00000}).");

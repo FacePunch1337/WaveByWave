@@ -37,6 +37,8 @@ namespace WaveByWave.Combat
             public Mesh Mesh;
             public Material Material;
             public Vector3 Scale;
+            public GameObject Fuse, Explosion;
+            public Vector3 FuseOffset;
         }
 
         private static DotsCannonProjectileVisuals _instance;
@@ -59,7 +61,8 @@ namespace WaveByWave.Combat
 
         public static void Add(ulong owner, uint revision, bool enemy, GameObject prefab,
             Vector3 origin, Vector3 velocity, Vector3 gravity, double started, float lifetime,
-            GameObject muzzle, double presentationTime = -1d)
+            GameObject muzzle, double presentationTime = -1d, GameObject fusePrefab = null,
+            Vector3 fuseOffset = default, GameObject explosionPrefab = null)
         {
             if (prefab == null) return;
             var meshFilter = prefab.GetComponentInChildren<MeshFilter>(true);
@@ -79,7 +82,8 @@ namespace WaveByWave.Combat
                 Mesh = meshFilter.sharedMesh,
                 Material = ownerInstance.RuntimeMaterial(meshRenderer.sharedMaterial),
                 Scale = prefab.transform.localScale,
-                Muzzle = muzzle
+                Muzzle = muzzle, Explosion = explosionPrefab, FuseOffset = fuseOffset,
+                Fuse = fusePrefab != null ? Instantiate(fusePrefab, origin + fuseOffset, Quaternion.identity) : null
             });
         }
 
@@ -117,7 +121,7 @@ namespace WaveByWave.Combat
             foreach (var pair in _instance._shots)
                 if (pair.Key.Owner == owner && pair.Key.Enemy == enemy)
                     _instance._expired.Add(pair.Key);
-            foreach (var key in _instance._expired) _instance._shots.Remove(key);
+            foreach (var key in _instance._expired) _instance.RemoveShot(key);
             _instance._expired.Clear();
         }
 
@@ -151,7 +155,9 @@ namespace WaveByWave.Combat
                 }
                 if (shot.Impact && shot.Age >= shot.ImpactAge)
                 {
-                    if (shot.Show) CannonEffects.Hit(shot.HitPoint, shot.HitNormal, shot.Water,
+                    if (shot.Show && shot.Explosion != null)
+                        WaveByWave.Effects.OneShotEffect.Spawn(shot.Explosion, shot.HitPoint, Vector3.up);
+                    else if (shot.Show) CannonEffects.Hit(shot.HitPoint, shot.HitNormal, shot.Water,
                         shot.WaterEffect, shot.GroundEffect);
                     _expired.Add(pair.Key);
                     continue;
@@ -162,6 +168,7 @@ namespace WaveByWave.Combat
                 var velocity = shot.Velocity + shot.Gravity * shot.Age;
                 var rotation = velocity.sqrMagnitude > 0.0001f
                     ? Quaternion.LookRotation(velocity.normalized) : Quaternion.identity;
+                if (shot.Fuse != null) shot.Fuse.transform.position = position + rotation * shot.FuseOffset;
                 var key = (shot.Mesh, shot.Material);
                 if (!_batches.TryGetValue(key, out var matrices))
                 {
@@ -170,7 +177,7 @@ namespace WaveByWave.Combat
                 }
                 matrices.Add(Matrix4x4.TRS(position, rotation, shot.Scale));
             }
-            foreach (var key in _expired) _shots.Remove(key);
+            foreach (var key in _expired) RemoveShot(key);
             foreach (var pair in _batches)
             {
                 var matrices = pair.Value;
@@ -184,8 +191,14 @@ namespace WaveByWave.Combat
             }
         }
 
+        private void RemoveShot(ShotKey key)
+        {
+            if (_shots.Remove(key, out var shot) && shot.Fuse != null) Destroy(shot.Fuse);
+        }
+
         private void OnDestroy()
         {
+            foreach (var shot in _shots.Values) if (shot.Fuse != null) Destroy(shot.Fuse);
             foreach (var material in _materials.Values) Destroy(material);
             _materials.Clear();
             _shots.Clear();

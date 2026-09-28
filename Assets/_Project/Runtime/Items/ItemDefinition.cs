@@ -22,7 +22,7 @@ namespace WaveByWave.Items
     }
 
     public enum SupplyKind : byte { None, Cannonball, Plank, Food }
-    public enum ItemEquipmentKind : byte { Automatic, Carry, Sword, Musket, Hook, Bucket, Shovel }
+    public enum ItemEquipmentKind : byte { Automatic, Carry, Sword, Musket, Hook, Bucket, Shovel, Throwable }
     public enum ShipUpgradeStat : byte { CannonDamage, Armor, Speed, Maneuverability }
 
     [System.Serializable]
@@ -52,8 +52,10 @@ namespace WaveByWave.Items
         [SerializeField, Min(1)] private int maximumStack = 1;
         [SerializeField] private SupplyKind supplyKind;
         [SerializeField, Min(0f)] private float potency = 40f;
-        [SerializeField, Min(0f), Tooltip("Дополнительный плоский урон этого ядра. Используется только для Supply Kind = Cannonball.")]
+        [SerializeField, Min(0f), Tooltip("Дополнительный урон боеприпаса при выстреле из пушки: ядра или заряжаемой бомбы.")]
         private float cannonDamageModifier;
+        [Header("Throwable weapon")]
+        [SerializeField] private ThrowableWeaponProfile throwable;
         [SerializeField, Min(0)] private int treasureExperience = 25;
         [SerializeField, Tooltip("Luck increases this reward's coin amount when it drops from a chest.")]
         private bool coinReward;
@@ -128,9 +130,13 @@ namespace WaveByWave.Items
         public int MaximumStack => Mathf.Clamp(maximumStack, 1, ushort.MaxValue);
         public SupplyKind SupplyKind => supplyKind;
         public float Potency => Mathf.Max(0f, potency);
-        public float CannonDamageModifier => supplyKind == SupplyKind.Cannonball ?
+        public ThrowableWeaponProfile Throwable => throwable;
+        public bool IsCannonAmmo => supplyKind == SupplyKind.Cannonball ||
+            EquipmentKind == ItemEquipmentKind.Throwable && throwable != null && throwable.LoadInCannons;
+        public float CannonDamageModifier => IsCannonAmmo ?
             Mathf.Max(0f, cannonDamageModifier) : 0f;
-        public bool IsWeapon => EquipmentKind == ItemEquipmentKind.Sword || EquipmentKind == ItemEquipmentKind.Musket;
+        public bool IsWeapon => EquipmentKind == ItemEquipmentKind.Sword || EquipmentKind == ItemEquipmentKind.Musket ||
+            EquipmentKind == ItemEquipmentKind.Throwable;
         public float WeaponDamage => Potency * RarityDamageMultiplier(rarity);
         public static float RarityDamageMultiplier(ItemRarity value) => value switch
         {

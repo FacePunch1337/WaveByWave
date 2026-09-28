@@ -2334,7 +2334,4 @@ MonoBehaviour:
   EnableCombat: 1
   SpawnsPerFrame: 32
   MaximumEnemies: 6000
-  LootDrops:
-  - {fileID: 11400000, guid: 3a9f66bdbb994a318bdddc477343b327, type: 2}
-  - {fileID: 11400000, guid: 9d3ef622b49c4a5fbd00c1be9b4a1083, type: 2}
-  - {fileID: 11400000, guid: 0047a177efbe4adbbe8ea1fa4931b70c, type: 2}
+  LootDrops: []

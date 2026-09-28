@@ -18,7 +18,7 @@ namespace WaveByWave.Generation
     public sealed class OceanWorldDirector : MonoBehaviour
     {
         private const string Channel = "WaveByWave.Ocean.v1";
-        private enum Kind : byte { Request, Create, Dig, Remove, Marker, RemoveMarker, Reset, Complete, HideMarker }
+        private enum Kind : byte { Request, Create, Dig, Remove, Marker, RemoveMarker, Reset, Complete, HideMarker, Blast }
         private struct Packet : INetworkSerializable
         {
             public Kind Kind;
@@ -262,12 +262,33 @@ namespace WaveByWave.Generation
             return true;
         }
 
-        private void HideMarkerAboveDig(IslandRecord record, Vector3 point)
+        public void ExplodeIslandServer(Vector3 center, float radius, float noise, uint seed)
+        {
+            if (!IsAuthority || !float.IsFinite(radius) || radius <= 0f) return;
+            radius = Mathf.Min(radius, 12f);
+            foreach (var record in _islands.Values)
+            {
+                var island = record.Island;
+                if (island == null) continue;
+                var local = island.transform.InverseTransformPoint(center);
+                var reach = island.Diameter * .5f + radius * 1.6f;
+                if (new Vector2(local.x, local.z).sqrMagnitude > reach * reach ||
+                    Mathf.Abs(local.y) > island.Settings.SandDepth + island.Settings.SandHeight + radius * 1.6f) continue;
+                // Reuse the edit log and late-join replay. Geometry stays local on every peer.
+                var packet = new Packet { Kind = Kind.Blast, Id = island.Id, Revision = record.Digs.Count + 1,
+                    Position = local, Radius = radius, Seed = seed | 1u,
+                    Size = (byte)Mathf.RoundToInt(Mathf.Clamp(noise, 0, .6f) / .6f * 255), Scene = CurrentScene() };
+                record.Digs.Add(packet); Apply(packet); Broadcast(packet);
+                HideMarkerAboveDig(record, center, radius * 1.6f);
+            }
+        }
+
+        private void HideMarkerAboveDig(IslandRecord record, Vector3 point, float digRadius = -1f)
         {
             // A marker identifies the patch of sand above a chest, rather than a physical
             // painted stroke. Remove it on the first successful excavation below that patch,
             // including sloped island surfaces and deeper follow-up hits.
-            var radius = settings.DigRadius + 0.1f;
+            var radius = (digRadius > 0f ? digRadius : settings.DigRadius) + 0.1f;
             foreach (var pair in record.Markers)
             {
                 if (record.HiddenMarkers.Contains(pair.Key)) continue;
@@ -279,7 +300,7 @@ namespace WaveByWave.Generation
                 var hidden = new Packet { Kind = Kind.HideMarker, Id = record.Island.Id,
                     ChestId = pair.Key, Scene = CurrentScene() };
                 Apply(hidden); Broadcast(hidden);
-                return;
+                if (digRadius < 0f) return;
             }
         }
         public bool IsChestExposed(int islandId, Vector3 position)
@@ -798,8 +819,9 @@ namespace WaveByWave.Generation
                 _islands.Add(packet.Id, new IslandRecord { Creation = packet, Island = island }); return;
             }
             if (!_islands.TryGetValue(packet.Id, out var record)) return;
-            if (packet.Kind == Kind.Dig)
-            { record.Island.ApplyDig(packet.Revision, packet.Position, packet.Radius); return; }
+            if (packet.Kind == Kind.Dig || packet.Kind == Kind.Blast)
+            { record.Island.ApplyDig(packet.Revision, packet.Position, packet.Radius,
+                packet.Kind == Kind.Blast ? packet.Size / 255f * .6f : 0f, packet.Seed); return; }
             if (packet.Kind == Kind.Remove)
             {
                 if (record.Island != null) Destroy(record.Island.gameObject);

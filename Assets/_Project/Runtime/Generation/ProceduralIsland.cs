@@ -256,18 +256,20 @@ namespace WaveByWave.Generation
             _meshing = false;
         }
 
-        public bool ApplyDig(int revision, Vector3 localCenter, float radius)
+        public bool ApplyDig(int revision, Vector3 localCenter, float radius, float noiseStrength = 0f, uint noiseSeed = 0)
         {
             if (!_density.IsCreated || revision <= LastDigRevision) return false;
             _job.Complete();
             if (_meshing) FinishMesh();
             _initialized = true;
             var grid = ((float3)localCenter - _parameters.Origin) / _parameters.CellSize;
-            var extent = (radius + Mathf.Max(0f, Settings.DigSmoothing)) / _parameters.CellSize + 1f;
+            noiseStrength = Mathf.Clamp(noiseStrength, 0f, .6f);
+            var extent = (radius * (1f + noiseStrength) + Mathf.Max(0f, Settings.DigSmoothing)) / _parameters.CellSize + 1f;
             var min = math.clamp((int3)math.floor(grid - extent), int3.zero, _parameters.Points - 1);
             var max = math.clamp((int3)math.ceil(grid + extent), int3.zero, _parameters.Points - 1);
             _job = new IslandDigJob { Density = _density, Parameters = _parameters,
                 Center = localCenter, Radius = radius, Smoothing = Settings.DigSmoothing,
+                NoiseStrength = noiseStrength, NoiseSeed = noiseSeed,
                 Minimum = min, Maximum = max }.Schedule();
             _job.Complete();
             LastDigRevision = revision;

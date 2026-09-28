@@ -19,7 +19,12 @@ using WaveByWave.Generation;
 
 namespace WaveByWave.Items
 {
-    public struct LootStressCommand : IRpcCommand
+    // These names intentionally differ from the original LootStress* RPCs. Old player builds
+    // retained Burst AOT executors from before Revision was added, even though their managed
+    // serializers already wrote it. New RPC identities invalidate those cached entry points and
+    // let NetCode reject an old peer at the protocol handshake instead of losing the loot stream.
+    [TypeManager.TypeVersion(2)]
+    public struct WorldLootSnapshotRpc : IRpcCommand
     {
         public uint Revision;
         public int Count;
@@ -29,7 +34,8 @@ namespace WaveByWave.Items
         public FixedString64Bytes SceneName;
     }
 
-    public struct LootStressDeltaCommand : IRpcCommand
+    [TypeManager.TypeVersion(2)]
+    public struct WorldLootDeltaRpc : IRpcCommand
     {
         public uint Revision;
         public int Id;
@@ -58,7 +64,8 @@ namespace WaveByWave.Items
     // Client-side readiness and the server-side item lifetime are independent. A newly connected
     // client explicitly asks for the current snapshot so pre-existing loose items cannot depend on
     // the timing of connection-system discovery.
-    public struct LootStressSnapshotRequest : IRpcCommand { public byte ProtocolVersion; }
+    [TypeManager.TypeVersion(2)]
+    public struct WorldLootSnapshotRequestRpc : IRpcCommand { public byte ProtocolVersion; }
 
     public struct LootStressEntity : IComponentData { }
     internal struct LootStressConnectionState : IComponentData
@@ -110,7 +117,7 @@ namespace WaveByWave.Items
         private static GameObject _rarityEffectPrefab;
         private static WaveProfile _waterProfile;
         private static EquipmentWaterQuery _water;
-        private static LootStressCommand _latest;
+        private static WorldLootSnapshotRpc _latest;
         private static uint _stateRevision;
         private static bool _hasState;
         private static string _sceneName;
@@ -148,7 +155,7 @@ namespace WaveByWave.Items
             }
             _stateRevision++;
             if (_stateRevision == 0) _stateRevision = 1;
-            _latest = new LootStressCommand
+            _latest = new WorldLootSnapshotRpc
             {
                 Revision = _stateRevision,
                 Count = Mathf.Clamp(count, 0, MaximumCount), Center = center,
@@ -199,12 +206,16 @@ namespace WaveByWave.Items
             var horizontalSpeed = speed * planarAmount;
             var start = feet + up * 0.9f + aim * 0.25f;
             var target = feet + forward * (dropDistance * Mathf.Max(0.15f, planarAmount));
-            if (!TryResolveSurface(target, out var point, out var normal, out var onWater, out var support, out var surfaceId))
+            if (!TryResolveSurface(target, out var point, out var normal, out var onWater, out var support, out var surfaceId, true))
                 return false;
+
+            // Swimming feet are below the waterline. Float a dropped item onto that surface
+            // instead of rejecting the drop because no surface exists below the feet.
+            if (onWater) start.y = Mathf.Max(start.y, point.y + .15f);
 
             var firstFall = BallisticFlightTime(Vector3.Dot(start - point, up), verticalVelocity);
             target = feet + forward * (dropDistance * Mathf.Max(0.15f, planarAmount) + horizontalSpeed * firstFall);
-            if (!TryResolveSurface(target, out point, out normal, out onWater, out support, out surfaceId)) return false;
+            if (!TryResolveSurface(target, out point, out normal, out onWater, out support, out surfaceId, true)) return false;
 
             var rotationUp = onWater ? Vector3.up : normal;
             var facing = Vector3.ProjectOnPlane(forward, rotationUp).normalized;
@@ -225,7 +236,7 @@ namespace WaveByWave.Items
                 if (normal.y < 0.3f)
                 {
                     var outside = point + normal * 0.2f;
-                    if (!TryResolveSurface(outside, out point, out normal, out onWater, out support, out surfaceId))
+                    if (!TryResolveSurface(outside, out point, out normal, out onWater, out support, out surfaceId, true))
                         return false;
                 }
                 else
@@ -329,7 +340,7 @@ namespace WaveByWave.Items
         {
             if (ClientServerBootstrap.ServerWorld is not { IsCreated: true } || !ServerItems.Remove(id))
                 return false;
-            Broadcast(new LootStressDeltaCommand { Id = id, Kind = Remove });
+            Broadcast(new WorldLootDeltaRpc { Id = id, Kind = Remove });
             ServerItemRemoved?.Invoke(id);
             return true;
         }
@@ -374,7 +385,7 @@ namespace WaveByWave.Items
                 item.OnWater = false;
                 item.HookOffset = PlayerEquipment.HookCargoOffset(offsetStart + captured.Count);
                 captured.Add(pair.Key);
-                Broadcast(new LootStressDeltaCommand { Id = pair.Key, Kind = Tether,
+                Broadcast(new WorldLootDeltaRpc { Id = pair.Key, Kind = Tether,
                     HookOwner = hook.OwnerClientId, HookOffset = item.HookOffset });
             }
         }
@@ -413,7 +424,7 @@ namespace WaveByWave.Items
                 item.RestPosition = position; item.Rotation = rotation; }
             item.FlightDuration = 0f;
             item.Moved = true;
-            Broadcast(new LootStressDeltaCommand
+            Broadcast(new WorldLootDeltaRpc
                 { Id = id, Kind = Place, Position = item.Position, Rotation = item.Rotation,
                     BaseRotation = item.BaseRotation, OnWater = item.OnWater,
                     SupportId = item.SupportId, LocalPosition = item.LocalPosition, LocalRotation = item.LocalRotation,
@@ -446,7 +457,7 @@ namespace WaveByWave.Items
             SetTarget(0, Vector3.zero, 30f);
         }
 
-        internal static bool TryGetLatest(out LootStressCommand command)
+        internal static bool TryGetLatest(out WorldLootSnapshotRpc command)
         {
             command = _latest;
             return _hasState;
@@ -458,14 +469,14 @@ namespace WaveByWave.Items
             for (var id = 0; id < _latest.Count; id++)
             {
                 if (!ServerItems.TryGetValue(id, out var item))
-                    Rpc(ecb, new LootStressDeltaCommand { Id = id, Kind = Remove }, connection);
+                    Rpc(ecb, new WorldLootDeltaRpc { Id = id, Kind = Remove }, connection);
                 else if (item.Hook != null)
-                    Rpc(ecb, new LootStressDeltaCommand { Id = id, Kind = Tether,
+                    Rpc(ecb, new WorldLootDeltaRpc { Id = id, Kind = Tether,
                         HookOwner = item.Hook.OwnerClientId, HookOffset = item.HookOffset }, connection);
                 else if (item.Moved || item.SupportId != 0)
                 {
                     UpdateItemPose(item);
-                    Rpc(ecb, new LootStressDeltaCommand { Id = id, Kind = Place,
+                    Rpc(ecb, new WorldLootDeltaRpc { Id = id, Kind = Place,
                         Position = item.Position, Rotation = item.Rotation, BaseRotation = item.BaseRotation,
                         OnWater = item.OnWater,
                         SupportId = item.SupportId, LocalPosition = item.LocalPosition, LocalRotation = item.LocalRotation,
@@ -478,7 +489,7 @@ namespace WaveByWave.Items
                 UpdateItemPose(pair.Value);
                 Rpc(ecb, BuildAddDelta(pair.Key, pair.Value, 0f), connection);
                 if (pair.Value.Hook != null)
-                    Rpc(ecb, new LootStressDeltaCommand { Id = pair.Key, Kind = Tether,
+                    Rpc(ecb, new WorldLootDeltaRpc { Id = pair.Key, Kind = Tether,
                         HookOwner = pair.Value.Hook.OwnerClientId, HookOffset = pair.Value.HookOffset }, connection);
             }
         }
@@ -511,7 +522,7 @@ namespace WaveByWave.Items
             if (_hasState && _sceneName == scene) return;
             _stateRevision++;
             if (_stateRevision == 0) _stateRevision = 1;
-            _latest = new LootStressCommand
+            _latest = new WorldLootSnapshotRpc
             {
                 Revision = _stateRevision,
                 Count = 0, Center = center, Radius = 15f,
@@ -524,10 +535,10 @@ namespace WaveByWave.Items
                 LootStressPresentation.Apply(clientWorld, _latest);
         }
 
-        private static LootStressDeltaCommand BuildAddDelta(int id, ServerItem item, float duration)
+        private static WorldLootDeltaRpc BuildAddDelta(int id, ServerItem item, float duration)
         {
             var start = duration > 0f ? item.FlightStart : item.Position;
-            return new LootStressDeltaCommand
+            return new WorldLootDeltaRpc
             {
                 Revision = _stateRevision,
                 Id = id, Kind = Add, CatalogIndex = item.CatalogIndex,
@@ -557,7 +568,7 @@ namespace WaveByWave.Items
                 UpdateItemPose(pair.Value);
                 LootStressPresentation.ApplyDelta(BuildAddDelta(pair.Key, pair.Value, 0f));
                 if (pair.Value.Hook != null)
-                    LootStressPresentation.ApplyDelta(new LootStressDeltaCommand
+                    LootStressPresentation.ApplyDelta(new WorldLootDeltaRpc
                     {
                         Revision = _stateRevision,
                         Id = pair.Key, Kind = Tether, HookOwner = pair.Value.Hook.OwnerClientId,
@@ -602,7 +613,7 @@ namespace WaveByWave.Items
             }
         }
 
-        internal static void NextPose(ref Unity.Mathematics.Random random, LootStressCommand command,
+        internal static void NextPose(ref Unity.Mathematics.Random random, WorldLootSnapshotRpc command,
             out Vector3 position, out Quaternion rotation)
         {
             var angle = random.NextFloat(0f, math.PI * 2f);
@@ -617,7 +628,7 @@ namespace WaveByWave.Items
             => TryResolveSurface(origin, out point, out normal, out onWater, out support, out _);
 
         internal static bool TryResolveSurface(Vector3 origin, out Vector3 point, out Vector3 normal,
-            out bool onWater, out NetworkObject support, out ulong surfaceId)
+            out bool onWater, out NetworkObject support, out ulong surfaceId, bool allowWaterAboveOrigin = false)
         {
             point = origin;
             normal = Vector3.up;
@@ -661,7 +672,7 @@ namespace WaveByWave.Items
                 surfaceId = 0;
             }
             if (_water != null && _water.TrySurface(origin, Vector2.one * 0.45f, out var height, out var waterNormal) &&
-                height <= origin.y + 0.5f && height > bestY + 0.01f)
+                (allowWaterAboveOrigin || height <= origin.y + 0.5f) && height > bestY + 0.01f)
             {
                 point = new Vector3(origin.x, height, origin.z);
                 normal = waterNormal;
@@ -779,7 +790,7 @@ namespace WaveByWave.Items
             ClearLocal();
         }
 
-        private static void Broadcast(LootStressDeltaCommand delta)
+        private static void Broadcast(WorldLootDeltaRpc delta)
         {
             delta.Revision = _stateRevision;
             if (ClientServerBootstrap.ServerWorld is { IsCreated: true } world)
@@ -791,10 +802,10 @@ namespace WaveByWave.Items
                 LootStressPresentation.QueueDelta(delta);
         }
 
-        private static void Rpc(EntityCommandBuffer ecb, LootStressDeltaCommand command, Entity target)
+        private static void Rpc(EntityCommandBuffer ecb, WorldLootDeltaRpc command, Entity target)
         {
             command.Revision = _stateRevision;
-            Rpc<LootStressDeltaCommand>(ecb, command, target);
+            Rpc<WorldLootDeltaRpc>(ecb, command, target);
         }
 
         private static void Send<T>(EntityManager manager, T command, Entity target) where T : unmanaged, IRpcCommand
@@ -821,7 +832,7 @@ namespace WaveByWave.Items
         {
             var ecb = new EntityCommandBuffer(Allocator.Temp);
             foreach (var (request, entity) in SystemAPI.Query<RefRO<ReceiveRpcCommandRequest>>()
-                         .WithAll<LootStressSnapshotRequest>().WithEntityAccess())
+                         .WithAll<WorldLootSnapshotRequestRpc>().WithEntityAccess())
             {
                 if (LootStressTest.TryGetLatest(out _))
                     LootStressTest.WriteLateJoinState(ecb, request.ValueRO.SourceConnection);
@@ -878,7 +889,7 @@ namespace WaveByWave.Items
                     if (requested && state.EntityManager.GetComponentData<LootSnapshotRequested>(connection)
                             .SceneName == scene) continue;
                     var request = ecb.CreateEntity();
-                    ecb.AddComponent(request, new LootStressSnapshotRequest { ProtocolVersion = 1 });
+                    ecb.AddComponent(request, new WorldLootSnapshotRequestRpc { ProtocolVersion = 1 });
                     ecb.AddComponent(request, new SendRpcCommandRequest { TargetConnection = connection });
                     var marker = new LootSnapshotRequested { SceneName = scene };
                     if (requested) ecb.SetComponent(connection, marker);
@@ -886,16 +897,16 @@ namespace WaveByWave.Items
                 }
             }
             var hasInitial = false;
-            var initial = default(LootStressCommand);
-            var deltas = new NativeList<LootStressDeltaCommand>(Allocator.Temp);
-            foreach (var (command, entity) in SystemAPI.Query<RefRO<LootStressCommand>>()
+            var initial = default(WorldLootSnapshotRpc);
+            var deltas = new NativeList<WorldLootDeltaRpc>(Allocator.Temp);
+            foreach (var (command, entity) in SystemAPI.Query<RefRO<WorldLootSnapshotRpc>>()
                          .WithAll<ReceiveRpcCommandRequest>().WithEntityAccess())
             {
                 if (!hasInitial || command.ValueRO.Revision >= initial.Revision) initial = command.ValueRO;
                 hasInitial = true;
                 ecb.DestroyEntity(entity);
             }
-            foreach (var (delta, entity) in SystemAPI.Query<RefRO<LootStressDeltaCommand>>()
+            foreach (var (delta, entity) in SystemAPI.Query<RefRO<WorldLootDeltaRpc>>()
                          .WithAll<ReceiveRpcCommandRequest>().WithEntityAccess())
             {
                 deltas.Add(delta.ValueRO);
@@ -991,13 +1002,13 @@ namespace WaveByWave.Items
 
         private static readonly Dictionary<int, ClientItem> Items = new(LootStressTest.MaximumCount);
         private static readonly List<ClientItem> WaterItems = new(LootStressTest.MaximumCount);
-        private static readonly List<LootStressDeltaCommand> PendingDeltas = new();
+        private static readonly List<WorldLootDeltaRpc> PendingDeltas = new();
         private static readonly HashSet<int> RemovedItems = new();
         private static ItemCatalog _catalog;
         private static GameObject _effectPrefab;
         private static EquipmentWaterQuery _water;
         private static World _world;
-        private static LootStressCommand? _pending;
+        private static WorldLootSnapshotRpc? _pending;
         private static int _waterCursor;
         private static string _activeScene;
         private static uint _appliedSeed;
@@ -1012,6 +1023,9 @@ namespace WaveByWave.Items
         internal static bool AssetsReady => _catalog != null;
         private static GameObject _prompt;
         private static Text _promptName;
+        private static GameObject _promptOverlay;
+        private static RectTransform _promptOverlayRect;
+        private static RectTransform _promptRect;
         private static int _focusedId = int.MaxValue;
         private static int _focusedFrame = -1;
         private static WorldItem _focusedWorldItem;
@@ -1037,7 +1051,7 @@ namespace WaveByWave.Items
             if (!_pending.HasValue) FlushPendingDeltas();
         }
 
-        internal static void Apply(World world, LootStressCommand command)
+        internal static void Apply(World world, WorldLootSnapshotRpc command)
         {
             if (command.Revision < _appliedRevision ||
                 _pending.HasValue && command.Revision < _pending.Value.Revision) return;
@@ -1130,7 +1144,7 @@ namespace WaveByWave.Items
             FlushPendingDeltas();
         }
 
-        internal static void ApplyDelta(LootStressDeltaCommand delta)
+        internal static void ApplyDelta(WorldLootDeltaRpc delta)
         {
             if (delta.Revision < _appliedRevision) return;
             if (_pending.HasValue || _catalog == null || _world == null || !_world.IsCreated || !_hasInitialState)
@@ -1212,7 +1226,7 @@ namespace WaveByWave.Items
             SetPose(item);
         }
 
-        internal static void QueueDelta(LootStressDeltaCommand delta)
+        internal static void QueueDelta(WorldLootDeltaRpc delta)
         {
             // A reliable NFE Add may arrive before the initial snapshot/client presentation world.
             // Retain it until scene/catalog readiness; session shutdown clears the queue.
@@ -1396,39 +1410,75 @@ namespace WaveByWave.Items
             {
                 GameUiPrefabs.Persist(_prompt);
                 _promptName=GameUiPrefabs.Find<Text>(_prompt,"Label");
-                return;
             }
-            _prompt = new GameObject("Focused Item Prompt", typeof(RectTransform), typeof(Canvas),
-                typeof(CanvasScaler), typeof(Image));
-            if(Application.isPlaying) UnityEngine.Object.DontDestroyOnLoad(_prompt);
-            var rect = (RectTransform)_prompt.transform;
-            rect.sizeDelta = new Vector2(350f, 76f);
-            rect.localScale = Vector3.one * 0.0032f;
-            var canvas = _prompt.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.WorldSpace;
-            canvas.sortingOrder = 80;
-            var background = _prompt.GetComponent<Image>();
-            background.color = new Color(0.025f, 0.035f, 0.05f, 0.9f);
-            background.raycastTarget = false;
+            else
+            {
+                _prompt = new GameObject("Focused Item Prompt", typeof(RectTransform), typeof(Canvas),
+                    typeof(CanvasScaler), typeof(Image));
+                if(Application.isPlaying) UnityEngine.Object.DontDestroyOnLoad(_prompt);
+                var rect = (RectTransform)_prompt.transform;
+                rect.sizeDelta = new Vector2(350f, 76f);
+                var canvas = _prompt.GetComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                canvas.sortingOrder = 80;
+                var background = _prompt.GetComponent<Image>();
+                background.color = new Color(0.025f, 0.035f, 0.05f, 0.9f);
+                background.raycastTarget = false;
 
-            var keyObject = new GameObject("Interaction Key", typeof(RectTransform), typeof(Image));
-            keyObject.transform.SetParent(_prompt.transform, false);
-            var keyRect = (RectTransform)keyObject.transform;
-            keyRect.anchorMin = keyRect.anchorMax = new Vector2(0f, 0.5f);
-            keyRect.pivot = new Vector2(0f, 0.5f);
-            keyRect.anchoredPosition = new Vector2(8f, 0f);
-            keyRect.sizeDelta = new Vector2(40f, 40f);
-            keyObject.GetComponent<Image>().color = new Color(0.9f, 0.92f, 0.95f, 0.98f);
-            var keyText = CreatePromptText("E", keyObject.transform, Color.black, 22, TextAnchor.MiddleCenter);
-            Stretch(keyText.rectTransform, 0f);
+                var keyObject = new GameObject("Interaction Key", typeof(RectTransform), typeof(Image));
+                keyObject.transform.SetParent(_prompt.transform, false);
+                var keyRect = (RectTransform)keyObject.transform;
+                keyRect.anchorMin = keyRect.anchorMax = new Vector2(0f, 0.5f);
+                keyRect.pivot = new Vector2(0f, 0.5f);
+                keyRect.anchoredPosition = new Vector2(8f, 0f);
+                keyRect.sizeDelta = new Vector2(40f, 40f);
+                keyObject.GetComponent<Image>().color = new Color(0.9f, 0.92f, 0.95f, 0.98f);
+                var keyText = CreatePromptText("E", keyObject.transform, Color.black, 22, TextAnchor.MiddleCenter);
+                Stretch(keyText.rectTransform, 0f);
 
-            _promptName = CreatePromptText("Item", _prompt.transform, Color.white, 20, TextAnchor.MiddleLeft);
-            var nameRect = _promptName.rectTransform;
-            nameRect.anchorMin = Vector2.zero;
-            nameRect.anchorMax = Vector2.one;
-            nameRect.offsetMin = new Vector2(60f, 3f);
-            nameRect.offsetMax = new Vector2(-8f, -3f);
+                _promptName = CreatePromptText("Item", _prompt.transform, Color.white, 20, TextAnchor.MiddleLeft);
+                var nameRect = _promptName.rectTransform;
+                nameRect.anchorMin = Vector2.zero;
+                nameRect.anchorMax = Vector2.one;
+                nameRect.offsetMin = new Vector2(60f, 3f);
+                nameRect.offsetMax = new Vector2(-8f, -3f);
+            }
+            MovePromptToOverlay();
             _prompt.SetActive(false);
+        }
+
+        private static void MovePromptToOverlay()
+        {
+            if (_promptOverlay == null)
+            {
+                _promptOverlay = new GameObject("Focused Item Overlay", typeof(RectTransform),
+                    typeof(Canvas), typeof(CanvasScaler));
+                var uiRoot = _prompt.GetComponentInParent<GameUiRoot>(true);
+                if (uiRoot != null) _promptOverlay.transform.SetParent(uiRoot.transform, false);
+                else if (Application.isPlaying) UnityEngine.Object.DontDestroyOnLoad(_promptOverlay);
+                var overlayCanvas = _promptOverlay.GetComponent<Canvas>();
+                overlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                overlayCanvas.sortingOrder = 80;
+                var scaler = _promptOverlay.GetComponent<CanvasScaler>();
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                scaler.referenceResolution = new Vector2(1920f, 1080f);
+                scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+                scaler.matchWidthOrHeight = 0.5f;
+                _promptOverlayRect = (RectTransform)_promptOverlay.transform;
+            }
+
+            _promptRect = (RectTransform)_prompt.transform;
+            _promptRect.SetParent(_promptOverlayRect, false);
+            _promptRect.anchorMin = _promptRect.anchorMax = new Vector2(0.5f, 0.5f);
+            _promptRect.pivot = new Vector2(0.5f, 0.5f);
+            _promptRect.sizeDelta = new Vector2(350f, 76f);
+            _promptRect.localScale = Vector3.one;
+            _promptRect.localRotation = Quaternion.identity;
+            var nestedCanvas = _prompt.GetComponent<Canvas>();
+            nestedCanvas.overrideSorting = true;
+            nestedCanvas.sortingOrder = 1;
+            var nestedScaler = _prompt.GetComponent<CanvasScaler>();
+            if (nestedScaler != null) nestedScaler.enabled = false;
         }
 
         private static Text CreatePromptText(string value, Transform parent, Color color, int size,
@@ -1463,12 +1513,20 @@ namespace WaveByWave.Items
             var world = _focusedWorldItem != null && _focusedWorldItem.IsSpawned;
             var definition = loose ? item.Definition : world ? _focusedWorldItem.Definition : null;
             var visible = _focusedFrame == Time.frameCount && definition != null && Camera.main != null && !PlayerEquipment.InputCaptured;
-            _prompt.SetActive(visible);
-            if (!visible) return;
             var camera = Camera.main;
             var position = loose ? item.Position + Vector3.up * Mathf.Max(0.45f, item.Variant.Radius + 0.22f)
-                : _focusedWorldItem.transform.position + Vector3.up * .55f;
-            _prompt.transform.SetPositionAndRotation(position, camera.transform.rotation);
+                : world ? _focusedWorldItem.transform.position + Vector3.up * .55f : Vector3.zero;
+            var screenPosition = visible ? camera.WorldToScreenPoint(position) : Vector3.back;
+            visible &= screenPosition.z > 0f;
+            _prompt.SetActive(visible);
+            if (!visible) return;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(_promptOverlayRect, screenPosition,
+                null, out var localPosition);
+            var half = _promptRect.rect.size * 0.5f;
+            var bounds = _promptOverlayRect.rect;
+            localPosition.x = Mathf.Clamp(localPosition.x, bounds.xMin + half.x, bounds.xMax - half.x);
+            localPosition.y = Mathf.Clamp(localPosition.y, bounds.yMin + half.y, bounds.yMax - half.y);
+            _promptRect.anchoredPosition = localPosition;
             var localPlayer = NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient?.PlayerObject != null
                 ? NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<NetworkPlayerController>() : null;
             _promptName.text = definition.HoverDescription(localPlayer) +
@@ -1577,7 +1635,7 @@ namespace WaveByWave.Items
             item.OnWater = false;
         }
 
-        private static void SetReplicatedSupport(ClientItem item, LootStressDeltaCommand delta)
+        private static void SetReplicatedSupport(ClientItem item, WorldLootDeltaRpc delta)
         {
             // Never derive local coordinates from a delayed world-space packet and today's
             // ship transform. These values belong to the server's original support frame.

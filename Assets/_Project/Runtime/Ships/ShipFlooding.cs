@@ -71,7 +71,15 @@ namespace WaveByWave.Ships
         private Vector3 _sinkPosition;
         private Quaternion _sinkRotation;
         private readonly RaycastHit[] _repairObstructions = new RaycastHit[32];
+        private readonly Dictionary<ulong, RepairSession> _repairSessions = new();
+        private readonly List<ulong> _expiredRepairers = new();
+        private const double RepairSessionTimeout = 0.35d;
         private static readonly List<ShipFlooding> Active = new();
+        private struct RepairSession
+        {
+            public int HoleId;
+            public double LastPulse;
+        }
         public int HoleCount => _holes?.Count ?? 0;
         public HullBreach GetHole(int index) => _holes[index];
         public bool IsSinking => _sinking.Value;
@@ -109,6 +117,7 @@ namespace WaveByWave.Ships
         {
             Active.Remove(this); _holes.OnListChanged -= HolesChanged;
             _sinking.OnValueChanged -= SinkingChanged;
+            _repairSessions.Clear();
             if (_repairPresentation != null) Destroy(_repairPresentation);
         }
         public override void OnDestroy()
@@ -123,13 +132,13 @@ namespace WaveByWave.Ships
             if (!Application.isBatchMode) Hull?.Present(this);
         }
 
-        public void HitServer(float damage, Vector3 point)
+        public void HitServer(float damage, Vector3 point, bool guaranteedBreach = false)
         {
             if (!IsServer || !IsSpawned || IsSinking || _battery.VoyageEnded ||
                 !float.IsFinite(damage) || damage <= 0f || Hull == null) return;
             // Roll once on the server; clients receive the resulting breach through the network list.
-            if (DamageBreachChancePercent <= 0f || (DamageBreachChancePercent < 100f &&
-                UnityEngine.Random.value * 100f >= DamageBreachChancePercent)) return;
+            if (!guaranteedBreach && (DamageBreachChancePercent <= 0f || (DamageBreachChancePercent < 100f &&
+                UnityEngine.Random.value * 100f >= DamageBreachChancePercent))) return;
             if (HoleCount < ShipHullHoles.MaximumHoles && Hull.TryChooseSite(point, Occupied, out var site))
             {
                 _holes.Add(new HullBreach { Id = ++_nextHole, UV = site.UV, RadiusUV = Hull.RadiusUV(site),
@@ -228,14 +237,84 @@ namespace WaveByWave.Ships
             if (count == _repairObstructions.Length) return false;
             for (var i = 0; i < count; i++)
                 if (_repairObstructions[i].collider.GetComponentInParent<NetworkPlayerController>() != player) return false;
+            BeginRepairSession(player.OwnerClientId, hole.Id);
             hole.Repair = AdvanceRepair(hole.Repair, elapsed, RepairMultiplier(player), RepairSeconds);
             if (hole.Repair >= 1f)
             {
-                if (!inventory.TryConsumeServer(inventory.ServerSelectedIndex, 1, out _)) return false;
+                if (!inventory.TryConsumeServer(inventory.ServerSelectedIndex, 1, out _))
+                {
+                    CancelRepairServer(player.OwnerClientId);
+                    return false;
+                }
                 _holes.RemoveAt(index);
+                RemoveRepairSessions(hole.Id);
             }
             else _holes[index] = hole;
             return true;
+        }
+
+        private void BeginRepairSession(ulong playerId, int holeId)
+        {
+            var previousHole = _repairSessions.TryGetValue(playerId, out var previous)
+                ? previous.HoleId : -1;
+            _repairSessions[playerId] = new RepairSession
+            {
+                HoleId = holeId,
+                LastPulse = NetworkManager.ServerTime.Time
+            };
+            if (previousHole >= 0 && previousHole != holeId)
+                ResetRepairIfUnattended(previousHole);
+        }
+
+        public static void CancelRepairServer(NetworkPlayerController player)
+        {
+            if (player == null) return;
+            foreach (var ship in Active)
+                if (ship != null && ship.IsServer)
+                    ship.CancelRepairServer(player.OwnerClientId);
+        }
+
+        private void CancelRepairServer(ulong playerId)
+        {
+            if (!_repairSessions.TryGetValue(playerId, out var session)) return;
+            _repairSessions.Remove(playerId);
+            ResetRepairIfUnattended(session.HoleId);
+        }
+
+        private void RemoveRepairSessions(int holeId)
+        {
+            _expiredRepairers.Clear();
+            foreach (var pair in _repairSessions)
+                if (pair.Value.HoleId == holeId) _expiredRepairers.Add(pair.Key);
+            foreach (var playerId in _expiredRepairers) _repairSessions.Remove(playerId);
+            _expiredRepairers.Clear();
+        }
+
+        private void ExpireRepairSessions()
+        {
+            if (_repairSessions.Count == 0) return;
+            var now = NetworkManager.ServerTime.Time;
+            _expiredRepairers.Clear();
+            foreach (var pair in _repairSessions)
+                if (now - pair.Value.LastPulse > RepairSessionTimeout)
+                    _expiredRepairers.Add(pair.Key);
+            for (var i = 0; i < _expiredRepairers.Count; i++)
+                CancelRepairServer(_expiredRepairers[i]);
+            _expiredRepairers.Clear();
+        }
+
+        private void ResetRepairIfUnattended(int holeId)
+        {
+            foreach (var session in _repairSessions.Values)
+                if (session.HoleId == holeId) return;
+            for (var i = 0; i < HoleCount; i++)
+            {
+                var hole = _holes[i];
+                if (hole.Id != holeId || hole.Repair <= 0f) continue;
+                hole.Repair = 0f;
+                _holes[i] = hole;
+                return;
+            }
         }
 
         public static float AdvanceRepair(float progress, float elapsed, float multiplier, float duration)
@@ -245,7 +324,7 @@ namespace WaveByWave.Ships
         {
             foreach (var ship in Active)
                 if (ship != null && ship.IsSpawned && ship.WaterVolume != null &&
-                    ship.WaterVolume.MasksOceanAt(point)) return ship;
+                    (ship.WaterVolume.ContainsInterior(point) || ship.WaterVolume.MasksOceanAt(point))) return ship;
             return null;
         }
 
@@ -282,6 +361,7 @@ namespace WaveByWave.Ships
         private void Update()
         {
             if (!IsSpawned) return;
+            if (IsServer) ExpireRepairSessions();
             if (IsServer && !IsSinking && !_battery.VoyageEnded && !_battery.UpgradePaused)
             {
                 _reservoir.Add(_leakRate * Time.deltaTime, CapacityLitres);

@@ -22,6 +22,7 @@ MonoBehaviour:
   maximumStack: 1
   supplyKind: 0
   potency: 40
+  cannonDamageModifier: 0
   treasureExperience: 25
   coinReward: 0
   upgradeStat: 0
@@ -31,7 +32,7 @@ MonoBehaviour:
   chestLoot: {fileID: 0}
   equipmentKind: 5
   overrideHeldPose: 1
-  heldPosition: {x: 0.32, y: -0.43, z: 0.7}
+  heldPosition: {x: 0.32, y: -0.7, z: 0.66}
   heldEulerAngles: {x: 0, y: 0, z: 0}
   heldScale: 1
   overrideSecondaryHeldPose: 0
@@ -40,9 +41,10 @@ MonoBehaviour:
   overrideHandGripPoints: 1
   rightHandGrip:
     enabled: 1
-    localPosition: {x: 0, y: 0.96, z: -0.49}
-    localEulerAngles: {x: -180, y: 97.4, z: 20.74}
+    localPosition: {x: 0, y: 0.16, z: -0.14}
+    localEulerAngles: {x: -180, y: 97.4, z: 54.18}
   leftHandGrip:
     enabled: 0
     localPosition: {x: 0, y: 0, z: 0}
     localEulerAngles: {x: 0, y: 0, z: 0}
+  heldAndIkProfile: {fileID: 0}

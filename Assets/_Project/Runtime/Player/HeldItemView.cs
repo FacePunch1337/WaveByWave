@@ -135,12 +135,14 @@ namespace WaveByWave.Player
                 _leftBone = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
             }
         }
+        private GameObject _heldFuse;
         private void SetItem(ItemDefinition definition)
         {
             _definition = definition;
             if (_itemPose != null) Destroy(_itemPose.gameObject);
             if (_hookVisual != null) Destroy(_hookVisual);
             _itemPose = null; _item = null; _bucketWater = null; _hookVisual = null;
+            _heldFuse = null;
             _rightGrip = default; _leftGrip = default; _muzzlePoint = default; _hasAuthoredGrips = false; _gripPrefab = null;
             if (definition == null || definition.WorldVisualPrefab == null) return;
             RefreshGripPoints();
@@ -149,6 +151,12 @@ namespace WaveByWave.Player
             _itemPose.SetParent(_motion, false);
             _item = ItemVisualUtility.InstantiatePresentation(definition.WorldVisualPrefab, _itemPose,
                 definition.DisplayName).transform;
+            if (definition.Throwable != null && definition.Throwable.FusePrefab != null)
+            {
+                _heldFuse = Instantiate(definition.Throwable.FusePrefab, _itemPose, false);
+                _heldFuse.transform.localPosition = definition.Throwable.FuseOffset;
+                _heldFuse.SetActive(false);
+            }
             foreach (var collider in _item.GetComponentsInChildren<Collider>()) { collider.enabled = false; Destroy(collider); }
             foreach (var body in _item.GetComponentsInChildren<Rigidbody>()) Destroy(body);
             foreach (var renderer in _item.GetComponentsInChildren<Renderer>())
@@ -302,6 +310,7 @@ namespace WaveByWave.Player
                 !_player.IsCustomizing &&
                 (!_equipment.IsOwner || (_player.OwnerView.gameObject.activeInHierarchy && !PlayerEquipment.InputCaptured));
             _rig.gameObject.SetActive(visible);
+            if (_heldFuse != null) _heldFuse.SetActive(visible && _equipment.ChargingHook);
             if (_equipment.IsOwner && _camera != null)
                 _camera.fieldOfView = Mathf.Lerp(_camera.fieldOfView,
                     visible && _equipment.IsAiming && definition.EquipmentKind == ItemEquipmentKind.Musket ? 48f : _fov,

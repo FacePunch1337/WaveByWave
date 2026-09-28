@@ -148,7 +148,7 @@ namespace WaveByWave.Ships
 
         private static bool HasSelectedAmmo(PlayerInventory inventory) => inventory != null &&
             inventory.TryGetDefinition(inventory.ServerSelectedIndex, out var ammo) &&
-            ammo.Category == ItemCategory.Supply && ammo.SupplyKind == SupplyKind.Cannonball;
+            ammo.IsCannonAmmo;
 
         private static void CancelReload(ref CannonState state)
         {
@@ -237,6 +237,8 @@ namespace WaveByWave.Ships
                     (_platform != null ? _platform.GetPointVelocity(origin) : Vector3.zero);
                 var id = Interlocked.Increment(ref _shotSequence);
                 var started = NetworkManager.ServerTime.Time;
+                player.Inventory.Catalog.TryGet(state.AmmoId.ToString(), out var loadedAmmo);
+                var explosive = loadedAmmo != null ? loadedAmmo.Throwable : null;
                 if (!DotsCannonProjectileSystem.Spawn(new DotsCannonProjectile
                     {
                         Position = origin, Previous = origin, Origin = origin, Velocity = velocity,
@@ -246,17 +248,20 @@ namespace WaveByWave.Ships
                             _battery != null ? _battery.CannonDamageModifier : 0f,
                             state.Damage),
                         ShooterClientId = sender, SourceNetworkObjectId = NetworkObjectId,
-                        ShotId = id
+                        ShotId = id,
+                        BlastRadius = explosive != null ? explosive.BlastRadius : 0f,
+                        CraterRadius = explosive != null ? explosive.CraterRadius : 0f,
+                        CraterNoise = explosive != null ? explosive.CraterNoise : 0f
                     })) { _states[index] = state; return; }
                 ShotClientRpc(index, id, origin, velocity, cannon.Gravity, started,
-                    cannon.BallRadius, cannon.ProjectileLifetime);
+                    cannon.BallRadius, cannon.ProjectileLifetime, player.NetworkObjectId, state.AmmoId);
                 state.Loaded = false;
                 state.AmmoId = default;
             }
             else
             {
                 if (!player.Inventory.TryGetDefinition(selectedSlot, out var ammo) ||
-                    ammo.Category != ItemCategory.Supply || ammo.SupplyKind != SupplyKind.Cannonball ||
+                    !ammo.IsCannonAmmo ||
                     selectedSlot != player.Inventory.ServerSelectedIndex) return;
                 state.AmmoId = new Unity.Collections.FixedString64Bytes(ammo.Id);
                 state.Damage = ammo.CannonDamageModifier;
@@ -288,11 +293,17 @@ namespace WaveByWave.Ships
 
         [ClientRpc]
         private void ShotClientRpc(int index, int id, Vector3 origin, Vector3 velocity,
-            Vector3 gravity, double started, float radius, float lifetime)
+            Vector3 gravity, double started, float radius, float lifetime, ulong shooterObject,
+            Unity.Collections.FixedString64Bytes ammoId)
         {
             _shotCannons[id] = index;
+            ItemDefinition ammo = null;
+            if (NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(shooterObject, out var shooter) &&
+                shooter.TryGetComponent<PlayerInventory>(out var inventory)) inventory.Catalog.TryGet(ammoId.ToString(), out ammo);
+            var explosive = ammo != null ? ammo.Throwable : null;
             CannonEffects.Shot(this, cannons[index], id, origin, velocity, gravity, started,
-                lifetime, cannons[index].ProjectilePrefab, cannons[index].MuzzleEffectPrefab);
+                lifetime, explosive != null ? ammo.WorldVisualPrefab : cannons[index].ProjectilePrefab,
+                cannons[index].MuzzleEffectPrefab, explosive);
         }
 
         [ClientRpc]

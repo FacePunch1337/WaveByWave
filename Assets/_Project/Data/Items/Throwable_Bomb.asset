@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ed74742919509e48b3e085457f03213, type: 3}
+  m_Name: Throwable_Bomb
+  m_EditorClassIdentifier: WaveByWave.Runtime::WaveByWave.Items.ThrowableWeaponProfile
+  ChargeSeconds: 1.5
+  MinimumSpeed: 8
+  MaximumSpeed: 22
+  Gravity: 12
+  ProjectileRadius: 0.14
+  Lifetime: 15
+  ThrowCooldown: 0.65
+  ExtraProjectileSpread: 5
+  LoadInCannons: 1
+  BlastRadius: 4
+  CraterRadius: 2.5
+  CraterNoise: 0.25
+  FusePrefab: {fileID: 5102309812797378828, guid: 567cc822eb9e770409bb66639faaf53d, type: 3}
+  FuseOffset: {x: 0, y: 0.14, z: 0}
+  ExplosionPrefab: {fileID: 7319813955679211790, guid: 0121b61f095033c429616fdd40e841b8, type: 3}

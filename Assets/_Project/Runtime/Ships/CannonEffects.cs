@@ -8,7 +8,8 @@ namespace WaveByWave.Ships
     {
         public static void Shot(CannonNetworkController controller, Cannon cannon, int id,
             Vector3 origin, Vector3 velocity, Vector3 gravity,
-            double started, float lifetime, GameObject projectilePrefab, GameObject muzzleEffectPrefab)
+            double started, float lifetime, GameObject projectilePrefab, GameObject muzzleEffectPrefab,
+            WaveByWave.Items.ThrowableWeaponProfile explosive = null)
         {
             if (!controller.IsClient) return;
             cannon.PlayRecoil();
@@ -18,7 +19,8 @@ namespace WaveByWave.Ships
                 ? motion.PresentationServerTime : -1d;
             DotsCannonProjectileVisuals.Add(controller.NetworkObjectId, (uint)id, false,
                 projectilePrefab, origin, velocity, gravity, started, lifetime,
-                muzzleEffectPrefab, presentationTime);
+                muzzleEffectPrefab, presentationTime, explosive != null ? explosive.FusePrefab : null,
+                explosive != null ? explosive.FuseOffset : Vector3.zero, explosive != null ? explosive.ExplosionPrefab : null);
         }
 
         public static void Impact(CannonNetworkController controller, int id, Vector3 point,

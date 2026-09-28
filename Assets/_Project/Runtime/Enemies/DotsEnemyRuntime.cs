@@ -251,6 +251,10 @@ namespace WaveByWave.Enemies
                 if (state.Scene != _scene) { _remove.Add(entity); continue; }
                 if (state.Health <= 0)
                 {
+                    // Deaths from environmental/system paths must settle the crew ledger too.
+                    var defeatedShip = RecordCrewDeath(ref brain);
+                    manager.SetComponentData(entity, brain);
+                    if (defeatedShip != 0) DotsEnemyShipRuntime.Instance?.SinkAfterCrewDefeated(defeatedShip);
                     _surfaceTransfers.Remove(state.Id);
                     RemoveMovementCrowdBody(state.Id);
                     if (now > state.DeathAt + 1f) _remove.Add(entity);
@@ -710,6 +714,16 @@ namespace WaveByWave.Enemies
                 var brain = manager.GetComponentData<DotsEnemyBrain>(entity);
                 var dt = Mathf.Clamp(now - brain.LastSurfaceTime, 0, 0.2f);
                 if (dt < 0.02f) continue;
+                var movementCatalog = GetCatalog(state.Kind) ?? Catalog;
+                // Use the existing round-robin surface budget, not a new all-enemy water scan.
+                // A ship's hold and an active boarding arc are not drowning.
+                if (brain.CrewShipId != 0 && movementCatalog.Habitat == EnemyHabitat.Land &&
+                    !_surfaceTransfers.ContainsKey(state.Id) &&
+                    CrewSubmerged((Vector3)state.Position + Vector3.up * (movementCatalog.BodyHeight * .65f)))
+                {
+                    Damage(state.Id, state.Health, state.Position);
+                    continue;
+                }
                 brain.LastSurfaceTime = now;
                 state.MovementUpdatedAt = now;
                 if (AdvanceSurfaceTransfer(ref state, ref brain, dt, now))
@@ -1194,6 +1208,11 @@ namespace WaveByWave.Enemies
             _livingCrew[shipId] = alive + 1;
         }
 
+        private bool CrewSubmerged(Vector3 head) =>
+            // The mean water plane avoids extra CPU wave sampling and crest-only deaths.
+            _water.TryWaterLevel(head, out var level) && head.y < level - .25f &&
+            ShipFlooding.CompartmentAt(head) == null;
+
         private int RecordCrewDeath(ref DotsEnemyBrain brain)
         {
             var shipId = brain.CrewShipId;
@@ -1342,6 +1361,28 @@ namespace WaveByWave.Enemies
                 Damage(state.Id, damage, origin);
             }
         }
+        public void Explosion(Vector3 center, float radius, float damage)
+        {
+            if (!CanSimulate || !AttachServer()) return;
+            PrepareProjectileGrid();
+            var extent = radius + _projectileGridPadding;
+            var min = (int2)math.floor(((float3)center).xz / ProjectileCellSize - extent / ProjectileCellSize);
+            var max = (int2)math.floor(((float3)center).xz / ProjectileCellSize + extent / ProjectileCellSize);
+            for (var z = min.y; z <= max.y; z++)
+            for (var x = min.x; x <= max.x; x++)
+            {
+                if (!_projectileGrid.TryGetValue(new int2(x, z), out var targets)) continue;
+                foreach (var target in targets)
+                {
+                    var axis = target.Top - target.Bottom;
+                    var point = Vector3.Lerp(target.Bottom, target.Top, Mathf.Clamp01(Vector3.Dot(center - target.Bottom, axis) /
+                        Mathf.Max(.0001f, axis.sqrMagnitude)));
+                    var distance = Mathf.Max(0f, Vector3.Distance(center, point) - target.Radius);
+                    if (distance <= radius) Damage(target.Id, WaveByWave.Combat.ProjectileExplosion.DamageAt(damage, distance, radius), center, point);
+                }
+            }
+        }
+
         public bool RayHit(Vector3 from, Vector3 to, float radius, out int id, out float fraction)
         {
             id = 0; fraction = 1;

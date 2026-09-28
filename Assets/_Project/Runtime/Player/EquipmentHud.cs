@@ -50,6 +50,8 @@ namespace WaveByWave.Player
             _state.text = _inventory.TryGetDefinition(_inventory.SelectedIndex, out var item) &&
                 item.EquipmentKind == ItemEquipmentKind.Bucket ? (_equipment.BucketFull
                     ? $"Ведро: {_equipment.BucketLitres:0.#} л — ЛКМ: выплеснуть" : "ЛКМ: зачерпнуть воду") : "";
+            if (item != null && item.EquipmentKind == ItemEquipmentKind.Throwable)
+                _state.text = _equipment.ChargingHook ? $"Сила броска: {_equipment.ThrowableCharge:P0}" : "Удерживай ЛКМ — бросок";
         }
         private void OnDestroy()
         {

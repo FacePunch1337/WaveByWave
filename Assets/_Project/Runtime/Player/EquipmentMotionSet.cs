@@ -3,7 +3,7 @@ using UnityEngine;
 namespace WaveByWave.Player
 {
     public enum EquipmentAction : byte { None, SwordSwing, SwordBlock, MusketShot, MusketReload, MusketAim,
-        HookCharge, HookThrow, HookReel, BucketScoop, BucketSplash, ShovelDig, Drink }
+        HookCharge, HookThrow, HookReel, BucketScoop, BucketSplash, ShovelDig, Drink, ThrowableThrow }
 
     [CreateAssetMenu(menuName = "Wave by Wave/Player/Equipment motions")]
     public sealed class EquipmentMotionSet : ScriptableObject
@@ -18,6 +18,7 @@ namespace WaveByWave.Player
             EquipmentAction.MusketShot => musketShot, EquipmentAction.MusketReload => musketReload,
             EquipmentAction.MusketAim => musketAim, EquipmentAction.HookCharge => hookCharge,
             EquipmentAction.HookThrow => hookThrow, EquipmentAction.HookReel => hookReel,
+            EquipmentAction.ThrowableThrow => hookThrow,
             EquipmentAction.BucketScoop => bucketScoop, EquipmentAction.BucketSplash => bucketSplash,
             EquipmentAction.ShovelDig => shovelDig, EquipmentAction.Drink => drink, _ => null
         };

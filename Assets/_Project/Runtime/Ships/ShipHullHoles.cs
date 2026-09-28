@@ -83,6 +83,7 @@ namespace WaveByWave.Ships
         {
             EnsureRenderer();
             if (_renderer == null) return;
+            var interiorCenter = InteriorCenter(ship);
             _shownHoles = Mathf.Min(ship.HoleCount, MaximumHoles);
             for (var i = 0; i < _shownHoles; i++)
             {
@@ -104,11 +105,40 @@ namespace WaveByWave.Ships
             {
                 var hole = ship.GetHole(i);
                 var spray = _sprays[i];
-                spray.transform.localPosition = hole.Position - hole.Normal * 0.08f;
-                spray.transform.localRotation = Quaternion.LookRotation(-hole.Normal, Vector3.up);
+                var inward = InwardDirection(hole.Position, hole.Normal, interiorCenter);
+                spray.transform.localPosition = hole.Position + inward * 0.12f;
+                var up = Mathf.Abs(Vector3.Dot(inward, Vector3.up)) > 0.98f ? Vector3.forward : Vector3.up;
+                spray.transform.localRotation = Quaternion.LookRotation(inward, up);
                 var emission = spray.emission;
-                emission.rateOverTime = ship.IsSinking ? 0f : Mathf.Min(45f, 10f + hole.Leak * 4f);
+                emission.rateOverTime = ship.IsSinking ? 0f : Mathf.Min(140f, 30f + hole.Leak * 12f);
             }
+        }
+
+        private Vector3 InteriorCenter(ShipFlooding ship)
+        {
+            if (ship != null && ship.WaterVolume != null)
+            {
+                var volume = ship.WaterVolume;
+                var worldCenter = volume.transform.TransformPoint(volume.LocalBounds.center);
+                return transform.InverseTransformPoint(worldCenter);
+            }
+            var mesh = GetComponent<MeshFilter>()?.sharedMesh;
+            return mesh != null ? mesh.bounds.center : Vector3.zero;
+        }
+
+        // Imported hull triangles are not guaranteed to use the same winding.
+        // The compartment centre is a stable reference for the actual inward side.
+        public static Vector3 InwardDirection(Vector3 position, Vector3 surfaceNormal, Vector3 interiorCenter)
+        {
+            var towardInterior = interiorCenter - position;
+            if (towardInterior.sqrMagnitude < 0.000001f) towardInterior = Vector3.forward;
+            var direction = surfaceNormal.sqrMagnitude > 0.000001f
+                ? surfaceNormal.normalized
+                : towardInterior.normalized;
+            var alignment = Vector3.Dot(direction, towardInterior);
+            if (alignment < 0f) direction = -direction;
+            else if (alignment < 0.0001f) direction = towardInterior.normalized;
+            return direction;
         }
 
         private void EnsureRenderer()

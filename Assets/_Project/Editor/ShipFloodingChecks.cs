@@ -40,6 +40,13 @@ namespace WaveByWave.Editor
             Check(ShipFlooding.AdvanceRepair(0f, 99f, 1f, 4f) < 0.04f, "Repair heartbeat cannot credit arbitrary elapsed time");
             var breach = new HullBreach { Id = 17, UV = new Vector2(0.3f, 0.7f), RadiusUV = Vector2.one * 0.01f,
                 Position = new Vector3(2,3,4), Normal = Vector3.right, Leak = 4.5f, Repair = 0.42f };
+            var interior = Vector3.zero;
+            var outsidePoint = Vector3.right * 2f;
+            var fromOutwardNormal = ShipHullHoles.InwardDirection(outsidePoint, Vector3.right, interior);
+            var fromInwardNormal = ShipHullHoles.InwardDirection(outsidePoint, Vector3.left, interior);
+            Check(Vector3.Dot(fromOutwardNormal, interior - outsidePoint) > 0f &&
+                Vector3.Dot(fromInwardNormal, interior - outsidePoint) > 0f,
+                "Leak spray must face the compartment regardless of imported triangle winding");
             using (var writer = new FastBufferWriter(128, Allocator.Temp))
             {
                 writer.WriteNetworkSerializable(breach);
@@ -61,6 +68,10 @@ namespace WaveByWave.Editor
                 volume.Footprint = new[] { new Vector2(-2,-4), new Vector2(2,-4), new Vector2(2,2), new Vector2(0,4), new Vector2(-2,2) };
                 go.transform.SetPositionAndRotation(new Vector3(12, 3, -8), Quaternion.Euler(0, 37, 0));
                 Check(volume.ContainsColumn(go.transform.TransformPoint(Vector3.zero)), "Moving ship interior point");
+                Check(volume.ContainsInterior(go.transform.TransformPoint(Vector3.zero)),
+                    "Camera inside the moving hold must select its underwater volume");
+                Check(!volume.ContainsInterior(go.transform.TransformPoint(new Vector3(0, 1.5f, 0))),
+                    "Camera above the hold must keep using the ocean underwater volume");
                 Check(!volume.ContainsColumn(go.transform.TransformPoint(new Vector3(1.9f, 0, 3.9f))), "Bow outside footprint must pour overboard");
                 var origin = go.transform.TransformPoint(new Vector3(0, 2, 0));
                 Check(volume.RaySurface(origin, Vector3.down, 3f, 0.5f, out var hit) && Mathf.Abs(hit.y - 3f) < 0.0001f,
@@ -75,6 +86,12 @@ namespace WaveByWave.Editor
                     generated.GetComponent<StylizedWater3.WaterObject>() == null &&
                     !volume.RuntimeWaterMaterial.GetShaderPassEnabled("WaterHeight"),
                     "Interior water must have no buoyancy source or height prepass");
+                var underwater = go.transform.Find("Interior underwater area");
+                var area = underwater != null
+                    ? underwater.GetComponent<StylizedWater3.UnderwaterRendering.UnderwaterArea>() : null;
+                Check(area != null && area.boxCollider != null && area.boxCollider.isTrigger &&
+                    area.underwaterResources != null && area.waterMaterial == volume.RuntimeWaterMaterial,
+                    "Interior water must own a valid local underwater post-process volume");
             }
             finally { Object.DestroyImmediate(go); }
 

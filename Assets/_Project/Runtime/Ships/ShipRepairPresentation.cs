@@ -8,6 +8,10 @@ using WaveByWave.Player;
 namespace WaveByWave.Ships
 {
     // The repair ring follows the breach and matches CannonReloadProgress.
+    // Run after ship interpolation (1500), passenger presentation (9000) and
+    // local camera effects (10000), so projection uses one coherent render pose.
+    [DefaultExecutionOrder(11000)]
+    [DisallowMultipleComponent]
     public sealed class ShipRepairPresentation : MonoBehaviour
     {
         private ShipFlooding _ship;

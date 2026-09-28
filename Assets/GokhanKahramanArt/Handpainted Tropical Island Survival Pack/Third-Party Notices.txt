@@ -1,0 +1,7 @@
+////////////////////////////////////////////////////////////
+// Licenses //
+////////////////////////////////////////////////////////////
+
+Handpainted Tropical Island Survival Pack is governed by the Unity Asset Store EULA.
+(https://unity3d.com/legal/as_terms)
+No third-party asset has been used in the package.

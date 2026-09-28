@@ -190,3 +190,11 @@ Assets/Zekirak/** -filter -diff -merge -text
 Assets/forest/** -filter -diff -merge -text
 Assets/jewelry_shop/** -filter -diff -merge -text
 Assets/_Project/Data/Items/Enemies/Combined/SkeletonColorAtlas.asset -filter -diff -merge -text
+
+# September 28 imported art: retain the existing snapshot policy without new LFS uploads.
+Assets/GokhanKahramanArt/**/*.fbx -filter -diff -merge -text
+Assets/GokhanKahramanArt/**/*.png -filter -diff -merge -text
+"Assets/Static Soul Studio/**/*.fbx" -filter -diff -merge -text
+"Assets/Static Soul Studio/**/*.png" -filter -diff -merge -text
+"Assets/Wood (Wall) Texture & Material Vol 13/**/*.tga" -filter -diff -merge -text
+"Assets/Wood (Wall) Texture & Material Vol 13/**/*.png" -filter -diff -merge -text

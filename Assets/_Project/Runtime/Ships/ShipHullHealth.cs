@@ -31,12 +31,18 @@ namespace WaveByWave.Ships
         public void ApplyDamageServer(float amount) => ApplyDamageServer(amount, transform.position);
 
         public void ApplyDamageServer(float amount, Vector3 hitPoint)
+            => ApplyDamageServer(amount, hitPoint, false);
+
+        public void ApplyExplosionDamageServer(float amount, Vector3 hitPoint)
+            => ApplyDamageServer(amount, hitPoint, true);
+
+        private void ApplyDamageServer(float amount, Vector3 hitPoint, bool guaranteedBreach)
         {
             if (!IsServer || (_shipState != null && _shipState.VoyageEnded) ||
                 !float.IsFinite(amount) || amount <= 0f) return;
             amount /= 1f + _armorBonus.Value;
             DotsDamagePopups.ReportServer(hitPoint, amount);
-            if (_flooding != null) _flooding.HitServer(amount, hitPoint);
+            if (_flooding != null) _flooding.HitServer(amount, hitPoint, guaranteedBreach);
             else _health.Value = Mathf.Max(0f, _health.Value - amount);
         }
 

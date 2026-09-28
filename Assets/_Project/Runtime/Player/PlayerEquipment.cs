@@ -22,7 +22,7 @@ namespace WaveByWave.Player
 
     [DefaultExecutionOrder(9600)]
     [RequireComponent(typeof(PlayerInventory), typeof(NetworkPlayerController), typeof(NetworkHealth))]
-    public sealed class PlayerEquipment : NetworkBehaviour, IEquipmentDamageReceiver
+    public sealed partial class PlayerEquipment : NetworkBehaviour, IEquipmentDamageReceiver
     {
         [SerializeField] private EquipmentMotionSet motions;
         [SerializeField] private GameObject firstPersonHandsPrefab;
@@ -109,7 +109,7 @@ namespace WaveByWave.Player
         private CapsuleCollider _combatHitbox;
         private double _cooldown, _recoverAfter, _inputHeartbeat, _serverHeartbeat, _chargeStarted = -1d;
         private double _hookSampleTime, _hookFlightStarted;
-        private bool _localBlock, _localAim, _localReel, _localCharge, _sentCharge;
+        private bool _localBlock, _localAim, _localReel, _localCharge, _localRepair, _sentCharge;
         private bool _secondaryActionLatched;
         private float _localChargeStarted;
         private int _localSlot = -1, _serverSlot = -1, _nextBullet;
@@ -252,7 +252,11 @@ namespace WaveByWave.Player
         }
         public override void OnNetworkDespawn()
         {
-            if (IsServer) ResetHookServer();
+            if (IsServer)
+            {
+                ShipFlooding.CancelRepairServer(_player);
+                ResetHookServer();
+            }
             _localMovementSprinting = _localMovementSwimming = false;
             _serverMovementSprinting = _serverMovementSwimming = false;
             if (_combatHitbox != null) { _combatHitbox.enabled = false; Destroy(_combatHitbox.gameObject); }
@@ -385,7 +389,8 @@ namespace WaveByWave.Player
             if (!_inventory.IsCarryingChest) _inventory.TryGetDefinition(_inventory.SelectedIndex, out item);
             if (_localSlot != _inventory.SelectedIndex || _localItem != item || !enabledInput || mouse == null)
             {
-                if (_localSlot != _inventory.SelectedIndex || _localItem != item || _localBlock || _localAim || _localReel || _localCharge)
+                if (_localSlot != _inventory.SelectedIndex || _localItem != item || _localBlock || _localAim ||
+                    _localReel || _localCharge || _localRepair)
                 {
                     if (_localSlot != _inventory.SelectedIndex || _localItem != item || !enabledInput)
                         _secondaryActionLatched = false;
@@ -394,16 +399,16 @@ namespace WaveByWave.Player
                     if (_predictedMotion.Action != EquipmentAction.Drink ||
                         Now >= _predictedMotion.Started + _predictedMotion.Duration)
                         _predictedMotion = default;
-                    _localBlock = _localAim = _localReel = _localCharge = false;
+                    _localBlock = _localAim = _localReel = _localCharge = _localRepair = false;
                     SendHeldInput(false, false, false, false);
                 }
                 if (!enabledInput || mouse == null) return;
             }
             if (item == null)
             {
-                if (_localBlock || _localAim || _localReel || _localCharge)
+                if (_localBlock || _localAim || _localReel || _localCharge || _localRepair)
                 {
-                    _localBlock = _localAim = _localReel = _localCharge = false;
+                    _localBlock = _localAim = _localReel = _localCharge = _localRepair = false;
                     SendHeldInput(false, false, false, false);
                 }
                 return;
@@ -427,21 +432,24 @@ namespace WaveByWave.Player
                 reel = false;
                 RecallHookServerRpc(_inventory.SelectedIndex, _inventory.SelectionRevision);
             }
-            if (item.EquipmentKind == ItemEquipmentKind.Hook && _hook.Value.Phase == HookPhase.Stowed)
+            if (item.EquipmentKind == ItemEquipmentKind.Hook && _hook.Value.Phase == HookPhase.Stowed ||
+                item.EquipmentKind == ItemEquipmentKind.Throwable && item.Throwable != null)
             {
                 if (mouse.leftButton.wasPressedThisFrame) { _localCharge = true; _localChargeStarted = Time.unscaledTime; }
                 if (_localCharge && mouse.leftButton.wasReleasedThisFrame)
                 {
-                    SendAction(EquipmentAction.HookThrow);
+                    SendAction(item.EquipmentKind == ItemEquipmentKind.Throwable
+                        ? EquipmentAction.ThrowableThrow : EquipmentAction.HookThrow);
                     _localCharge = false;
                 }
             }
             else _localCharge = false;
-            if (block != _localBlock || aim != _localAim || reel != _localReel || _localCharge != _sentCharge || Now >= _inputHeartbeat)
+            var repair = item.SupplyKind == SupplyKind.Plank && mouse.leftButton.isPressed;
+            if (block != _localBlock || aim != _localAim || reel != _localReel || repair != _localRepair ||
+                _localCharge != _sentCharge || Now >= _inputHeartbeat)
             {
-                _localBlock = block; _localAim = aim; _localReel = reel;
-                SendHeldInput(block, aim, reel, _localCharge,
-                    item.SupplyKind == SupplyKind.Plank && mouse.leftButton.isPressed);
+                _localBlock = block; _localAim = aim; _localReel = reel; _localRepair = repair;
+                SendHeldInput(block, aim, reel, _localCharge, repair);
                 _inputHeartbeat = Now + 0.1d;
             }
             if (mouse.leftButton.wasPressedThisFrame)
@@ -477,6 +485,7 @@ namespace WaveByWave.Player
                 EquipmentAction.SwordSwing => SwingDuration,
                 EquipmentAction.MusketShot => ShotDuration,
                 EquipmentAction.HookThrow => 0.4f,
+                EquipmentAction.ThrowableThrow => _localItem.Throwable.ThrowCooldown / _player.AttackSpeedMultiplier,
                 EquipmentAction.BucketSplash => 0.65f,
                 _ => 0.8f
             };
@@ -552,22 +561,33 @@ namespace WaveByWave.Player
         {
             if (Time.timeScale <= 0f || !_inventory.ApplySelectionServer(slot, revision) || !CanActServer() ||
                 !_inventory.TryGetDefinition(slot, out var item) ||
-                !ResolveAimServer(requestedOrigin, requestedDirection, support, out var origin, out var direction)) return;
+                !ResolveAimServer(requestedOrigin, requestedDirection, support, out var origin, out var direction))
+            {
+                ShipFlooding.CancelRepairServer(_player);
+                return;
+            }
             RefreshSelectedServer(slot, item);
             _serverHeartbeat = Now;
             _look.Value = direction;
+            var repairing = repair && item.SupplyKind == SupplyKind.Plank && Time.timeScale > 0f;
+            if (!repairing) ShipFlooding.CancelRepairServer(_player);
             if (Now - _lastRepairPulse >= 0.08d)
             {
                 var elapsed = Mathf.Min(0.15f, (float)(Now - _lastRepairPulse));
                 _lastRepairPulse = Now;
-                if (repair && item.SupplyKind == SupplyKind.Plank && Time.timeScale > 0f)
-                    ShipFlooding.RepairTarget(origin, direction, out _)?.RepairServer(_player, _inventory, origin, direction, elapsed);
+                if (repairing)
+                {
+                    var target = ShipFlooding.RepairTarget(origin, direction, out _);
+                    if (target == null || !target.RepairServer(_player, _inventory, origin, direction, elapsed))
+                        ShipFlooding.CancelRepairServer(_player);
+                }
             }
             if (!block) _blockExhausted = false;
             _blocking.Value = block && !_blockExhausted && item.EquipmentKind == ItemEquipmentKind.Sword && _stamina.Value > 0f && Now >= _cooldown;
             _aiming.Value = aim && item.EquipmentKind == ItemEquipmentKind.Musket;
             _serverReeling = reel && item.EquipmentKind == ItemEquipmentKind.Hook;
-            if (charge && item.EquipmentKind == ItemEquipmentKind.Hook && _hook.Value.Phase == HookPhase.Stowed)
+            if (charge && (item.EquipmentKind == ItemEquipmentKind.Hook && _hook.Value.Phase == HookPhase.Stowed ||
+                item.EquipmentKind == ItemEquipmentKind.Throwable && item.Throwable != null))
             {
                 if (_chargeStarted < 0d) { _chargeStarted = Now; _chargeStartNet.Value = Now; }
                 _charging.Value = true;
@@ -593,7 +613,13 @@ namespace WaveByWave.Player
         }
 
         private void StopHeldServer()
-        { _blocking.Value = _aiming.Value = false; _charging.Value = false; _serverReeling = false; _chargeStarted = -1d; }
+        {
+            _blocking.Value = _aiming.Value = false;
+            _charging.Value = false;
+            _serverReeling = false;
+            _chargeStarted = -1d;
+            ShipFlooding.CancelRepairServer(_player);
+        }
         [ServerRpc]
         private void ActionServerRpc(EquipmentAction action, int slot, uint revision,
             Vector3 requestedOrigin, Vector3 requestedDirection, NetworkObjectReference support)
@@ -642,6 +668,9 @@ namespace WaveByWave.Player
                     _hookSampleTime = _hookFlightStarted = Now; _chargeStarted = -1d;
                     _charging.Value = false;
                     PlayServer(action, 0.4f);
+                    break;
+                case EquipmentAction.ThrowableThrow when item.EquipmentKind == ItemEquipmentKind.Throwable:
+                    ThrowBombServer(item, slot, origin, direction);
                     break;
                 case EquipmentAction.BucketScoop when item.EquipmentKind == ItemEquipmentKind.Bucket:
                     if (_bucketFull.Value) return;

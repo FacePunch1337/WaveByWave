@@ -22,6 +22,8 @@ namespace WaveByWave.Combat
         public int EnemyShipId, ShotId;
         public uint ShotRevision;
         public byte EnemyTeam, EnteredWater;
+        public byte HandThrown;
+        public float BlastRadius, CraterRadius, CraterNoise;
     }
 
     [BurstCompile]
@@ -92,7 +94,9 @@ namespace WaveByWave.Combat
                 }
                 if (!wasUnderwater && ball.EnteredWater != 0)
                     ReportWaterEntry(in ball, waterEntryPoint);
-                if (kind == 1 && ball.EnemyTeam == 0)
+                if (ball.BlastRadius > 0f && kind != 0)
+                    ProjectileExplosion.Detonate(ball, point);
+                else if (kind == 1 && ball.EnemyTeam == 0)
                     DotsEnemyShipRuntime.Instance?.DamageFromPlayerCannon(targetId, ball.Damage, ball.Previous, point);
                 else if (kind == 2)
                     DotsEnemyRuntime.Instance?.Damage(targetId, ball.Damage, ball.Previous, point);
@@ -127,28 +131,30 @@ namespace WaveByWave.Combat
             if (distance > 0.000001f)
             {
                 var count = Physics.SphereCastNonAlloc(from, ball.Radius, delta / distance,
-                    _hits, distance, ~0, QueryTriggerInteraction.Ignore);
+                    _hits, distance, ~0, QueryTriggerInteraction.Collide);
                 var hits = count == _hits.Length
                     ? Physics.SphereCastAll(from, ball.Radius, delta / distance,
-                        distance, ~0, QueryTriggerInteraction.Ignore) : _hits;
+                        distance, ~0, QueryTriggerInteraction.Collide) : _hits;
                 if (hits != _hits) count = hits.Length;
                 for (var i = 0; i < count; i++)
                 {
                     var hit = hits[i];
                     if (hit.collider == null || hit.distance / distance >= best ||
                         hit.collider.GetComponentInParent<WaterObject>() != null) continue;
+                    // Only combat triggers are hittable, not pickup/interaction volumes.
+                    if (hit.collider.isTrigger && hit.collider.GetComponent<EquipmentHitbox>() == null) continue;
                     var enemyView = hit.collider.GetComponentInParent<EnemyShipView>();
                     if (enemyView != null)
                     {
                         if (ball.EnemyTeam != 0 || enemyView.ShipId == ball.EnemyShipId) continue;
                     }
                     var hull = hit.collider.GetComponentInParent<ShipHullHealth>();
-                    if (hull != null && hull.NetworkObjectId == ball.SourceNetworkObjectId) continue;
+                    if (hull != null && hull.NetworkObjectId == ball.SourceNetworkObjectId && ball.Age < .15f) continue;
                     var player = hit.collider.GetComponentInParent<NetworkPlayerController>();
                     if (ball.EnemyTeam != 0 && player == null &&
                         hit.collider.GetComponentInParent<NetworkHealth>() != null) continue;
                     if (player != null && ball.EnemyTeam == 0 &&
-                        player.OwnerClientId == ball.ShooterClientId) continue;
+                        player.OwnerClientId == ball.ShooterClientId && ball.Age < .15f) continue;
                     best = hit.distance / distance;
                     point = hit.point;
                     normal = hit.normal;
@@ -179,6 +185,11 @@ namespace WaveByWave.Combat
                 {
                     ball.EnteredWater = 1;
                     waterEntryPoint = waterPoint;
+                    if (ball.BlastRadius > 0f)
+                    {
+                        point = waterPoint; normal = Vector3.up; water = true;
+                        kind = 4; collider = null; targetId = 0;
+                    }
                 }
             }
             return kind != 0;
@@ -186,7 +197,7 @@ namespace WaveByWave.Combat
 
         private static void ReportWaterEntry(in DotsCannonProjectile ball, Vector3 point)
         {
-            if (ball.EnemyTeam != 0) return;
+            if (ball.EnemyTeam != 0 || ball.BlastRadius > 0f) return;
             var manager = NetworkManager.Singleton;
             if (manager != null && manager.SpawnManager.SpawnedObjects.TryGetValue(
                     ball.SourceNetworkObjectId, out var source))
@@ -206,8 +217,12 @@ namespace WaveByWave.Combat
             var manager = NetworkManager.Singleton;
             if (manager != null && manager.SpawnManager.SpawnedObjects.TryGetValue(
                     ball.SourceNetworkObjectId, out var source))
-                source.GetComponent<CannonNetworkController>()?.ReportProjectileImpact(
+            {
+                if (ball.HandThrown != 0)
+                    source.GetComponent<PlayerEquipment>()?.ReportBombImpact(ball.ShotId, point, normal, show, ball.Started + ball.Age);
+                else source.GetComponent<CannonNetworkController>()?.ReportProjectileImpact(
                     ball.ShotId, point, normal, water, show, ball.Started + ball.Age);
+            }
         }
     }
 }

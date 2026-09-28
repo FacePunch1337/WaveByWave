@@ -65,15 +65,6 @@ MonoBehaviour:
   DecorationAttemptsPerFrame: 4
   DecorationBudgetMilliseconds: 1
   Decorations:
-  - Prefab: {fileID: 718803082561174767, guid: 087d70cb3890af747b53f636742a587c, type: 3}
-    InstancesPerSquareMetre: 0.005
-    ScaleRange: {x: 0.55, y: 0.85}
-    MaximumSlope: 30
-    MinimumHeightAboveWater: 0.25
-    Spacing: 1.4
-    AlignToSurface: 0
-    GroundMeshBase: 1
-    VerticalOffset: -0.25
   - Prefab: {fileID: 1538027470874685010, guid: bdd2a5c95ae34574f9e6a41cc59cbf91, type: 3}
     InstancesPerSquareMetre: 0.001
     ScaleRange: {x: 0.25, y: 0.6}
@@ -83,6 +74,24 @@ MonoBehaviour:
     AlignToSurface: 0
     GroundMeshBase: 0
     VerticalOffset: 0
+  - Prefab: {fileID: 919132149155446097, guid: adb1f594e18a9e6469d6790c03dd7e21, type: 3}
+    InstancesPerSquareMetre: 0.005
+    ScaleRange: {x: 2, y: 2.5}
+    MaximumSlope: 30
+    MinimumHeightAboveWater: 0.25
+    Spacing: 1.4
+    AlignToSurface: 0
+    GroundMeshBase: 1
+    VerticalOffset: -0.25
+  - Prefab: {fileID: 919132149155446097, guid: f3fda3496156c874f9086ff5d4b3781f, type: 3}
+    InstancesPerSquareMetre: 0.005
+    ScaleRange: {x: 2, y: 2.5}
+    MaximumSlope: 30
+    MinimumHeightAboveWater: 0.25
+    Spacing: 1.4
+    AlignToSurface: 0
+    GroundMeshBase: 1
+    VerticalOffset: -0.25
   EnemySpawnDays:
   - FromDay: 1
     Random: 0
@@ -117,23 +126,23 @@ MonoBehaviour:
   ChestCountLarge: {x: 1, y: 3}
   BuriedChests:
   - Item: {fileID: 11400000, guid: c393e52b7f7ac3a419c24f19a3f22cf2, type: 2}
-    Weight: 45
+    Weight: 1
     MinimumAmount: 1
     MaximumAmount: 1
   - Item: {fileID: 11400000, guid: 1ceb7f1ad0d9abd449fc89fb0af37ca0, type: 2}
-    Weight: 28
+    Weight: 0.8
     MinimumAmount: 1
     MaximumAmount: 1
   - Item: {fileID: 11400000, guid: db92208a227c9a748b78786d60214446, type: 2}
-    Weight: 16
+    Weight: 0.6
     MinimumAmount: 1
     MaximumAmount: 1
   - Item: {fileID: 11400000, guid: db6ac57e40c662f46998734d1df7f2db, type: 2}
-    Weight: 8
+    Weight: 0.4
     MinimumAmount: 1
     MaximumAmount: 1
   - Item: {fileID: 11400000, guid: dcd90c158330b4d4aa9a2e4c36fac9a4, type: 2}
-    Weight: 3
+    Weight: 0.4
     MinimumAmount: 1
     MaximumAmount: 1
   BuriedChestRarityUnlocks:

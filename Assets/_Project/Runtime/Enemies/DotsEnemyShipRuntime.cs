@@ -801,6 +801,23 @@ namespace WaveByWave.Enemies
             return true;
         }
 
+        public void Explosion(Vector3 center, float radius, float damage)
+        {
+            if (!CanSimulate) return;
+            using var states = _ships.ToComponentDataArray<DotsEnemyShipState>(Allocator.Temp);
+            foreach (var state in states)
+            {
+                if (state.Health <= 0 || state.Scene != _scene) continue;
+                var rotation = (Quaternion)state.Rotation;
+                var local = Quaternion.Inverse(rotation) * (center - (Vector3)state.Position) - _contactBoundsCenter;
+                var closest = Vector3.Min(Vector3.Max(local, -_contactBoundsHalfExtents), _contactBoundsHalfExtents);
+                var distance = Vector3.Distance(local, closest);
+                if (distance <= radius) DamageFromPlayerCannon(state.Id,
+                    WaveByWave.Combat.ProjectileExplosion.DamageAt(damage, distance, radius), center,
+                    (Vector3)state.Position + rotation * (closest + _contactBoundsCenter));
+            }
+        }
+
         public bool ProjectileHit(Vector3 from, Vector3 to, float radius,
             out int shipId, out float fraction, out Vector3 normal)
         {

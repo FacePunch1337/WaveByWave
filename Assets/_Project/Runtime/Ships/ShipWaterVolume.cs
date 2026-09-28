@@ -1,3 +1,4 @@
+using StylizedWater3.UnderwaterRendering;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -23,12 +24,25 @@ namespace WaveByWave.Ships
         private GameObject _surfaceObject;
         private Material _runtimeMaterial;
         private Material _runtimeSource;
+        private GameObject _underwaterObject;
+        private BoxCollider _underwaterCollider;
+        private UnderwaterArea _underwaterArea;
+        private float _presentedFill;
         public Material RuntimeWaterMaterial => EnsureWaterMaterial();
         public float Level(float fill) => Mathf.Lerp(LocalBounds.min.y, LocalBounds.max.y, Mathf.Clamp01(fill));
 
         public bool ContainsColumn(Vector3 world)
         {
             var p = transform.InverseTransformPoint(world);
+            return ContainsXZ(new Vector2(p.x, p.z));
+        }
+
+        public bool ContainsInterior(Vector3 world, float verticalPadding = 0.25f)
+        {
+            var p = transform.InverseTransformPoint(world);
+            var padding = Mathf.Max(0f, verticalPadding);
+            if (p.y < LocalBounds.min.y - padding || p.y > LocalBounds.max.y + padding)
+                return false;
             return ContainsXZ(new Vector2(p.x, p.z));
         }
 
@@ -90,16 +104,21 @@ namespace WaveByWave.Ships
         private void BeforeCamera(ScriptableRenderContext _, Camera camera)
         {
             if (_surfaceRenderer != null && _surfaceRenderer.enabled) ApplyCutoutProperties();
+            EnsureInteriorUnderwaterArea();
+            UpdateInteriorUnderwaterArea(camera);
         }
 
         public void Present(float fill, bool sinking)
         {
+            _presentedFill = Mathf.Clamp01(fill);
             // Keep the real ocean clipped out of the hull even during the
             // sinking animation. Letting it back in covers the interior walls
             // from a submerged camera before the return to port.
             if (OceanCutout != null) OceanCutout.enabled = true;
             if (InteriorWater != null) InteriorWater.forceRenderingOff = true;
             EnsureSurface();
+            EnsureInteriorUnderwaterArea();
+            ConfigureInteriorUnderwaterArea(transform.TransformPoint(LocalBounds.center));
             if (_surfaceRenderer == null) return;
             var material = EnsureWaterMaterial();
             if (_cutout == null && OceanCutout != null) _cutout = OceanCutout.GetComponent<ShipOceanCutout>();
@@ -108,6 +127,124 @@ namespace WaveByWave.Ships
             _surfaceRenderer.sharedMaterial = material;
             _surfaceObject.transform.localPosition = Vector3.up * Level(fill);
             if (cutReady) ApplyCutoutProperties();
+        }
+
+        private void EnsureInteriorUnderwaterArea()
+        {
+            var material = EnsureWaterMaterial();
+            if (material == null) return;
+
+            UnderwaterArea source = null;
+            var resources = _underwaterArea != null ? _underwaterArea.underwaterResources : null;
+            if (resources == null) resources = ResolveUnderwaterResources(out source);
+            if (resources == null) return;
+
+            if (_underwaterArea == null)
+            {
+                _underwaterObject = new GameObject("Interior underwater area");
+                _underwaterObject.hideFlags = HideFlags.HideAndDontSave;
+                _underwaterObject.SetActive(false);
+                _underwaterObject.transform.SetParent(transform, false);
+                var waterLayer = LayerMask.NameToLayer("Water");
+                if (waterLayer >= 0) _underwaterObject.layer = waterLayer;
+                _underwaterCollider = _underwaterObject.AddComponent<BoxCollider>();
+                _underwaterCollider.isTrigger = true;
+                _underwaterArea = _underwaterObject.AddComponent<UnderwaterArea>();
+                _underwaterArea.boxCollider = _underwaterCollider;
+                _underwaterArea.waterLevelSource = UnderwaterArea.WaterLevelSource.FixedValue;
+                _underwaterArea.renderingOrder = 1;
+                _underwaterArea.waterlineOffset = source != null ? source.waterlineOffset : 0.1f;
+                _underwaterArea.waterlineThickness = source != null ? source.waterlineThickness : 0.05f;
+                _underwaterArea.shadingSettings = CopyShading(source != null ? source.shadingSettings : null);
+                _underwaterArea.particleEffects.Clear();
+            }
+
+            _underwaterArea.underwaterResources = resources;
+            _underwaterArea.waterMaterial = material;
+            if (!_underwaterObject.activeSelf) _underwaterObject.SetActive(true);
+        }
+
+        private UnderwaterResources ResolveUnderwaterResources(out UnderwaterArea source)
+        {
+            source = null;
+            foreach (var candidate in UnderwaterArea.Instances)
+            {
+                if (candidate == null || candidate == _underwaterArea || candidate.underwaterResources == null) continue;
+                source = candidate;
+                return candidate.underwaterResources;
+            }
+#if UNITY_EDITOR
+            return UnderwaterResources.Find();
+#else
+            return null;
+#endif
+        }
+
+        private static UnderwaterArea.ShadingSettings CopyShading(UnderwaterArea.ShadingSettings source)
+        {
+            if (source == null)
+            {
+                return new UnderwaterArea.ShadingSettings
+                {
+                    fogDensity = 0.25f,
+                    fogStartDistance = 0f,
+                    fogBrightness = 1f,
+                    colorAbsorption = 0.01f,
+                    heightFogDensity = 2f,
+                    heightFogStart = 0.1f,
+                    heightFogEnd = 25f,
+                    heightFogBrightness = 0f,
+                    causticsBrightness = 1f,
+                    translucencyStrength = 1f,
+                    translucencyExponent = 1.78f
+                };
+            }
+            return new UnderwaterArea.ShadingSettings
+            {
+                fogDensity = source.fogDensity,
+                fogStartDistance = source.fogStartDistance,
+                fogBrightness = source.fogBrightness,
+                colorAbsorption = source.colorAbsorption,
+                heightFogDensity = source.heightFogDensity,
+                heightFogStart = source.heightFogStart,
+                heightFogEnd = source.heightFogEnd,
+                heightFogBrightness = source.heightFogBrightness,
+                causticsBrightness = source.causticsBrightness,
+                translucencyStrength = source.translucencyStrength,
+                translucencyExponent = source.translucencyExponent
+            };
+        }
+
+        private void UpdateInteriorUnderwaterArea(Camera camera)
+        {
+            if (_underwaterArea == null || _underwaterCollider == null || camera == null) return;
+
+            var enabledForCamera = _presentedFill > 0.00001f &&
+                                   ContainsInterior(camera.transform.position, 0.75f);
+            _underwaterCollider.enabled = enabledForCamera;
+            if (!enabledForCamera) return;
+
+            ConfigureInteriorUnderwaterArea(camera.transform.position);
+        }
+
+        private void ConfigureInteriorUnderwaterArea(Vector3 waterLevelSample)
+        {
+            if (_underwaterArea == null || _underwaterCollider == null) return;
+
+            _underwaterArea.waterMaterial = EnsureWaterMaterial();
+            _underwaterArea.waterLevelSource = UnderwaterArea.WaterLevelSource.FixedValue;
+            _underwaterArea.waterLevel = HeightAt(waterLevelSample, _presentedFill);
+
+            // SW3 samples the near plane with a three-metre transition padding. Keep that
+            // padding inside this local trigger so the waterline remains stable while the
+            // camera crosses the moving water surface.
+            var bottom = LocalBounds.min.y - 0.5f;
+            var top = Level(_presentedFill) + 3.25f;
+            _underwaterCollider.center = new Vector3(LocalBounds.center.x, (bottom + top) * 0.5f,
+                LocalBounds.center.z);
+            _underwaterCollider.size = new Vector3(LocalBounds.size.x + 0.5f,
+                Mathf.Max(0.1f, top - bottom), LocalBounds.size.z + 0.5f);
+            _underwaterCollider.enabled = _presentedFill > 0.00001f;
         }
 
         private void ApplyCutoutProperties()
@@ -197,6 +334,10 @@ namespace WaveByWave.Ships
         {
             RenderPipelineManager.beginCameraRendering -= BeforeCamera;
             if (InteriorWater != null) InteriorWater.forceRenderingOff = true;
+            if (_underwaterObject != null)
+            {
+                if (Application.isPlaying) Destroy(_underwaterObject); else DestroyImmediate(_underwaterObject);
+            }
             if (_surfaceObject != null)
             {
                 if (Application.isPlaying) Destroy(_surfaceObject); else DestroyImmediate(_surfaceObject);
@@ -205,6 +346,7 @@ namespace WaveByWave.Ships
             {
                 if (Application.isPlaying) Destroy(_surfaceMesh); else DestroyImmediate(_surfaceMesh);
             }
+            _underwaterObject = null; _underwaterCollider = null; _underwaterArea = null;
             _surfaceObject = null; _surfaceMesh = null; _surfaceRenderer = null;
             ReleaseMaterial();
         }

@@ -137,11 +137,6 @@ namespace StylizedWater3
             if (cameraType == CameraType.SceneView && UnityEditor.SceneView.lastActiveSceneView && !UnityEditor.SceneView.lastActiveSceneView.sceneViewState.showImageEffects) return false;
 #endif
             
-            #if UNITY_EDITOR
-            //Skip rendering if editing a prefab
-            if (UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage()) return false;
-            #endif
-            
             return true;
         }
         

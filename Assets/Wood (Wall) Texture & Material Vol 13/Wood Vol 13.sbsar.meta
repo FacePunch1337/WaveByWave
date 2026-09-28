@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 51e45b2a9a20af94c9d9f42e2451f7d4
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: dda12f74ff9116a42b23482252b2c482, type: 3}
+  _fileAsset: {instanceID: 0}
+AssetOrigin:
+  serializedVersion: 1
+  productId: 410690
+  packageName: Wood (Wall) Texture & Material Vol. 13
+  packageVersion: 1.0
+  assetPath: Assets/Wood (Wall) Texture & Material Vol 13/Wood Vol 13.sbsar
+  uploadId: 1003538

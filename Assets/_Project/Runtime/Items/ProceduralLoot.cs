@@ -60,7 +60,7 @@ namespace WaveByWave.Items
             item.OpenerLuck = Mathf.Max(0f, luck);
             item.OpeningAt = NetworkManager.Singleton.ServerTime.Time + definition.ChestLoot.ShakeDuration;
             OpeningChests.Add(id);
-            var delta = new LootStressDeltaCommand { Id = id, Kind = ChestOpening, OpeningAt = item.OpeningAt };
+            var delta = new WorldLootDeltaRpc { Id = id, Kind = ChestOpening, OpeningAt = item.OpeningAt };
             Broadcast(delta);
             return true;
         }
@@ -94,7 +94,7 @@ namespace WaveByWave.Items
                         }
                     }
                 }
-                var burst = new LootStressDeltaCommand { Id = id, Kind = ChestBurst, Position = item.Position };
+                var burst = new WorldLootDeltaRpc { Id = id, Kind = ChestBurst, Position = item.Position };
                 Broadcast(burst);
                 ServerItems.Remove(id); ServerItemRemoved?.Invoke(id); OpeningChests.RemoveAt(i);
             }

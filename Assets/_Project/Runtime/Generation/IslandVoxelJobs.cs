@@ -55,6 +55,8 @@ namespace WaveByWave.Generation
         public float3 Center;
         public float Radius;
         public float Smoothing;
+        public float NoiseStrength;
+        public uint NoiseSeed;
         public int3 Minimum, Maximum;
         private static float SmoothMinimum(float a, float b, float smoothing)
         {
@@ -71,8 +73,12 @@ namespace WaveByWave.Generation
                 var p = new int3(x, y, z);
                 var i = Parameters.Index(p);
                 var value = Density[i];
-                value.x = SmoothMinimum(value.x,
-                    math.distance(Parameters.Position(p), Center) - Radius, Smoothing);
+                var offset = Parameters.Position(p) - Center;
+                var radius = Radius;
+                if (NoiseStrength > 0f)
+                    radius *= 1f + NoiseStrength * noise.cnoise(offset * (3f / math.max(.1f, Radius)) +
+                        new float3(NoiseSeed % 919u, NoiseSeed % 613u, NoiseSeed % 353u));
+                value.x = SmoothMinimum(value.x, math.length(offset) - radius, Smoothing);
                 Density[i] = value;
             }
         }

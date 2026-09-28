@@ -55,10 +55,11 @@ namespace WaveByWave.Editor
                 "Assets/Stylized Water 3/Materials/StylizedWater3_Smooth.mat");
             if (water == null) throw new InvalidOperationException("Stylized Water 3 material is missing.");
             var spray = Material("LeakSpray", "Universal Render Pipeline/Particles/Unlit");
-            spray.SetFloat("_Surface", 1); spray.SetFloat("_Blend", 0);
-            spray.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha); spray.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
-            spray.SetFloat("_ZWrite", 0); spray.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); spray.renderQueue = 2998;
-            spray.SetColor("_BaseColor", Color.white);
+            spray.SetFloat("_Surface", 1); spray.SetFloat("_Blend", 2);
+            spray.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha); spray.SetFloat("_DstBlend", (float)BlendMode.One);
+            spray.SetFloat("_SrcBlendAlpha", (float)BlendMode.One); spray.SetFloat("_DstBlendAlpha", (float)BlendMode.One);
+            spray.SetFloat("_ZWrite", 0); spray.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); spray.renderQueue = 3100;
+            spray.SetColor("_BaseColor", new Color(0.65f, 0.92f, 1f, 1f));
             EditorUtility.SetDirty(spray);
             const string path = "Assets/_Project/Prefabs/Ship.prefab";
             var root = PrefabUtility.LoadPrefabContents(path);

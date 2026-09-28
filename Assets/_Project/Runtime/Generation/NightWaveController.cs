@@ -21,6 +21,7 @@ namespace WaveByWave.Generation
         private bool _waveActive, _victoryRequested;
         private bool _waveNumberPublished;
         private float _nextWaveCheck;
+        private float _nextFragmentStatusLog;
         private NightBattlefieldController _battlefield;
         [SerializeField, Min(0.5f)] private float announcementDuration = 4f;
         private VoyagePhase _lastAnnouncedPhase;
@@ -163,6 +164,9 @@ namespace WaveByWave.Generation
         private void SpawnFragment(NightWaveFragment fragment)
         {
             _waveGroup = 100000 + _waveIndex * 1000 + _fragmentIndex;
+            Debug.Log($"[Night waves] Wave {_waveIndex + 1}, fragment {_fragmentIndex + 1} " +
+                $"'{fragment?.Name}' started (group {_waveGroup}).", this);
+            _nextFragmentStatusLog = Time.unscaledTime + 30f;
             var enemies = DotsEnemyRuntime.EnsureInstance();
             var ships = DotsEnemyShipRuntime.EnsureInstance();
             var entryIndex = 0;
@@ -175,21 +179,41 @@ namespace WaveByWave.Generation
                 var maximumRadius = minimumRadius + Mathf.Max(1f, bandWidth);
                 if (entry.EnemyType.IsShip)
                 {
-                    ships?.SpawnAt(center, entry.Count, maximumRadius,
+                    var queued = ships != null && ships.SpawnAt(center, entry.Count, maximumRadius,
                         unchecked((uint)(_waveGroup * 7919 + entryIndex * 104729)), _waveGroup,
                         minimumRadius);
+                    LogSpawnRequest(entry, queued, center);
                     continue;
                 }
-                enemies?.QueueNightWave(center, entry.Count, minimumRadius, maximumRadius,
+                var queuedEnemies = enemies != null && enemies.QueueNightWave(center, entry.Count, minimumRadius, maximumRadius,
                     entry.EnemyType.CombatType, entry.EnemyType.Species, _waveGroup);
+                LogSpawnRequest(entry, queuedEnemies, center);
             }
             _nextWaveCheck = Time.time + 1f;
         }
 
         private int FragmentRemaining()
         {
-            return (DotsEnemyRuntime.Instance?.NightWaveRemaining(_waveGroup) ?? 0) +
-                   (DotsEnemyShipRuntime.Instance?.NightWaveRemaining(_waveGroup) ?? 0);
+            var bots = DotsEnemyRuntime.Instance?.NightWaveRemaining(_waveGroup) ?? 0;
+            var ships = DotsEnemyShipRuntime.Instance?.NightWaveRemaining(_waveGroup) ?? 0;
+            if (bots + ships > 0 && Time.unscaledTime >= _nextFragmentStatusLog)
+            {
+                _nextFragmentStatusLog = Time.unscaledTime + 30f;
+                Debug.Log($"[Night waves] Wave {_waveIndex + 1}, fragment {_fragmentIndex + 1} " +
+                    $"waiting: {bots} bots/crew (including queued spawns), " +
+                    $"{ships} ships (including queued spawns); group {_waveGroup}.", this);
+            }
+            return bots + ships;
+        }
+
+        private void LogSpawnRequest(NightWaveEnemy entry, bool queued, Vector3 center)
+        {
+            var message = $"[Night waves] Wave {_waveIndex + 1}, fragment {_fragmentIndex + 1}: " +
+                $"{entry.EnemyType.name} x{entry.Count}, center {center}, " +
+                $"exclusion radius {entry.SpawnRadius}, band {entry.SpawnBandWidth}.";
+            if (queued) Debug.Log(message + " Spawn request queued.", this);
+            else Debug.LogWarning(message + " Spawn request rejected; check runtime availability, " +
+                "enemy bake, enabled combat types and population limits.", this);
         }
 
         private void PublishEnemyProgress()
@@ -217,6 +241,7 @@ namespace WaveByWave.Generation
 
         private void FinishWave()
         {
+            Debug.Log($"[Night waves] Wave {_waveIndex + 1} completed.", this);
             _waveActive = false;
             _battery.SetWaveEnemyProgressServer(_waveTotalBots, _waveTotalBots);
             _battlefield?.EndServer();
